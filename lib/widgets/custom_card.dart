@@ -1,30 +1,35 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 
 class CustomCard extends StatelessWidget {
-  final Widget child;
   final String? title;
+  final Widget child;
 
-  const CustomCard({super.key, required this.child, this.title});
+  const CustomCard({super.key, this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Card(
       elevation: 4,
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (title != null)
-              Text(
-                title!,
-                style: Theme.of(context).textTheme.titleLarge,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                l10n != null ? l10n.translate(title!) : title!,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
               ),
-            if (title != null) const SizedBox(height: 8),
-            child,
-          ],
-        ),
+            ),
+          child,
+        ],
       ),
     );
   }
