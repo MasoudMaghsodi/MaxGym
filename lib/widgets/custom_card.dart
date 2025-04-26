@@ -1,35 +1,62 @@
 import 'package:flutter/material.dart';
-import '../l10n/app_localizations.dart';
 
-class CustomCard extends StatelessWidget {
+class CustomCard extends StatefulWidget {
+  final Widget? child;
   final String? title;
-  final Widget child;
 
-  const CustomCard({super.key, this.title, required this.child});
+  const CustomCard({super.key, this.child, this.title});
+
+  @override
+  State<CustomCard> createState() => _CustomCardState();
+}
+
+class _CustomCardState extends State<CustomCard> {
+  double _scale = 1.0;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (title != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(
-                l10n != null ? l10n.translate(title!) : title!,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _scale = 1.05),
+      onTapUp: (_) => setState(() => _scale = 1.0),
+      onTapCancel: () => setState(() => _scale = 1.0),
+      child: Transform.scale(
+        scale: _scale,
+        child: Card(
+          elevation: 6,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF424242),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                // ignore: deprecated_member_use
+                color: const Color(0xFFE53935).withOpacity(0.3),
               ),
             ),
-          child,
-        ],
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.title != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Text(
+                      widget.title!,
+                      style: const TextStyle(
+                        fontFamily: 'Montserrat',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                if (widget.child != null) widget.child!,
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

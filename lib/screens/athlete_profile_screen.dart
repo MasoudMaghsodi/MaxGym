@@ -138,14 +138,14 @@ class _AthleteProfileScreenState extends ConsumerState<AthleteProfileScreen>
     final gender = widget.athlete.gender?.toLowerCase();
     if (gender == 'female') {
       return Image.asset(
-        'assets/images/women.jpg',
+        'assets/images/women.png',
         width: 100,
         height: 100,
         fit: BoxFit.fill,
       );
     } else if (gender == 'male') {
       return Image.asset(
-        'assets/images/men.jpg',
+        'assets/images/men.png',
         width: 100,
         height: 100,
         fit: BoxFit.fill,

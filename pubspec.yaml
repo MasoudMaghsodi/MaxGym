@@ -28,7 +28,9 @@ dependencies:
   fl_chart: ^0.68.0
   cupertino_icons: ^1.0.8
   intl: ^0.19.0
-  flutter_svg: ^2.1.0
+  flutter_staggered_animations: ^1.1.1
+  lottie: ^3.3.1
+  vibration: ^3.1.3
 
 dev_dependencies:
   flutter_test:
@@ -46,12 +48,14 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/images/women.jpg
-    - assets/images/women.svg
-    - assets/images/men.jpg
-    - assets/images/men.svg
+    - assets/images/women.png
+    - assets/images/men.png
+    - assets/images/max.png
     - assets/locales/en.json
     - assets/locales/fa.json 
+    - assets/animations/barabell.json
+    - assets/fonts/Montserrat-Bold.ttf
+    - assets/fonts/Montserrat-Regular.ttf
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
@@ -65,11 +69,11 @@ flutter:
   # "family" key with the font family name, and a "fonts" key with a
   # list giving the asset and other descriptors for the font. For
   # example:
-  # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
+  fonts:
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat-Bold.ttf
+        - asset: assets/fonts/Montserrat-Regular.ttf
   #         style: italic
   #   - family: Trajan Pro
   #     fonts:
