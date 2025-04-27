@@ -5,6 +5,7 @@ import 'package:max_gym/core/theme/theme.dart';
 import 'package:max_gym/data/services/notification_service.dart';
 import 'package:max_gym/providers/athlete_provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:max_gym/screens/splash_screen.dart';
 import 'core/config/supabase_config.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -28,6 +29,7 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Max Gym',
       theme: lightTheme,
       darkTheme: darkTheme,
@@ -43,8 +45,9 @@ class MyApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      initialRoute: '/login',
+      initialRoute: '/splash',
       routes: {
+        '/splash': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
         '/dashboard': (context) => const DashboardScreen(),
       },

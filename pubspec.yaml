@@ -31,6 +31,8 @@ dependencies:
   flutter_staggered_animations: ^1.1.1
   lottie: ^3.3.1
   vibration: ^3.1.3
+  connectivity_plus: ^6.1.4
+  animated_text_kit: ^4.2.3
 
 dev_dependencies:
   flutter_test:
@@ -54,6 +56,7 @@ flutter:
     - assets/locales/en.json
     - assets/locales/fa.json 
     - assets/animations/barabell.json
+    - assets/animations/max_gym.gif
     - assets/fonts/Montserrat-Bold.ttf
     - assets/fonts/Montserrat-Regular.ttf
   #   - images/a_dot_ham.jpeg

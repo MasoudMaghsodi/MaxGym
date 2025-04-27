@@ -32,5 +32,10 @@
   "filter": "Filter",
   "end_date": "End Date",
   "no_notifications": "No Notifications",
-  "error_loading_notifications": "Error loading notifications"
+  "error_loading_notifications": "Error loading notifications",
+  "welcome_max_gym": "Welcome to Max Gym",
+  "offline_limited": "You are in offline mode, data may be limited",
+  "please_connect_to_login": "Please connect to the internet to login",
+  "online_ready": "Connected online, ready to start!",
+  "please_login": "Please login to continue"
 }

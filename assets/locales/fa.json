@@ -32,5 +32,10 @@
   "filter": "فیلتر",
   "end_date": "تاریخ پایان",
   "no_notifications": "هیچ اعلانی وجود ندارد",
-  "error_loading_notifications": "خطا در بارگذاری اعلان‌ها"
-}
+  "error_loading_notifications": "خطا در بارگذاری اعلان‌ها",
+  "welcome_max_gym": "به باشگاه مکس خوش آمدید",
+  "offline_limited": "شما در حالت آفلاین هستید، داده‌ها ممکن است محدود باشند",
+  "please_connect_to_login": "لطفا برای لاگین آنلاین شوید",
+  "online_ready": "به‌صورت آنلاین متصل هستید، آماده شروع!",
+  "please_login": "لطفا برای ادامه لاگین کنید"
+  }
