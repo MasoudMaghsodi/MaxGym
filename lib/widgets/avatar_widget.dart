@@ -17,13 +17,13 @@ class AvatarWidget extends StatelessWidget {
     String semanticsLabel;
 
     if (isMale) {
-      imagePath = 'assets/images/men.jpg';
+      imagePath = 'assets/images/men.png';
       semanticsLabel = l10n.translate('male_athlete_avatar');
     } else if (isFemale) {
-      imagePath = 'assets/images/women.jpg';
+      imagePath = 'assets/images/women.png';
       semanticsLabel = l10n.translate('female_athlete_avatar');
     } else {
-      imagePath = 'assets/images/men.jpg'; // Assumes a default halter image
+      imagePath = 'assets/images/men.png'; // Assumes a default halter image
       semanticsLabel = l10n.translate('default_athlete_avatar');
     }
 

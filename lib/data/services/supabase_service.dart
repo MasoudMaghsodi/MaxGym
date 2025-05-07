@@ -238,4 +238,12 @@ class SupabaseService {
     // ignore: unnecessary_cast
     return response as List<Map<String, dynamic>>;
   }
+
+  void subscribeToAthletes(void Function() onUpdate) {
+    Supabase.instance.client
+        .from('athletes')
+        .stream(primaryKey: ['id']).listen((List<Map<String, dynamic>> data) {
+      onUpdate();
+    });
+  }
 }

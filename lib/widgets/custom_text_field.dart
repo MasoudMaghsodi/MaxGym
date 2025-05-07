@@ -8,6 +8,7 @@ class CustomTextField extends StatelessWidget {
   final bool obscureText;
   final VoidCallback? onTap;
   final ValueChanged<String>? onChanged;
+  final String? Function(String?)? validator;
 
   const CustomTextField({
     super.key,
@@ -17,19 +18,21 @@ class CustomTextField extends StatelessWidget {
     this.obscureText = false,
     this.onTap,
     this.onChanged,
+    this.validator,
   });
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return TextField(
+    return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
       onTap: onTap,
       onChanged: onChanged,
+      validator: validator,
       decoration: InputDecoration(
-        labelText: l10n != null ? l10n.translate(label) : label, // مدیریت null
+        labelText: l10n != null ? l10n.translate(label) : label,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),

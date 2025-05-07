@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:max_gym/data/models/athlete.dart';
 import 'package:max_gym/providers/athlete_provider.dart';
 import 'package:max_gym/widgets/custom_card.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/custom_text_field.dart';
-import '../l10n/app_localizations.dart';
+import '../../widgets/custom_button.dart';
+import '../../widgets/custom_text_field.dart';
+import '../../l10n/app_localizations.dart';
 
 class AthleteProfileScreen extends ConsumerStatefulWidget {
   final Athlete athlete;
@@ -151,7 +151,7 @@ class _AthleteProfileScreenState extends ConsumerState<AthleteProfileScreen>
         fit: BoxFit.fill,
       );
     }
-    return Image.asset('assets/images/athlete.png', width: 100, height: 100);
+    return Image.asset('assets/images/max.png', width: 100, height: 100);
   }
 
   @override

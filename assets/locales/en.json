@@ -34,8 +34,13 @@
   "no_notifications": "No Notifications",
   "error_loading_notifications": "Error loading notifications",
   "welcome_max_gym": "Welcome to Max Gym",
-  "offline_limited": "You are in offline mode, data may be limited",
-  "please_connect_to_login": "Please connect to the internet to login",
-  "online_ready": "Connected online, ready to start!",
-  "please_login": "Please login to continue"
+  "login_title": "Login to Max Gym",
+  "login_subtitle": "Enter your credentials to continue",
+  "email": "Email",
+  "password": "Password",
+  "login_button": "Login",
+  "login_error": "Invalid email or password",
+  "switch_to_light": "Switch to Light Mode",
+  "switch_to_dark": "Switch to Dark Mode",
+  "switch_language": "Change Language"
 }

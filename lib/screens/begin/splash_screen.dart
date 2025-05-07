@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:animated_text_kit/animated_text_kit.dart';
-import '../l10n/app_localizations.dart';
+import '../../l10n/app_localizations.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -21,14 +21,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   Future<void> _checkStatusAndNavigate() async {
     await Future.delayed(const Duration(seconds: 10)); // Wait for 6-second GIF
+    // ignore: use_build_context_synchronously
     final l10n = AppLocalizations.of(context)!;
     final supabase = Supabase.instance.client;
     final connectivityResult = await Connectivity().checkConnectivity();
+    // ignore: unrelated_type_equality_checks
     final isOnline = connectivityResult != ConnectivityResult.none;
     final isLoggedIn = supabase.auth.currentUser != null;
 
     if (!isOnline) {
       if (isLoggedIn) {
+        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.translate('offline_limited')),
@@ -36,8 +39,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             duration: const Duration(seconds: 3),
           ),
         );
+        // ignore: use_build_context_synchronously
         Navigator.pushReplacementNamed(context, '/dashboard');
       } else {
+        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.translate('please_connect_to_login')),
@@ -45,10 +50,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             duration: const Duration(seconds: 3),
           ),
         );
+        // ignore: use_build_context_synchronously
         Navigator.pushReplacementNamed(context, '/login');
       }
     } else {
       if (isLoggedIn) {
+        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.translate('online_ready')),
@@ -56,8 +63,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             duration: const Duration(seconds: 3),
           ),
         );
+        // ignore: use_build_context_synchronously
         Navigator.pushReplacementNamed(context, '/dashboard');
       } else {
+        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.translate('please_login')),
@@ -65,6 +74,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             duration: const Duration(seconds: 3),
           ),
         );
+        // ignore: use_build_context_synchronously
         Navigator.pushReplacementNamed(context, '/login');
       }
     }

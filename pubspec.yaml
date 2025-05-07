@@ -56,6 +56,7 @@ flutter:
     - assets/locales/en.json
     - assets/locales/fa.json 
     - assets/animations/barabell.json
+    - assets/animations/empty_state.json
     - assets/animations/max_gym.gif
     - assets/fonts/Montserrat-Bold.ttf
     - assets/fonts/Montserrat-Regular.ttf
