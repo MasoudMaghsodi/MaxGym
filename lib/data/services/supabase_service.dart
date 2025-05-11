@@ -1,7 +1,8 @@
+import 'package:max_gym/data/models/exercise.dart';
+import 'package:max_gym/data/models/workout_plan.dart';
 import 'package:max_gym/data/services/isar_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/athlete.dart';
-import '../models/workout_plan.dart';
 import 'notification_service.dart';
 
 class SupabaseService {
@@ -199,7 +200,7 @@ class SupabaseService {
         ..endDate = data['end_date'];
       if (data['exercises'] != null) {
         plan.exercises = (data['exercises'] as List).map((entry) {
-          return Exercise()
+          return Exercisee()
             ..name = entry['name']
             ..sets = entry['sets']
             ..reps = entry['reps']
@@ -245,5 +246,60 @@ class SupabaseService {
         .stream(primaryKey: ['id']).listen((List<Map<String, dynamic>> data) {
       onUpdate();
     });
+  }
+
+  // Exercise methods
+  Future<String> addExercise(Exercise exercise) async {
+    final response = await _client
+        .from('exercises')
+        .insert({
+          'name': exercise.name,
+          'muscle_group': exercise.muscleGroup,
+          'description': exercise.description,
+          'created_at': DateTime.now().toIso8601String(),
+        })
+        .select('id')
+        .single();
+    return response['id'].toString();
+  }
+
+  Future<void> updateExercise(String supabaseId, Exercise exercise) async {
+    await _client.from('exercises').update({
+      'name': exercise.name,
+      'muscle_group': exercise.muscleGroup,
+      'description': exercise.description,
+    }).eq('id', supabaseId);
+  }
+
+  Future<void> deleteExercise(String supabaseId) async {
+    await _client.from('exercises').delete().eq('id', supabaseId);
+  }
+
+  Future<List<Exercise>> fetchExercises() async {
+    final response = await _client.from('exercises').select();
+    return response
+        .map((data) => Exercise(
+              supabaseId: data['id'].toString(),
+              name: data['name'],
+              muscleGroup: data['muscle_group'],
+              description: data['description'],
+              createdAt: data['created_at'],
+            ))
+        .toList();
+  }
+
+  void subscribeToExercises(void Function() callback) {
+    _client
+        .channel('exercises')
+        .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'exercises',
+            callback: (_) => callback())
+        .subscribe();
+  }
+
+  Future<void> syncExercises() async {
+    await fetchExercises();
   }
 }

@@ -5,7 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:max_gym/data/models/athlete.dart';
 import 'package:max_gym/l10n/app_localizations.dart';
 import 'package:max_gym/providers/athlete_provider.dart';
-import 'package:max_gym/screens/settings_screen.dart';
+import 'package:max_gym/screens/setting/settings_screen.dart';
 import 'package:max_gym/widgets/quick_actions.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'athletes_tab.dart';
@@ -321,6 +321,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 onTap: () async {
                   await Supabase.instance.client.auth.signOut();
                   if (mounted) {
+                    // ignore: use_build_context_synchronously
                     Navigator.pushReplacementNamed(context, '/login');
                   }
                 },
@@ -394,6 +395,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 )
               : null,
           filled: true,
+          // ignore: deprecated_member_use
           fillColor: Colors.white.withOpacity(0.1),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12.r),
@@ -432,6 +434,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                     selected: _filterGender == gender,
                     selectedColor: const Color(0xFFE53935),
+                    // ignore: deprecated_member_use
                     backgroundColor: Colors.white.withOpacity(0.1),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8.r),
@@ -465,6 +468,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                     selected: _filterStatus == status,
                     selectedColor: const Color(0xFFE53935),
+                    // ignore: deprecated_member_use
                     backgroundColor: Colors.white.withOpacity(0.1),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8.r),

@@ -11,7 +11,7 @@ class WorkoutPlan {
 
   String? name;
 
-  List<Exercise> exercises = [];
+  List<Exercisee> exercises = [];
 
   @Index()
   String? athleteId;
@@ -24,7 +24,7 @@ class WorkoutPlan {
 }
 
 @embedded
-class Exercise {
+class Exercisee {
   String? name;
   int? sets;
   int? reps;

@@ -1,4 +1,5 @@
 import 'package:isar/isar.dart';
+import 'package:max_gym/data/models/exercise.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/athlete.dart';
 import '../models/workout_plan.dart';
@@ -149,6 +150,45 @@ class IsarService {
       if (plan != null) {
         await isar.workoutPlans.delete(plan.id);
       }
+    });
+  }
+
+  // Exercise methods
+  Future<void> addExercise(Exercise exercise, String supabaseId) async {
+    await _isarInstance?.writeTxn(() async {
+      final existing = await _isarInstance?.exercises
+          .filter()
+          .supabaseIdEqualTo(supabaseId)
+          .findFirst();
+      if (existing == null) {
+        await _isarInstance?.exercises.put(exercise..supabaseId = supabaseId);
+      }
+    });
+  }
+
+  Future<void> updateExercise(Exercise exercise) async {
+    await _isarInstance?.writeTxn(() async {
+      await _isarInstance?.exercises.put(exercise);
+    });
+  }
+
+  Future<void> deleteExercise(String supabaseId) async {
+    await _isarInstance?.writeTxn(() async {
+      await _isarInstance?.exercises
+          .filter()
+          .supabaseIdEqualTo(supabaseId)
+          .deleteFirst();
+    });
+  }
+
+  Future<List<Exercise>> getExercises() async {
+    return await _isarInstance!.exercises.where().findAll();
+  }
+
+  Future<void> syncExercises(List<Exercise> exercises) async {
+    await _isarInstance?.writeTxn(() async {
+      await _isarInstance?.exercises.clear();
+      await _isarInstance?.exercises.putAll(exercises);
     });
   }
 }

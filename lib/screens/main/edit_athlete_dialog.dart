@@ -96,11 +96,13 @@ class _EditAthleteDialogState extends ConsumerState<EditAthleteDialog> {
                 parameters: {'name': updatedAthlete.name ?? ''},
               );
               if (mounted) {
+                // ignore: use_build_context_synchronously
                 Navigator.pop(context, true);
               }
             } catch (e) {
               await ref.read(firebaseServiceProvider).logError(e.toString());
               if (mounted) {
+                // ignore: use_build_context_synchronously
                 Navigator.pop(context, false);
               }
             }

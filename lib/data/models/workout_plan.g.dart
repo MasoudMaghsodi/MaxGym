@@ -36,7 +36,7 @@ const WorkoutPlanSchema = CollectionSchema(
       id: 3,
       name: r'exercises',
       type: IsarType.objectList,
-      target: r'Exercise',
+      target: r'Exercisee',
     ),
     r'name': PropertySchema(
       id: 4,
@@ -88,7 +88,7 @@ const WorkoutPlanSchema = CollectionSchema(
     )
   },
   links: {},
-  embeddedSchemas: {r'Exercise': ExerciseSchema},
+  embeddedSchemas: {r'Exercisee': ExerciseeSchema},
   getId: _workoutPlanGetId,
   getLinks: _workoutPlanGetLinks,
   attach: _workoutPlanAttach,
@@ -121,10 +121,10 @@ int _workoutPlanEstimateSize(
   }
   bytesCount += 3 + object.exercises.length * 3;
   {
-    final offsets = allOffsets[Exercise]!;
+    final offsets = allOffsets[Exercisee]!;
     for (var i = 0; i < object.exercises.length; i++) {
       final value = object.exercises[i];
-      bytesCount += ExerciseSchema.estimateSize(value, offsets, allOffsets);
+      bytesCount += ExerciseeSchema.estimateSize(value, offsets, allOffsets);
     }
   }
   {
@@ -157,10 +157,10 @@ void _workoutPlanSerialize(
   writer.writeString(offsets[0], object.athleteId);
   writer.writeString(offsets[1], object.createdAt);
   writer.writeString(offsets[2], object.endDate);
-  writer.writeObjectList<Exercise>(
+  writer.writeObjectList<Exercisee>(
     offsets[3],
     allOffsets,
-    ExerciseSchema.serialize,
+    ExerciseeSchema.serialize,
     object.exercises,
   );
   writer.writeString(offsets[4], object.name);
@@ -178,11 +178,11 @@ WorkoutPlan _workoutPlanDeserialize(
   object.athleteId = reader.readStringOrNull(offsets[0]);
   object.createdAt = reader.readStringOrNull(offsets[1]);
   object.endDate = reader.readStringOrNull(offsets[2]);
-  object.exercises = reader.readObjectList<Exercise>(
+  object.exercises = reader.readObjectList<Exercisee>(
         offsets[3],
-        ExerciseSchema.deserialize,
+        ExerciseeSchema.deserialize,
         allOffsets,
-        Exercise(),
+        Exercisee(),
       ) ??
       [];
   object.id = id;
@@ -206,11 +206,11 @@ P _workoutPlanDeserializeProp<P>(
     case 2:
       return (reader.readStringOrNull(offset)) as P;
     case 3:
-      return (reader.readObjectList<Exercise>(
+      return (reader.readObjectList<Exercisee>(
             offset,
-            ExerciseSchema.deserialize,
+            ExerciseeSchema.deserialize,
             allOffsets,
-            Exercise(),
+            Exercisee(),
           ) ??
           []) as P;
     case 4:
@@ -1508,7 +1508,7 @@ extension WorkoutPlanQueryFilter
 extension WorkoutPlanQueryObject
     on QueryBuilder<WorkoutPlan, WorkoutPlan, QFilterCondition> {
   QueryBuilder<WorkoutPlan, WorkoutPlan, QAfterFilterCondition>
-      exercisesElement(FilterQuery<Exercise> q) {
+      exercisesElement(FilterQuery<Exercisee> q) {
     return QueryBuilder.apply(this, (query) {
       return query.object(q, r'exercises');
     });
@@ -1751,7 +1751,7 @@ extension WorkoutPlanQueryProperty
     });
   }
 
-  QueryBuilder<WorkoutPlan, List<Exercise>, QQueryOperations>
+  QueryBuilder<WorkoutPlan, List<Exercisee>, QQueryOperations>
       exercisesProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'exercises');
@@ -1784,9 +1784,9 @@ extension WorkoutPlanQueryProperty
 // coverage:ignore-file
 // ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
 
-const ExerciseSchema = Schema(
-  name: r'Exercise',
-  id: 2972066467915231902,
+const ExerciseeSchema = Schema(
+  name: r'Exercisee',
+  id: 7736618314810506070,
   properties: {
     r'name': PropertySchema(
       id: 0,
@@ -1809,14 +1809,14 @@ const ExerciseSchema = Schema(
       type: IsarType.double,
     )
   },
-  estimateSize: _exerciseEstimateSize,
-  serialize: _exerciseSerialize,
-  deserialize: _exerciseDeserialize,
-  deserializeProp: _exerciseDeserializeProp,
+  estimateSize: _exerciseeEstimateSize,
+  serialize: _exerciseeSerialize,
+  deserialize: _exerciseeDeserialize,
+  deserializeProp: _exerciseeDeserializeProp,
 );
 
-int _exerciseEstimateSize(
-  Exercise object,
+int _exerciseeEstimateSize(
+  Exercisee object,
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
@@ -1830,8 +1830,8 @@ int _exerciseEstimateSize(
   return bytesCount;
 }
 
-void _exerciseSerialize(
-  Exercise object,
+void _exerciseeSerialize(
+  Exercisee object,
   IsarWriter writer,
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
@@ -1842,13 +1842,13 @@ void _exerciseSerialize(
   writer.writeDouble(offsets[3], object.weight);
 }
 
-Exercise _exerciseDeserialize(
+Exercisee _exerciseeDeserialize(
   Id id,
   IsarReader reader,
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  final object = Exercise();
+  final object = Exercisee();
   object.name = reader.readStringOrNull(offsets[0]);
   object.reps = reader.readLongOrNull(offsets[1]);
   object.sets = reader.readLongOrNull(offsets[2]);
@@ -1856,7 +1856,7 @@ Exercise _exerciseDeserialize(
   return object;
 }
 
-P _exerciseDeserializeProp<P>(
+P _exerciseeDeserializeProp<P>(
   IsarReader reader,
   int propertyId,
   int offset,
@@ -1876,9 +1876,9 @@ P _exerciseDeserializeProp<P>(
   }
 }
 
-extension ExerciseQueryFilter
-    on QueryBuilder<Exercise, Exercise, QFilterCondition> {
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameIsNull() {
+extension ExerciseeQueryFilter
+    on QueryBuilder<Exercisee, Exercisee, QFilterCondition> {
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
         property: r'name',
@@ -1886,7 +1886,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameIsNotNull() {
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameIsNotNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNotNull(
         property: r'name',
@@ -1894,7 +1894,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameEqualTo(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameEqualTo(
     String? value, {
     bool caseSensitive = true,
   }) {
@@ -1907,7 +1907,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameGreaterThan(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameGreaterThan(
     String? value, {
     bool include = false,
     bool caseSensitive = true,
@@ -1922,7 +1922,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameLessThan(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameLessThan(
     String? value, {
     bool include = false,
     bool caseSensitive = true,
@@ -1937,7 +1937,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameBetween(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameBetween(
     String? lower,
     String? upper, {
     bool includeLower = true,
@@ -1956,7 +1956,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameStartsWith(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameStartsWith(
     String value, {
     bool caseSensitive = true,
   }) {
@@ -1969,7 +1969,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameEndsWith(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameEndsWith(
     String value, {
     bool caseSensitive = true,
   }) {
@@ -1982,7 +1982,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameContains(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameContains(
       String value,
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1994,7 +1994,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameMatches(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameMatches(
       String pattern,
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2006,7 +2006,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameIsEmpty() {
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameIsEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'name',
@@ -2015,7 +2015,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> nameIsNotEmpty() {
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> nameIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'name',
@@ -2024,7 +2024,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> repsIsNull() {
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> repsIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
         property: r'reps',
@@ -2032,7 +2032,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> repsIsNotNull() {
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> repsIsNotNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNotNull(
         property: r'reps',
@@ -2040,7 +2040,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> repsEqualTo(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> repsEqualTo(
       int? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -2050,7 +2050,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> repsGreaterThan(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> repsGreaterThan(
     int? value, {
     bool include = false,
   }) {
@@ -2063,7 +2063,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> repsLessThan(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> repsLessThan(
     int? value, {
     bool include = false,
   }) {
@@ -2076,7 +2076,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> repsBetween(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> repsBetween(
     int? lower,
     int? upper, {
     bool includeLower = true,
@@ -2093,7 +2093,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> setsIsNull() {
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> setsIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
         property: r'sets',
@@ -2101,7 +2101,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> setsIsNotNull() {
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> setsIsNotNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNotNull(
         property: r'sets',
@@ -2109,7 +2109,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> setsEqualTo(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> setsEqualTo(
       int? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -2119,7 +2119,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> setsGreaterThan(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> setsGreaterThan(
     int? value, {
     bool include = false,
   }) {
@@ -2132,7 +2132,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> setsLessThan(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> setsLessThan(
     int? value, {
     bool include = false,
   }) {
@@ -2145,7 +2145,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> setsBetween(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> setsBetween(
     int? lower,
     int? upper, {
     bool includeLower = true,
@@ -2162,7 +2162,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> weightIsNull() {
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> weightIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
         property: r'weight',
@@ -2170,7 +2170,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> weightIsNotNull() {
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> weightIsNotNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNotNull(
         property: r'weight',
@@ -2178,7 +2178,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> weightEqualTo(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> weightEqualTo(
     double? value, {
     double epsilon = Query.epsilon,
   }) {
@@ -2191,7 +2191,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> weightGreaterThan(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> weightGreaterThan(
     double? value, {
     bool include = false,
     double epsilon = Query.epsilon,
@@ -2206,7 +2206,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> weightLessThan(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> weightLessThan(
     double? value, {
     bool include = false,
     double epsilon = Query.epsilon,
@@ -2221,7 +2221,7 @@ extension ExerciseQueryFilter
     });
   }
 
-  QueryBuilder<Exercise, Exercise, QAfterFilterCondition> weightBetween(
+  QueryBuilder<Exercisee, Exercisee, QAfterFilterCondition> weightBetween(
     double? lower,
     double? upper, {
     bool includeLower = true,
@@ -2241,5 +2241,5 @@ extension ExerciseQueryFilter
   }
 }
 
-extension ExerciseQueryObject
-    on QueryBuilder<Exercise, Exercise, QFilterCondition> {}
+extension ExerciseeQueryObject
+    on QueryBuilder<Exercisee, Exercisee, QFilterCondition> {}
