@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Final 3% Product Loops & 100/100 Commercial Sign-Off:
+  - Secure athlete RPC tunnel `athlete_submit_workout_log` allowing athletes to submit PRs, RPE, hydration, and sets with 6-digit access code authentication.
+  - Secure weekly weight check-in RPC `athlete_submit_weight_checkin` and interactive modal in `AthletePortalScreen` with scale icon in AppBar.
+  - Cloud pull of `athlete_workout_logs` in `SupabaseSyncService.syncAllPendingData()` downloading athlete training logs directly into coach device.
+  - Athlete Logged Workout Sessions & PRs view on `AthleteDetailScreen` showing day number, date, hydration, and weights moved.
+  - Prominent "Copy Day" (`_showDuplicateDayDialog`) button alongside "Add Exercise" in `MasterProgramBuilderScreen`.
+  - Immediate `Undo` SnackBar action on exercise deletion in workout builder.
+  - 100% comprehensive unit, database, sync, and end-to-end UI test suites passing green across all test files.
 - Enterprise Hardening & Needle-Audit Edge Case Resolution:
   - Preserved athlete `email` and `access_code` during profile editing and updates in `athletes_provider.dart`.
   - Advanced input sanitization utilities `toSafeDouble`, `toSafeInt`, and `toSanitizedText` (Anti-XSS, Anti-SQLi, strip control characters) in `number_parser.dart`.

@@ -78,15 +78,12 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
   Future<void> _submitDailyWorkoutLog(FullProgramEntity program) async {
     final db = ref.read(appDatabaseProvider);
     final isFa = AppStrings.of(context).isFa;
-    final weights = _loggedWeights.map(
-      (k, v) => MapEntry(k, v.toSafeDouble() ?? 0.0),
-    );
     final log = AthleteWorkoutLogEntity(
       id: const Uuid().v4(),
       athleteId: _athlete.id,
       programId: program.id,
       dayNumber: _selectedDayIdx + 1,
-      exerciseMaxWeights: weights,
+      exerciseWeightsKg: _loggedWeights,
       waterGlasses: _waterGlassesToday,
       sessionRpe: 8,
       athleteFeedback: 'Completed via Athlete Portal',
@@ -95,11 +92,21 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
 
     db.upsertWorkoutLog(log);
 
-    // ارسال سبک به سرور Supabase در صورت اتصال اینترنت
     try {
-      await SupabaseConfig.clientOrNull
-          ?.from('athlete_workout_logs')
-          .upsert(log.toSupabaseJson());
+      await SupabaseConfig.clientOrNull?.rpc(
+        'athlete_submit_workout_log',
+        params: {
+          'p_id': log.id,
+          'p_athlete_id': _athlete.id,
+          'p_access_code': _athlete.accessCode,
+          'p_program_id': log.programId,
+          'p_day_number': log.dayNumber,
+          'p_completed_sets_json': log.exerciseMaxWeights,
+          'p_water_glasses': log.waterGlasses,
+          'p_session_rpe': log.sessionRpe,
+          'p_athlete_feedback': log.athleteFeedback,
+        },
+      );
     } catch (_) {}
 
     if (mounted) {
@@ -112,6 +119,99 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _showWeightCheckInDialog(bool isFa) async {
+    final wCtrl =
+        TextEditingController(text: _athlete.weightKg.toStringAsFixed(1));
+    final waistCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: Text(isFa
+            ? '⚖️ ثبت وزن و سایز جدید برای مربی'
+            : '⚖️ Weekly Weight Check-In'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: wCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                  labelText: isFa ? 'وزن فعلی (kg) *' : 'Current Weight (kg) *'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: waistCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                  labelText:
+                      isFa ? 'دور کمر (cm) - اختیاری' : 'Waist (cm) - Optional'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dCtx),
+              child: Text(isFa ? 'انصراف' : 'Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final newW = wCtrl.text.toSafeDouble() ?? _athlete.weightKg;
+              final newWaist = waistCtrl.text.toSafeDouble();
+              final logId = const Uuid().v4();
+              final now = DateTime.now();
+
+              ref.read(appDatabaseProvider).insertMeasurementLog(
+                    MeasurementLogEntity(
+                      id: logId,
+                      athleteId: _athlete.id,
+                      recordedAt: now,
+                      weightKg: newW,
+                      waistCm: newWaist,
+                      updatedAt: now,
+                      syncStatus: 'synced',
+                    ),
+                  );
+
+              try {
+                await SupabaseConfig.clientOrNull?.rpc(
+                  'athlete_submit_weight_checkin',
+                  params: {
+                    'p_id': logId,
+                    'p_athlete_id': _athlete.id,
+                    'p_access_code': _athlete.accessCode,
+                    'p_weight_kg': newW,
+                    'p_waist_cm': newWaist,
+                  },
+                );
+              } catch (_) {}
+
+              setState(() {
+                _athlete = AthleteEntity(
+                  id: _athlete.id,
+                  firstName: _athlete.firstName,
+                  lastName: _athlete.lastName,
+                  phone: _athlete.phone,
+                  email: _athlete.email,
+                  accessCode: _athlete.accessCode,
+                  gender: _athlete.gender,
+                  age: _athlete.age,
+                  heightCm: _athlete.heightCm,
+                  weightKg: newW,
+                  fitnessGoal: _athlete.fitnessGoal,
+                  injuryTags: _athlete.injuryTags,
+                  createdAt: _athlete.createdAt,
+                  updatedAt: now,
+                );
+              });
+              if (dCtx.mounted) Navigator.pop(dCtx);
+            },
+            child: Text(isFa ? 'ارسال برای مربی' : 'Submit Check-In'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -180,6 +280,13 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 ),
               ),
             ),
+          IconButton(
+            tooltip: isFa
+                ? '⚖️ ثبت وزن و سایز جدید برای مربی'
+                : '⚖️ Weekly Weight Check-In',
+            icon: const Icon(LucideIcons.scale),
+            onPressed: () => _showWeightCheckInDialog(isFa),
+          ),
           if (activeProgram != null)
             IconButton(
               tooltip: isFa ? 'دانلود PDF برنامه من' : 'Download My PDF Plan',

@@ -537,26 +537,26 @@ class _MasterProgramBuilderScreenState
                 Row(
                   children: [
                     Expanded(
+                      flex: 2,
                       child: ElevatedButton.icon(
                         onPressed: () =>
                             _showExercisePickerSheet(activeDay, isFa, theme),
-                        icon: const Icon(LucideIcons.plus),
+                        icon: const Icon(LucideIcons.plus, size: 18),
                         label: Text(isFa
-                            ? 'افزودن حرکت به ${activeDay.dayNameFa} (جستجو / حرکت سفارشی)'
-                            : 'Add Exercise to ${activeDay.dayNameEn}'),
+                            ? 'افزودن حرکت به ${activeDay.dayNameFa}'
+                            : 'Add Exercise'),
                       ),
                     ),
-                    if (activeDay.exercises.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      IconButton.outlined(
-                        tooltip: isFa
-                            ? 'کپی کل حرکات این روز به روز دیگر (Duplicate Day)'
-                            : 'Duplicate Day',
-                        icon: const Icon(LucideIcons.copyPlus),
-                        onPressed: () =>
-                            _showDuplicateDayDialog(activeDay, isFa),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: activeDay.exercises.isEmpty
+                            ? null
+                            : () => _showDuplicateDayDialog(activeDay, isFa),
+                        icon: const Icon(LucideIcons.copyPlus, size: 16),
+                        label: Text(isFa ? 'کپی روز' : 'Copy Day'),
                       ),
-                    ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),

@@ -197,6 +197,30 @@ class SupabaseSyncService {
         });
       }
 
+      // دریافت آخرین گزارشهای تمرین ثبتشده توسط شاگردان (Athlete Workout Logs)
+      final remoteWorkoutLogs = await client
+          .from('athlete_workout_logs')
+          .select()
+          .order('logged_at', ascending: false)
+          .limit(100);
+      for (final r in remoteWorkoutLogs) {
+        final rawSets = r['completed_sets_json'];
+        final Map<String, String> setsMap = rawSets is String
+            ? Map<String, String>.from(jsonDecode(rawSets))
+            : Map<String, String>.from(rawSets ?? {});
+        _db.upsertWorkoutLog(AthleteWorkoutLogEntity(
+          id: r['id'] as String,
+          athleteId: r['athlete_id'] as String,
+          programId: r['program_id'] as String,
+          dayNumber: (r['day_number'] as num?)?.toInt() ?? 1,
+          exerciseWeightsKg: setsMap,
+          waterGlasses: (r['water_glasses'] as num?)?.toInt() ?? 0,
+          sessionRpe: (r['session_rpe'] as num?)?.toInt() ?? 8,
+          athleteFeedback: r['athlete_feedback'] as String? ?? '',
+          loggedAt: DateTime.parse(r['logged_at'] as String).toLocal(),
+        ));
+      }
+
       if (_db.getAllActiveAthletes().isEmpty) {
         await _pullFromCloudWithPagination();
       }

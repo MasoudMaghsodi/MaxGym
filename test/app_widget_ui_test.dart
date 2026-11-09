@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pro_coach_app/core/theme/branding_provider.dart';
@@ -40,7 +41,7 @@ class _TestSyncService extends SupabaseSyncService {
 
 void main() {
   testWidgets(
-      'Dual-Portal UI Test: Coach Auth, Kill-Switch, Mandatory Athlete Profile Gate & Athlete Portal',
+      'End-to-End UI Suite: Dual Auth, Kill-Switch, Mandatory Athlete Gate, Water Tracker, Chat & Coach Flow',
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
@@ -73,13 +74,33 @@ void main() {
     expect(find.text('پنل مربی'), findsOneWidget);
     expect(find.text('پنل ورزشکار'), findsOneWidget);
 
-    // ۲. شبیهسازی ورود ورزشکاری که پروفایلش ناقص است (ایمیل ندارد) -> باید گیت تکمیل پروفایل باز شود
+    // ۲. تست صفحه انتظار تایید مدیر (Pending Admin Approval)
+    gateNotifier.setTestState(const SecurityGateState(
+      status: SecurityGateStatus.pendingAdminApproval,
+      coachFullName: 'مربی تست',
+      email: 'coach@gym.com',
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('حساب شما در انتظار تایید مدیر است'), findsOneWidget);
+
+    // ۳. تست صفحه قفل سراسری اپلیکیشن (Kill-Switch Screen)
+    gateNotifier.setTestState(const SecurityGateState(
+      status: SecurityGateStatus.suspendedKillSwitch,
+      lockTitle: 'دسترسی به اپلیکیشن مسدود شده است',
+      lockMessage: 'لطفاً با توسعهدهنده تماس بگیرید.',
+      developerContact: '@SupportAdmin',
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('دسترسی به اپلیکیشن مسدود شده است'), findsOneWidget);
+    expect(find.text('@SupportAdmin'), findsOneWidget);
+
+    // ۴. تست ورود ورزشکار با پروفایل ناقص -> نمایش اجباری گیت تکمیل پرونده
     final incompleteAthlete = AthleteEntity(
       id: 'ath-portal-1',
       firstName: 'سهراب',
-      lastName: '', // نام خانوادگی خالی
+      lastName: '',
       phone: '09121112222',
-      email: '', // ایمیل خالی
+      email: '',
       accessCode: 'PC-777888',
       gender: 'male',
       age: 25,
@@ -97,11 +118,9 @@ void main() {
       loggedInAthlete: incompleteAthlete,
     ));
     await tester.pumpAndSettle();
-
-    // بررسی باز شدن صفحه «تکمیل اجباری پرونده ورزشی شما»
     expect(find.text('تکمیل اجباری پرونده ورزشی شما'), findsOneWidget);
 
-    // ۳. شبیهسازی ورود ورزشکاری که پروفایلش کامل است -> باید مستقیم وارد داشبورد ورزشکار و چت شود
+    // ۵. تست ورود ورزشکار با پروفایل کامل -> تست کنتور آب و چت متنی با مربی
     final completeAthlete = AthleteEntity(
       id: 'ath-portal-2',
       firstName: 'سهراب',
@@ -127,14 +146,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('پنل ورزشکار: سهراب سپهری'), findsOneWidget);
-    expect(find.text('گفتگو با مربی'), findsOneWidget);
 
-    // ۴. بازگشت به پنل مربی تاییدشده
+    // رفتن به تب تغذیه و آب در پنل ورزشکار و زدن دکمه +۱ لیوان آب
+    await tester.tap(find.text('تغذیه، مکمل و آب'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+۱ لیوان'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('آب مصرفی امروز: 1 از'), findsOneWidget);
+
+    // رفتن به تب گفتگو با مربی و ارسال پیام متنی خالص
+    await tester.tap(find.text('گفتگو با مربی'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'سلام استاد تمرین امروز عالی بود');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('سلام استاد تمرین امروز عالی بود'), findsOneWidget);
+
+    // ۶. ورود به پنل مربی تاییدشده و تست ساخت شاگرد جدید
     gateNotifier.setTestState(const SecurityGateState(
       status: SecurityGateStatus.authorizedAndActive,
       coachFullName: 'مربی ارشد',
     ));
     await tester.pumpAndSettle();
+
     expect(find.text('داشبورد مربی'), findsWidgets);
+    await tester.tap(find.text('ورزشکاران'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('شاگرد جدید +'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'آرش کمانگیر');
+    await tester.tap(find.text('ذخیره نهایی'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('آرش کمانگیر'), findsOneWidget);
   });
 }

@@ -16,7 +16,7 @@ void main() {
           startsWith('sb_publishable_'));
     });
 
-    test('AthleteEntity.toSupabaseJson includes email and access_code', () {
+    test('Athlete, ChatMessage, and WorkoutLog payloads match PostgreSQL schema', () {
       final now = DateTime.utc(2026, 11, 9, 12, 0);
       final athlete = AthleteEntity(
         id: '550e8400-e29b-41d4-a716-446655440000',
@@ -35,10 +35,31 @@ void main() {
         updatedAt: now,
       );
 
-      final payload = athlete.toSupabaseJson();
-      expect(payload['email'], equals('reza@gym.com'));
-      expect(payload['access_code'], equals('PC-A1B2C3'));
-      expect(payload.containsKey('sync_status'), isFalse);
+      final athJson = athlete.toSupabaseJson();
+      expect(athJson['email'], equals('reza@gym.com'));
+      expect(athJson['access_code'], equals('PC-A1B2C3'));
+      expect(athJson.containsKey('sync_status'), isFalse);
+
+      final chatMsg = ChatMessageEntity(
+        id: 'chat-uuid-1',
+        athleteId: athlete.id,
+        senderRole: 'coach',
+        messageText: 'Keep pushing!',
+        createdAt: now,
+      );
+      expect(chatMsg.toSupabaseJson()['sender_role'], equals('coach'));
+
+      final wLog = AthleteWorkoutLogEntity(
+        id: 'log-uuid-1',
+        athleteId: athlete.id,
+        programId: 'prog-uuid-1',
+        dayNumber: 2,
+        exerciseWeightsKg: const {'Squat': '120'},
+        waterGlasses: 10,
+        sessionRpe: 8,
+        loggedAt: now,
+      );
+      expect(wLog.toSupabaseJson()['water_glasses'], equals(10));
     });
 
     test('SupabaseSyncService blocks sync gracefully when offline or unauthenticated', () async {

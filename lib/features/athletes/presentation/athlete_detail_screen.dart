@@ -706,6 +706,60 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
             ),
           ],
         ),
+        const SizedBox(height: 20),
+        Text(
+          isFa
+              ? '📊 آخرین گزارشهای تمرین و رکوردهای ثبتشده توسط شاگرد:'
+              : '📊 Athlete Logged Workout Sessions & PRs:',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        ),
+        const SizedBox(height: 8),
+        Builder(
+          builder: (ctx) {
+            final workoutLogs =
+                ref.read(appDatabaseProvider).getWorkoutLogsForAthlete(athlete.id);
+            if (workoutLogs.isEmpty) {
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Text(
+                    isFa
+                        ? 'شاگرد هنوز گزارش تمرینی از پنل خود ارسال نکرده است.'
+                        : 'No workout sessions logged by athlete yet.',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ),
+              );
+            }
+            return Column(
+              children: workoutLogs.take(5).map((wLog) {
+                final weightsSummary = wLog.exerciseWeightsKg.entries
+                    .map((e) => '${e.value}kg')
+                    .join(' | ');
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: const Icon(LucideIcons.trophy,
+                        color: AppColors.success),
+                    title: Text(
+                      isFa
+                          ? 'جلسه روز ${wLog.dayNumber} - تاریخ: ${_formatShamsi(wLog.loggedAt)}'
+                          : 'Day ${wLog.dayNumber} - ${wLog.loggedAt.toString().substring(0, 10)}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    subtitle: Text(
+                      isFa
+                          ? '💧 آب: ${wLog.waterGlasses} لیوان | وزنه ثبتشده: ${weightsSummary.isEmpty ? "تکمیل شده" : weightsSummary}'
+                          : '💧 Water: ${wLog.waterGlasses} glasses | Weights: $weightsSummary',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
         const SizedBox(height: 80),
       ],
     );

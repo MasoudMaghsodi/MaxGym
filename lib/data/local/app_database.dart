@@ -244,6 +244,9 @@ class AthleteWorkoutLogEntity {
                     k, (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0.0)))
                 : const {});
 
+  Map<String, dynamic> get exerciseWeightsKg => exerciseMaxWeights
+      .map((k, v) => MapEntry(k, v % 1 == 0 ? v.toInt().toString() : v.toString()));
+
   Map<String, dynamic> toSupabaseJson() => {
         'id': id,
         'athlete_id': athleteId,

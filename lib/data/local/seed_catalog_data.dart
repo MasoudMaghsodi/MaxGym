@@ -164,6 +164,9 @@ class SeedCatalogData {
     return 'chest';
   }
 
+  static String mapGlobalMuscleToCategory(String rawMuscle) =>
+      mapGlobalMuscleGroup(rawMuscle);
+
   /// دانلود و تبدیل خودکار کل ۸۷۳ حرکت از GitHub در پسزمینه (فقط یکبار)
   static Future<List<ExerciseSeedItem>> fetchAll873GlobalExercises() async {
     try {
