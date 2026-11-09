@@ -12,21 +12,19 @@ final appDatabaseProvider = Provider<LocalAppDatabase>((ref) {
   throw UnimplementedError('LocalAppDatabase must be initialized in main.dart');
 });
 
-/// وضعیت همگامسازی رکوردهای محلی با Supabase
 enum SyncStatus { synced, pendingInsert, pendingUpdate, pendingDelete }
 
-/// مدل کامل ورزشکار (Step 1 Onboarding)
 class AthleteEntity {
   final String id;
   final String firstName;
   final String lastName;
   final String phone;
-  final String gender; // 'male' | 'female'
+  final String gender;
   final int age;
   final double heightCm;
   final double weightKg;
-  final String fitnessGoal; // 'weight_loss', 'lean_bulk', 'muscle_gain', 'maintenance'
-  final List<String> injuryTags; // ['lower_back', 'knee', 'shoulder', ...]
+  final String fitnessGoal;
+  final List<String> injuryTags;
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isDeleted;
@@ -68,7 +66,6 @@ class AthleteEntity {
       };
 }
 
-/// مدل سایزگیری بدنی تاریخدار (Step 2 Anthropometrics)
 class MeasurementLogEntity {
   final String id;
   final String athleteId;
@@ -122,7 +119,6 @@ class MeasurementLogEntity {
       };
 }
 
-/// مدل یک حرکت تمرینی داخل یک روز مشخص (شامل پشتیبانی از سوپرست و تمپو)
 class WorkoutItemEntity {
   final String id;
   final String exerciseId;
@@ -133,7 +129,7 @@ class WorkoutItemEntity {
   final String imageEndUrl;
   final int orderIndex;
   final SetType setType;
-  final String? supersetGroupId; // اگر دو حرکت کد یکسان داشته باشند (مثلاً "SS-1") به هم قفل میشوند
+  final String? supersetGroupId;
   final List<SingleSetConfig> sets;
   final String coachNote;
 
@@ -151,6 +147,31 @@ class WorkoutItemEntity {
     required this.sets,
     this.coachNote = '',
   });
+
+  WorkoutItemEntity copyWith({
+    int? orderIndex,
+    SetType? setType,
+    String? supersetGroupId,
+    bool clearSuperset = false,
+    List<SingleSetConfig>? sets,
+    String? coachNote,
+  }) {
+    return WorkoutItemEntity(
+      id: id,
+      exerciseId: exerciseId,
+      exerciseNameFa: exerciseNameFa,
+      exerciseNameEn: exerciseNameEn,
+      targetMuscle: targetMuscle,
+      imageStartUrl: imageStartUrl,
+      imageEndUrl: imageEndUrl,
+      orderIndex: orderIndex ?? this.orderIndex,
+      setType: setType ?? this.setType,
+      supersetGroupId:
+          clearSuperset ? null : (supersetGroupId ?? this.supersetGroupId),
+      sets: sets ?? this.sets,
+      coachNote: coachNote ?? this.coachNote,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -190,13 +211,12 @@ class WorkoutItemEntity {
   }
 }
 
-/// مدل یک روز در برنامه هفتگی (Macro-to-Micro Split)
 class WorkoutDayPlan {
-  final int dayNumber; // 1 (شنبه/Sat) تا 7 (جمعه/Fri)
+  final int dayNumber;
   final String dayNameFa;
   final String dayNameEn;
   final bool isRestDay;
-  final List<String> targetMuscles; // ['chest', 'triceps']
+  final List<String> targetMuscles;
   final List<WorkoutItemEntity> exercises;
 
   const WorkoutDayPlan({
@@ -231,25 +251,21 @@ class WorkoutDayPlan {
   }
 }
 
-/// مدل جامع برنامه اختصاصی ورزشکار (تمرین + تغذیه + مکمل + مالی + تاریخ انقضا)
 class FullProgramEntity {
   final String id;
   final String athleteId;
   final String title;
   final DateTime startDate;
-  final int durationWeeks; // مثلاً 4 یا 6 هفته
+  final int durationWeeks;
   final List<WorkoutDayPlan> days;
   final List<DietMealSlot> dietMeals;
   final double waterLiters;
   final List<String> dietGuidelines;
   final List<SupplementPrescriptionItem> supplements;
-
-  // بخش مالی و شهریه این دوره
   final double totalFee;
   final double paidAmount;
-  final String paymentStatus; // 'paid', 'partial', 'unpaid'
-
-  final bool isTemplate; // آیا به عنوان قالب آماده هم ذخیره شده؟
+  final String paymentStatus;
+  final bool isTemplate;
   final DateTime updatedAt;
   final String syncStatus;
 
@@ -298,7 +314,6 @@ class FullProgramEntity {
       };
 }
 
-/// کلاس مدیریت دیتابیس محلی SQLite با پشتیبانی از Outbox Sync Queue
 class LocalAppDatabase {
   late final Database _db;
 
@@ -313,20 +328,16 @@ class LocalAppDatabase {
     return instance;
   }
 
-  static LocalAppDatabase inMemory() {
-    return initInMemoryForTesting();
-  }
-
   /// سازنده مخصوص اجرای سریع Unit Test و Widget Test در حافظه RAM
+    static LocalAppDatabase inMemory() => initInMemoryForTesting();
+
+  void close() => _db.dispose();
+
   static LocalAppDatabase initInMemoryForTesting() {
     final db = sqlite3.openInMemory();
     final instance = LocalAppDatabase._(db);
     instance._createTablesAndSeed();
     return instance;
-  }
-
-  void close() {
-    _db.dispose();
   }
 
   void _createTablesAndSeed() {
@@ -395,13 +406,31 @@ class LocalAppDatabase {
         image_end_url TEXT NOT NULL,
         contraindicated_injuries TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS custom_foods_catalog (
+        id TEXT PRIMARY KEY,
+        name_fa TEXT NOT NULL,
+        name_en TEXT NOT NULL,
+        unit_fa TEXT NOT NULL,
+        unit_en TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS custom_supplements_catalog (
+        id TEXT PRIMARY KEY,
+        name_fa TEXT NOT NULL,
+        name_en TEXT NOT NULL,
+        dosage_fa TEXT NOT NULL,
+        dosage_en TEXT NOT NULL,
+        timing_fa TEXT NOT NULL,
+        timing_en TEXT NOT NULL
+      );
     ''');
 
-    // Seed کردن کاتالوگ حرکات دوزبانه در صورت خالی بودن
-    final countResult =
-        _db.select('SELECT COUNT(*) as cnt FROM exercises_catalog');
-    final count = countResult.first['cnt'] as int;
-    if (count == 0) {
+    // Seed کردن حرکات ورزشی پایه
+    final exCount =
+        _db.select('SELECT COUNT(*) as cnt FROM exercises_catalog').first['cnt']
+            as int;
+    if (exCount == 0) {
       final stmt = _db.prepare('''
         INSERT INTO exercises_catalog (
           id, name_fa, name_en, target_muscle, equipment,
@@ -422,10 +451,57 @@ class LocalAppDatabase {
       }
       stmt.dispose();
     }
+
+    // Seed کردن بانک غذاها
+    final foodCount = _db
+        .select('SELECT COUNT(*) as cnt FROM custom_foods_catalog')
+        .first['cnt'] as int;
+    if (foodCount == 0) {
+      final stmt = _db.prepare('''
+        INSERT INTO custom_foods_catalog (id, name_fa, name_en, unit_fa, unit_en)
+        VALUES (?, ?, ?, ?, ?)
+      ''');
+      int i = 1;
+      for (final f in SeedCatalogData.quickFoodCatalog) {
+        stmt.execute([
+          'food_$i',
+          f['nameFa']!,
+          f['nameEn']!,
+          f['unitFa']!,
+          f['unitEn']!
+        ]);
+        i++;
+      }
+      stmt.dispose();
+    }
+
+    // Seed کردن بانک مکملها
+    final suppCount = _db
+        .select('SELECT COUNT(*) as cnt FROM custom_supplements_catalog')
+        .first['cnt'] as int;
+    if (suppCount == 0) {
+      final stmt = _db.prepare('''
+        INSERT INTO custom_supplements_catalog (
+          id, name_fa, name_en, dosage_fa, dosage_en, timing_fa, timing_en
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ''');
+      for (final s in SeedCatalogData.supplementCatalog) {
+        stmt.execute([
+          s['id']!,
+          s['nameFa']!,
+          s['nameEn']!,
+          s['defaultDosageFa']!,
+          s['defaultDosageEn']!,
+          s['defaultTimingFa']!,
+          s['defaultTimingEn']!,
+        ]);
+      }
+      stmt.dispose();
+    }
   }
 
   // ===========================================================================
-  // ۱. عملیات مربوط به ورزشکاران (Athletes DAO)
+  // ۱. عملیات ورزشکاران (Athletes DAO)
   // ===========================================================================
   void upsertAthlete(AthleteEntity athlete) {
     _db.execute('''
@@ -493,7 +569,7 @@ class LocalAppDatabase {
   }
 
   // ===========================================================================
-  // ۲. عملیات مربوط به سایزگیری و تاریخچه آنتروپومتریک (Measurements DAO)
+  // ۲. عملیات سایزگیری (Measurements DAO)
   // ===========================================================================
   void insertMeasurementLog(MeasurementLogEntity log) {
     _db.execute('''
@@ -520,11 +596,14 @@ class LocalAppDatabase {
       log.syncStatus,
     ]);
 
-    // بهروزرسانی وزن فعلی در پروفایل اصلی ورزشکار
     _db.execute('''
       UPDATE athletes SET weight_kg = ?, updated_at = ?, sync_status = 'pending_update'
       WHERE id = ?
-    ''', [log.weightKg, DateTime.now().toUtc().toIso8601String(), log.athleteId]);
+    ''', [
+      log.weightKg,
+      DateTime.now().toUtc().toIso8601String(),
+      log.athleteId
+    ]);
   }
 
   List<MeasurementLogEntity> getMeasurementsForAthlete(String athleteId) {
@@ -554,7 +633,7 @@ class LocalAppDatabase {
   }
 
   // ===========================================================================
-  // ۳. عملیات مربوط به برنامههای تمرینی، غذایی، مکمل، قالبها و مالی (Programs DAO)
+  // ۳. عملیات برنامهها، قالبها و تسویه بدهی مالی (Programs & Billing DAO)
   // ===========================================================================
   void upsertProgram(FullProgramEntity program) {
     _db.execute('''
@@ -582,6 +661,20 @@ class LocalAppDatabase {
       program.updatedAt.toUtc().toIso8601String(),
       program.syncStatus,
     ]);
+  }
+
+  /// تسویه آنی بدهی مالی یک برنامه با یک کلیک
+  void settleProgramDebt(String programId) {
+    _db.execute('''
+      UPDATE programs
+      SET paid_amount = total_fee, payment_status = 'paid', updated_at = ?, sync_status = 'pending_update'
+      WHERE id = ?
+    ''', [DateTime.now().toUtc().toIso8601String(), programId]);
+  }
+
+  /// حذف برنامه یا قالب آماده
+  void deleteProgramOrTemplate(String programId) {
+    _db.execute('DELETE FROM programs WHERE id = ?', [programId]);
   }
 
   List<FullProgramEntity> getProgramsForAthlete(String athleteId) {
@@ -633,9 +726,12 @@ class LocalAppDatabase {
   }
 
   // ===========================================================================
-  // ۴. کاتالوگ حرکات ورزشی (Exercises Catalog)
+  // ۴. کاتالوگ حرکات، غذاها و مکملها + افزودن آیتم سفارشی توسط مربی
   // ===========================================================================
-  List<ExerciseSeedItem> getExercisesCatalog({String? muscleFilter}) {
+  List<ExerciseSeedItem> getExercisesCatalog({
+    String? muscleFilter,
+    String? searchQuery,
+  }) {
     final rows = muscleFilter == null || muscleFilter.isEmpty
         ? _db.select('SELECT * FROM exercises_catalog ORDER BY name_fa ASC')
         : _db.select(
@@ -643,7 +739,7 @@ class LocalAppDatabase {
             [muscleFilter],
           );
 
-    return rows.map((r) {
+    final list = rows.map((r) {
       return ExerciseSeedItem(
         id: r['id'] as String,
         nameFa: r['name_fa'] as String,
@@ -656,6 +752,101 @@ class LocalAppDatabase {
             jsonDecode(r['contraindicated_injuries'] as String)),
       );
     }).toList();
+
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      final q = searchQuery.trim().toLowerCase();
+      return list.where((ex) {
+        return ex.nameFa.toLowerCase().contains(q) ||
+            ex.nameEn.toLowerCase().contains(q);
+      }).toList();
+    }
+    return list;
+  }
+
+  /// افزودن حرکت جدید سفارشی توسط مربی به بانک حرکات
+  void addCustomExercise(ExerciseSeedItem item) {
+    _db.execute('''
+      INSERT OR REPLACE INTO exercises_catalog (
+        id, name_fa, name_en, target_muscle, equipment,
+        image_start_url, image_end_url, contraindicated_injuries
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      item.id,
+      item.nameFa,
+      item.nameEn,
+      item.targetMuscle,
+      item.equipment,
+      item.imageStartUrl,
+      item.imageEndUrl,
+      jsonEncode(item.contraindicatedInjuries),
+    ]);
+  }
+
+  List<Map<String, String>> getFoodsCatalog() {
+    final rows =
+        _db.select('SELECT * FROM custom_foods_catalog ORDER BY rowid DESC');
+    return rows.map((r) {
+      return {
+        'id': r['id'] as String,
+        'nameFa': r['name_fa'] as String,
+        'nameEn': r['name_en'] as String,
+        'unitFa': r['unit_fa'] as String,
+        'unitEn': r['unit_en'] as String,
+      };
+    }).toList();
+  }
+
+  /// افزودن ماده غذایی جدید توسط مربی به بانک غذاها
+  void addCustomFood({
+    required String nameFa,
+    required String nameEn,
+    required String unitFa,
+    required String unitEn,
+  }) {
+    _db.execute('''
+      INSERT INTO custom_foods_catalog (id, name_fa, name_en, unit_fa, unit_en)
+      VALUES (?, ?, ?, ?, ?)
+    ''', [const Uuid().v4(), nameFa, nameEn, unitFa, unitEn]);
+  }
+
+  List<Map<String, String>> getSupplementsCatalog() {
+    final rows = _db.select(
+        'SELECT * FROM custom_supplements_catalog ORDER BY rowid DESC');
+    return rows.map((r) {
+      return {
+        'id': r['id'] as String,
+        'nameFa': r['name_fa'] as String,
+        'nameEn': r['name_en'] as String,
+        'defaultDosageFa': r['dosage_fa'] as String,
+        'defaultDosageEn': r['dosage_en'] as String,
+        'defaultTimingFa': r['timing_fa'] as String,
+        'defaultTimingEn': r['timing_en'] as String,
+      };
+    }).toList();
+  }
+
+  /// افزودن مکمل جدید توسط مربی به بانک مکملها
+  void addCustomSupplement({
+    required String nameFa,
+    required String nameEn,
+    required String dosageFa,
+    required String dosageEn,
+    required String timingFa,
+    required String timingEn,
+  }) {
+    _db.execute('''
+      INSERT INTO custom_supplements_catalog (
+        id, name_fa, name_en, dosage_fa, dosage_en, timing_fa, timing_en
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      const Uuid().v4(),
+      nameFa,
+      nameEn,
+      dosageFa,
+      dosageEn,
+      timingFa,
+      timingEn
+    ]);
   }
 
   // ===========================================================================
@@ -698,7 +889,6 @@ class LocalAppDatabase {
   }
 
   void markRecordSynced(String table, String id) {
-    _db.execute(
-        "UPDATE $table SET sync_status = 'synced' WHERE id = ?", [id]);
+    _db.execute("UPDATE $table SET sync_status = 'synced' WHERE id = ?", [id]);
   }
 }

@@ -10,7 +10,7 @@ import '../../athletes/presentation/athlete_detail_screen.dart';
 import '../../athletes/presentation/athlete_onboarding_sheet.dart';
 import '../../athletes/presentation/athletes_provider.dart';
 
-class CoachDashboardScreen extends ConsumerWidget {
+class CoachDashboardScreen extends ConsumerStatefulWidget {
   final VoidCallback onTriggerCloudSync;
   final void Function(AthleteEntity athlete)? onOpenWorkoutBuilder;
   final void Function(AthleteEntity athlete, FullProgramEntity program)?
@@ -24,7 +24,15 @@ class CoachDashboardScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CoachDashboardScreen> createState() =>
+      _CoachDashboardScreenState();
+}
+
+class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
+  bool _isPrivacyMode = false;
+
+  @override
+  Widget build(BuildContext context) {
     final branding = ref.watch(brandingProvider);
     final athletes = ref.watch(athletesProvider);
     final db = ref.watch(appDatabaseProvider);
@@ -33,7 +41,7 @@ class CoachDashboardScreen extends ConsumerWidget {
     final isFa = s.isFa;
     final theme = Theme.of(context);
 
-    // محاسبه شاخصهای کلیدی مالی و انقضای برنامهها
+    // محاسبه شاخص‌های کلیدی مالی و انقضای برنامه‌ها
     double totalRevenue = 0;
     double totalPendingDebt = 0;
     final List<FullProgramEntity> expiringPrograms = [];
@@ -64,17 +72,29 @@ class CoachDashboardScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            tooltip: isFa ? 'همگامسازی ابری با Supabase' : 'Sync with Cloud',
+            tooltip: _isPrivacyMode
+                ? (isFa ? 'نمایش مبالغ مالی' : 'Show Financial Amounts')
+                : (isFa
+                    ? 'حالت حریم خصوصی (مخفی‌سازی درآمد در حضور شاگرد)'
+                    : 'Privacy Mode (Hide Amounts)'),
+            icon: Icon(
+              _isPrivacyMode ? LucideIcons.eyeOff : LucideIcons.eye,
+              color: _isPrivacyMode ? AppColors.warning : null,
+            ),
+            onPressed: () => setState(() => _isPrivacyMode = !_isPrivacyMode),
+          ),
+          IconButton(
+            tooltip: isFa ? 'همگام‌سازی ابری با Supabase' : 'Sync with Cloud',
             icon: Icon(LucideIcons.cloudUpload,
                 color: theme.colorScheme.primary),
-            onPressed: onTriggerCloudSync,
+            onPressed: widget.onTriggerCloudSync,
           ),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ۱. کارتهای آماری بالای داشبورد
+          // ۱. کارت‌های آماری بالای داشبورد
           Row(
             children: [
               _statCard(
@@ -85,8 +105,10 @@ class CoachDashboardScreen extends ConsumerWidget {
               ),
               const SizedBox(width: 12),
               _statCard(
-                title: isFa ? 'درآمد دریافتشده' : 'Collected Revenue',
-                value: totalRevenue.toStringAsFixed(0),
+                title: isFa ? 'درآمد دریافت‌شده' : 'Collected Revenue',
+                value: _isPrivacyMode
+                    ? '******'
+                    : totalRevenue.toStringAsFixed(0),
                 icon: LucideIcons.wallet,
                 color: AppColors.success,
               ),
@@ -96,7 +118,7 @@ class CoachDashboardScreen extends ConsumerWidget {
           Row(
             children: [
               _statCard(
-                title: isFa ? 'برنامههای رو به اتمام' : 'Expiring Soon',
+                title: isFa ? 'برنامه‌های رو به اتمام' : 'Expiring Soon',
                 value: '${expiringPrograms.length}',
                 icon: LucideIcons.clock,
                 color: AppColors.warning,
@@ -104,7 +126,9 @@ class CoachDashboardScreen extends ConsumerWidget {
               const SizedBox(width: 12),
               _statCard(
                 title: isFa ? 'مطالبات / بدهکاران' : 'Pending Debt',
-                value: totalPendingDebt.toStringAsFixed(0),
+                value: _isPrivacyMode
+                    ? '******'
+                    : totalPendingDebt.toStringAsFixed(0),
                 icon: LucideIcons.alertCircle,
                 color: AppColors.danger,
               ),
@@ -112,7 +136,7 @@ class CoachDashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          // ۲. هشدار برنامههای رو به اتمام یا منقضیشده
+          // ۲. هشدار برنامه‌های رو به اتمام یا منقضی‌شده
           Text(
             s.tr('expiring_programs'),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -124,7 +148,7 @@ class CoachDashboardScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 child: Text(
                   isFa
-                      ? '✅ تمام برنامههای ورزشکاران دارای اعتبار زمانی کافی هستند.'
+                      ? '✅ تمام برنامه‌های ورزشکاران دارای اعتبار زمانی کافی هستند.'
                       : '✅ All athlete programs are up to date.',
                   style: const TextStyle(color: Colors.grey),
                 ),
@@ -156,8 +180,8 @@ class CoachDashboardScreen extends ConsumerWidget {
                   ),
                   trailing: ElevatedButton(
                     onPressed: () {
-                      if (onOpenWorkoutBuilder != null) {
-                        onOpenWorkoutBuilder!(athlete);
+                      if (widget.onOpenWorkoutBuilder != null) {
+                        widget.onOpenWorkoutBuilder!(athlete);
                       }
                     },
                     child: Text(isFa ? 'تمدید برنامه' : 'Renew'),
@@ -199,8 +223,8 @@ class CoachDashboardScreen extends ConsumerWidget {
                       MaterialPageRoute(
                         builder: (_) => AthleteDetailScreen(
                           athleteId: athlete.id,
-                          onOpenWorkoutBuilder: onOpenWorkoutBuilder,
-                          onExportPdf: onExportPdf,
+                          onOpenWorkoutBuilder: widget.onOpenWorkoutBuilder,
+                          onExportPdf: widget.onExportPdf,
                         ),
                       ),
                     );
@@ -210,12 +234,43 @@ class CoachDashboardScreen extends ConsumerWidget {
                   title: Text(athlete.fullName,
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(p.title),
-                  trailing: Text(
-                    '${p.remainingDebt.toStringAsFixed(0)} T',
-                    style: const TextStyle(
-                      color: AppColors.danger,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _isPrivacyMode
+                            ? '******'
+                            : '${p.remainingDebt.toStringAsFixed(0)} T',
+                        style: const TextStyle(
+                          color: AppColors.danger,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.success,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () {
+                          db.settleProgramDebt(p.id);
+                          setState(() {});
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(isFa
+                                  ? 'بدهی ${athlete.fullName} با موفقیت تسویه شد.'
+                                  : 'Debt settled for ${athlete.fullName}'),
+                            ),
+                          );
+                        },
+                        child: Text(isFa ? 'تسویه شد' : 'Settle',
+                            style: const TextStyle(fontSize: 12)),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -272,12 +327,17 @@ class CoachDashboardScreen extends ConsumerWidget {
   }
 }
 
-/// صفحه نمایش قالبهای آماده مربی (Smart Templates Tab)
-class TemplatesScreen extends ConsumerWidget {
+/// صفحه نمایش قالب‌های آماده مربی (Smart Templates Tab)
+class TemplatesScreen extends ConsumerStatefulWidget {
   const TemplatesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TemplatesScreen> createState() => _TemplatesScreenState();
+}
+
+class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(appDatabaseProvider);
     final templates = db.getSavedTemplates();
     final isFa = AppStrings.of(context).isFa;
@@ -285,7 +345,7 @@ class TemplatesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-            isFa ? 'بانک قالبهای آماده (Smart Templates)' : 'Smart Templates'),
+            isFa ? 'بانک قالب‌های آماده (Smart Templates)' : 'Smart Templates'),
       ),
       body: templates.isEmpty
           ? Center(
@@ -316,6 +376,21 @@ class TemplatesScreen extends ConsumerWidget {
                       isFa
                           ? '$activeDaysCount جلسه تمرین در هفته | ${t.dietMeals.length} وعده غذایی | ${t.supplements.length} مکمل'
                           : '$activeDaysCount Workout Days | ${t.dietMeals.length} Meals | ${t.supplements.length} Supplements',
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(LucideIcons.trash2,
+                          color: AppColors.danger),
+                      onPressed: () {
+                        db.deleteProgramOrTemplate(t.id);
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(isFa
+                                ? 'قالب «${t.title}» حذف شد.'
+                                : 'Template ${t.title} deleted.'),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 );

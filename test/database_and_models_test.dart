@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pro_coach_app/data/local/app_database.dart';
 import 'package:pro_coach_app/data/local/database_models.dart';
+import 'package:pro_coach_app/data/local/seed_catalog_data.dart';
 
 void main() {
   late LocalAppDatabase db;
@@ -182,6 +183,104 @@ void main() {
       expect(loaded.days.first.exercises[1].sets.first.isDropSet, isTrue);
       expect(loaded.dietMeals.first.items.first.alternativesFa.length, equals(2));
       expect(loaded.supplements.first.onlyTrainingDays, isTrue);
+    });
+
+    test('Custom Coach Catalog (Moves, Foods, Supps) and Search Queries', () {
+      // ۱. افزودن حرکت سفارشی مربی و جستجوی آن
+      db.addCustomExercise(
+        const ExerciseSeedItem(
+          id: 'custom_incline_fly',
+          nameFa: 'بالاسینه دمبل موازی مربی',
+          nameEn: 'Coach Custom Incline Dumbbell Fly',
+          targetMuscle: 'chest',
+          equipment: 'dumbbell',
+          imageStartUrl: 'url_start',
+          imageEndUrl: 'url_end',
+        ),
+      );
+
+      final searchResults = db.getExercisesCatalog(searchQuery: 'موازی مربی');
+      expect(searchResults.length, equals(1));
+      expect(searchResults.first.nameEn, contains('Coach Custom'));
+
+      // ۲. افزودن غذای سفارشی مربی به بانک غذا
+      db.addCustomFood(
+        nameFa: 'حلیم گوشت بوقلمون',
+        nameEn: 'Turkey Haleem',
+        unitFa: '۲۵۰ گرم',
+        unitEn: '250g',
+      );
+
+      final foods = db.getFoodsCatalog();
+      expect(foods.any((f) => f['nameFa'] == 'حلیم گوشت بوقلمون'), isTrue);
+
+      // ۳. افزودن مکمل سفارشی
+      db.addCustomSupplement(
+        nameFa: 'سیترولین مالات',
+        nameEn: 'Citrulline Malate',
+        dosageFa: '۶ گرم',
+        dosageEn: '6g',
+        timingFa: '۳۰ دقیقه قبل تمرین',
+        timingEn: '30m Pre-Workout',
+      );
+
+      final supps = db.getSupplementsCatalog();
+      expect(supps.any((s) => s['nameFa'] == 'سیترولین مالات'), isTrue);
+    });
+
+    test('Quick Debt Settlement and Template Deletion', () {
+      final now = DateTime.now();
+      const programId = 'prog_debt_test';
+      final program = FullProgramEntity(
+        id: programId,
+        athleteId: 'ath-202',
+        title: 'برنامه تست بدهی',
+        startDate: now,
+        durationWeeks: 4,
+        days: const [],
+        dietMeals: const [],
+        waterLiters: 3.0,
+        dietGuidelines: const [],
+        supplements: const [],
+        totalFee: 1500000,
+        paidAmount: 500000,
+        paymentStatus: 'partial',
+        isTemplate: false,
+        updatedAt: now,
+      );
+
+      final template = FullProgramEntity(
+        id: 'tpl_1',
+        athleteId: 'ath-202',
+        title: 'قالب تست جهت حذف',
+        startDate: now,
+        durationWeeks: 4,
+        days: const [],
+        dietMeals: const [],
+        waterLiters: 3.0,
+        dietGuidelines: const [],
+        supplements: const [],
+        totalFee: 1000000,
+        paidAmount: 1000000,
+        paymentStatus: 'paid',
+        isTemplate: true,
+        updatedAt: now,
+      );
+
+      db.upsertProgram(program);
+      db.upsertProgram(template);
+      expect(db.getSavedTemplates().length, equals(1));
+
+      // تسویه آنی بدهی
+      db.settleProgramDebt(programId);
+      final updatedProg = db.getProgramsForAthlete('ath-202').first;
+      expect(updatedProg.remainingDebt, equals(0));
+      expect(updatedProg.paymentStatus, equals('paid'));
+      expect(updatedProg.paidAmount, equals(1500000));
+
+      // حذف قالب آماده
+      db.deleteProgramOrTemplate('tpl_1');
+      expect(db.getSavedTemplates().isEmpty, isTrue);
     });
   });
 }

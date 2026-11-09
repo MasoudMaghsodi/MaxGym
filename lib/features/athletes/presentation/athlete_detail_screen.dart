@@ -1,13 +1,19 @@
+import 'dart:io';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shamsi_date/shamsi_date.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/theme/branding_provider.dart';
 import '../../../data/local/app_database.dart';
+import '../../workout_builder/presentation/master_program_builder_screen.dart';
 import '../domain/scientific_bio_calculator.dart';
 import 'athlete_onboarding_sheet.dart';
 import 'athletes_provider.dart';
@@ -49,6 +55,177 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
   String _formatShamsi(DateTime dt) {
     final j = Jalali.fromDateTime(dt);
     return '${j.year}/${j.month.toString().padLeft(2, '0')}/${j.day.toString().padLeft(2, '0')}';
+  }
+
+  /// باز کردن طراح برنامه در حالت «ویرایش برنامه فعلی» یا «کپی برای دوره جدید»
+  Future<void> _openEditorOrClone({
+    required AthleteEntity athlete,
+    required FullProgramEntity program,
+    required bool isEditingExisting,
+  }) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MasterProgramBuilderScreen(
+          athlete: athlete,
+          initialProgramOrTemplate: program,
+          isEditingExisting: isEditingExisting,
+          onSavedAndExportPdf: widget.onExportPdf,
+        ),
+      ),
+    );
+    setState(() {});
+  }
+
+  /// ابزار مقایسه تصویری قبل و بعد (Before / After Story Comparison) بدون اشغال فضای ابری
+  void _showBeforeAfterStorySheet(AthleteEntity athlete, bool isFa) {
+    String? beforePath;
+    String? afterPath;
+    final branding = ref.read(brandingProvider);
+    final picker = ImagePicker();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isFa
+                        ? '📸 مقایسه تصویری پیشرفت (Before / After)'
+                        : '📸 Before & After Transformation',
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.darkCard,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          '${branding.gymName} | ${branding.coachName}',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () async {
+                                  final img = await picker.pickImage(
+                                      source: ImageSource.gallery);
+                                  if (img != null) {
+                                    setSheetState(() => beforePath = img.path);
+                                  }
+                                },
+                                child: Container(
+                                  height: 180,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black26,
+                                    borderRadius: BorderRadius.circular(12),
+                                    image: beforePath != null
+                                        ? DecorationImage(
+                                            image: FileImage(File(beforePath!)),
+                                            fit: BoxFit.cover)
+                                        : null,
+                                  ),
+                                  alignment: Alignment.bottomCenter,
+                                  child: Container(
+                                    width: double.infinity,
+                                    color: Colors.black54,
+                                    padding: const EdgeInsets.all(4),
+                                    child: Text(
+                                      isFa ? 'قبل (Before)' : 'BEFORE',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () async {
+                                  final img = await picker.pickImage(
+                                      source: ImageSource.gallery);
+                                  if (img != null) {
+                                    setSheetState(() => afterPath = img.path);
+                                  }
+                                },
+                                child: Container(
+                                  height: 180,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black26,
+                                    borderRadius: BorderRadius.circular(12),
+                                    image: afterPath != null
+                                        ? DecorationImage(
+                                            image: FileImage(File(afterPath!)),
+                                            fit: BoxFit.cover)
+                                        : null,
+                                  ),
+                                  alignment: Alignment.bottomCenter,
+                                  child: Container(
+                                    width: double.infinity,
+                                    color: Colors.black54,
+                                    padding: const EdgeInsets.all(4),
+                                    child: Text(
+                                      isFa ? 'بعد (After)' : 'AFTER',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${athlete.fullName} | ${branding.socialHandle}',
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (beforePath != null && afterPath != null)
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Share.shareXFiles(
+                          [XFile(beforePath!), XFile(afterPath!)],
+                          text:
+                              '🔥 تغییرات فوقالعاده ${athlete.fullName} تحت نظر ${branding.coachName} (${branding.gymName}) 💪',
+                        );
+                      },
+                      icon: const Icon(LucideIcons.share2),
+                      label: Text(isFa
+                          ? 'اشتراکگذاری تصاویر برای استوری'
+                          : 'Share Transformation'),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _showNewCheckInDialog(
@@ -208,7 +385,7 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(appDatabaseProvider);
-    ref.watch(athletesProvider); // برای بازخوانی خودکار
+    ref.watch(athletesProvider);
     final athlete = db.getAthleteById(widget.athleteId);
     final isFa = AppStrings.of(context).isFa;
     final theme = Theme.of(context);
@@ -238,6 +415,30 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
       appBar: AppBar(
         title: Text(athlete.fullName),
         actions: [
+          IconButton(
+            tooltip: isFa ? 'استوری قبل و بعد (Before/After)' : 'Before/After',
+            icon: const Icon(LucideIcons.camera),
+            onPressed: () => _showBeforeAfterStorySheet(athlete, isFa),
+          ),
+          IconButton(
+            tooltip: isFa ? 'کپی لینک مستقیم چت واتساپ' : 'WhatsApp Direct Link',
+            icon: const Icon(LucideIcons.messageCircle),
+            onPressed: () async {
+              final cleanPhone =
+                  athlete.phone.replaceAll(RegExp(r'^0'), '98');
+              final waLink = 'https://wa.me/$cleanPhone';
+              await Clipboard.setData(ClipboardData(text: waLink));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(isFa
+                        ? 'لینک مستقیم واتساپ شاگرد کپی شد: $waLink'
+                        : 'WhatsApp direct link copied: $waLink'),
+                  ),
+                );
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(LucideIcons.edit3),
             onPressed: () async {
@@ -290,7 +491,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
     );
   }
 
-  /// تب ۱: نمایش علمی BMI, WHtR, BMR, TDEE و گرم دقیق پروتئین، کربوهیدرات، چربی، فیبر و آب
   Widget _buildBioAndMacrosTab(
       AthleteEntity athlete, BioAnalysisResult bio, bool isFa, ThemeData theme) {
     Widget macroBox(
@@ -338,7 +538,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // خلاصه مشخصات و تگهای آسیبدیدگی
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -378,8 +577,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
           ),
         ),
         const SizedBox(height: 12),
-
-        // کارت شاخص توده بدنی (BMI) و نسبت دور کمر به قد (WHtR)
         Row(
           children: [
             macroBox(
@@ -400,8 +597,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
           ],
         ),
         const SizedBox(height: 12),
-
-        // کارت انرژی و کالری روزانه
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -421,7 +616,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
           ),
         ),
         const SizedBox(height: 16),
-
         Text(
           isFa
               ? 'مقادیر علمی درشتمغذیها و ریزمغذیها (بر اساس هدف شاگرد):'
@@ -429,8 +623,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
         ),
         const SizedBox(height: 10),
-
-        // ردیف ۱ ماکروها: پروتئین، کربوهیدرات، چربی
         Row(
           children: [
             macroBox(
@@ -459,8 +651,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
           ],
         ),
         const SizedBox(height: 10),
-
-        // ردیف ۲: فیبر و آب مصرفی
         Row(
           children: [
             macroBox(
@@ -485,7 +675,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
     );
   }
 
-  /// تب ۲: نمودارهای تعاملی پیشرفت سایزها و وزن (fl_chart Line + Radar Chart)
   Widget _buildAnalyticsChartsTab(AthleteEntity athlete,
       List<MeasurementLogEntity> logs, bool isFa, ThemeData theme) {
     final latest = logs.isNotEmpty ? logs.last : null;
@@ -509,8 +698,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
           ],
         ),
         const SizedBox(height: 12),
-
-        // ۱. نمودار خطی تغییرات وزن
         Card(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 24, 20, 12),
@@ -573,8 +760,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
           ),
         ),
         const SizedBox(height: 20),
-
-        // ۲. نمودار راداری (Radar Chart) مقایسه سایز روز اول (Baseline) با آخرین سایزگیری
         if (baseline != null &&
             latest != null &&
             (latest.chestCm != null ||
@@ -633,9 +818,10 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
                         entryRadius: 3,
                         dataEntries: [
                           RadarEntry(
-                              value: latest.shoulderCm ??
-                                  baseline.shoulderCm ??
-                                  100),
+                              value: (latest.shoulderCm ??
+                                      baseline.shoulderCm ??
+                                      100) +
+                                  0.1),
                           RadarEntry(
                               value: latest.chestCm ?? baseline.chestCm ?? 95),
                           RadarEntry(
@@ -654,9 +840,7 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
             ),
           ),
         ],
-
         const SizedBox(height: 16),
-        // جدول تاریخچه سایزگیریها
         Text(
           isFa ? 'تاریخچه کامل سایزگیریها:' : 'Measurement History Logs:',
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
@@ -696,9 +880,11 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
     );
   }
 
-  /// تب ۳: لیست برنامههای ورزشکار + وضعیت انقضا + دکمه خروجی PDF
+  /// تب ۳: لیست برنامهها با دکمههای «ویرایش برنامه»، «کپی برای دوره جدید»، «تسویه بدهی» و «PDF»
   Widget _buildProgramsTab(AthleteEntity athlete,
       List<FullProgramEntity> programs, bool isFa, ThemeData theme) {
+    final db = ref.read(appDatabaseProvider);
+
     if (programs.isEmpty) {
       return Center(
         child: Column(
@@ -723,24 +909,43 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
         final isExpired = remDays <= 0;
 
         return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            title: Text(
-              p.title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            subtitle: Column(
+          margin: const EdgeInsets.only(bottom: 14),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        p.title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: isFa ? 'خروجی PDF اختصاصی' : 'Export PDF',
+                      icon: Icon(LucideIcons.fileOutput,
+                          color: theme.colorScheme.primary, size: 24),
+                      onPressed: () {
+                        if (widget.onExportPdf != null) {
+                          widget.onExportPdf!(athlete, p);
+                        }
+                      },
+                    ),
+                  ],
+                ),
                 Text(
                   isFa
                       ? 'شروع: ${_formatShamsi(p.startDate)} | مدت: ${p.durationWeeks} هفته'
                       : 'Start: ${p.startDate.toString().substring(0, 10)} (${p.durationWeeks} Weeks)',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
-                const SizedBox(height: 6),
-                Row(
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -771,7 +976,6 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
                     if (p.remainingDebt > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -782,25 +986,62 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
                         ),
                         child: Text(
                           isFa
-                              ? 'بدهکار: ${p.remainingDebt.toStringAsFixed(0)}'
+                              ? 'بدهکار: ${p.remainingDebt.toStringAsFixed(0)} تومان'
                               : 'Unpaid: ${p.remainingDebt.toStringAsFixed(0)}',
                           style: const TextStyle(
-                              fontSize: 12, color: AppColors.danger),
+                              fontSize: 12,
+                              color: AppColors.danger,
+                              fontWeight: FontWeight.bold),
                         ),
                       ),
                   ],
                 ),
+                const Divider(height: 20),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => _openEditorOrClone(
+                        athlete: athlete,
+                        program: p,
+                        isEditingExisting: true,
+                      ),
+                      icon: const Icon(LucideIcons.edit, size: 16),
+                      label: Text(isFa ? 'ویرایش برنامه' : 'Edit Plan'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _openEditorOrClone(
+                        athlete: athlete,
+                        program: p,
+                        isEditingExisting: false,
+                      ),
+                      icon: const Icon(LucideIcons.copy, size: 16),
+                      label: Text(isFa ? 'کپی برای دوره جدید' : 'Clone Plan'),
+                    ),
+                    if (p.remainingDebt > 0)
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.success,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () {
+                          db.settleProgramDebt(p.id);
+                          setState(() {});
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(isFa
+                                  ? 'بدهی برنامه «${p.title}» با موفقیت تسویه شد.'
+                                  : 'Debt settled successfully for ${p.title}'),
+                            ),
+                          );
+                        },
+                        icon: const Icon(LucideIcons.checkCheck, size: 16),
+                        label: Text(isFa ? 'تسویه بدهی' : 'Settle Debt'),
+                      ),
+                  ],
+                ),
               ],
-            ),
-            trailing: IconButton(
-              tooltip: isFa ? 'خروجی PDF اختصاصی' : 'Export Custom PDF',
-              icon: Icon(LucideIcons.fileOutput,
-                  color: theme.colorScheme.primary, size: 28),
-              onPressed: () {
-                if (widget.onExportPdf != null) {
-                  widget.onExportPdf!(athlete, p);
-                }
-              },
             ),
           ),
         );

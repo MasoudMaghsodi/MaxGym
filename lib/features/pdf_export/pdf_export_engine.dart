@@ -687,11 +687,16 @@ class PdfExportEngine {
                           margin: const pw.EdgeInsets.only(right: 6),
                           child: pw.Image(endImg, fit: pw.BoxFit.cover),
                         ),
-                      pw.BarcodeWidget(
-                        barcode: pw.Barcode.qrCode(),
-                        data: ex.imageStartUrl,
-                        width: 26,
-                        height: 26,
+                      pw.UrlLink(
+                        destination:
+                            'https://www.youtube.com/results?search_query=${Uri.encodeComponent("${ex.exerciseNameEn.isNotEmpty ? ex.exerciseNameEn : ex.exerciseNameFa} form tutorial")}',
+                        child: pw.BarcodeWidget(
+                          barcode: pw.Barcode.qrCode(),
+                          data:
+                              'https://www.youtube.com/results?search_query=${Uri.encodeComponent("${ex.exerciseNameEn.isNotEmpty ? ex.exerciseNameEn : ex.exerciseNameFa} form tutorial")}',
+                          width: 26,
+                          height: 26,
+                        ),
                       ),
                     ],
                   ),
@@ -738,6 +743,17 @@ class PdfExportEngine {
                           style: const pw.TextStyle(
                               fontSize: 8, color: PdfColors.grey700),
                         ),
+                        if (ex.coachNote.isNotEmpty) ...[
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            'Note: ${ex.coachNote}',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              color: PdfColors.blueGrey800,
+                              fontStyle: pw.FontStyle.italic,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
