@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- Live Multi-Device Testing & Runtime Polish:
+  - Resolved athlete code login failure on secondary devices by introducing instant background auto-sync (`syncAllPendingData`) upon athlete creation, update, and program save.
+  - Enhanced Supabase RPC `athlete_login_by_code` and local SQLite `getAthleteByAccessCode` with flexible regex matching (`^PC-`) and explicit `GRANT EXECUTE` to `anon, authenticated`.
+  - Fixed `Unsupported operation: Cannot modify an unmodifiable list` crash when adding diet foods/meals in `master_program_builder_screen.dart` by ensuring default slots and day lists are mutable.
+  - Resolved `There are multiple heroes that share the same tag within a subtree` crash by assigning explicit unique `heroTag`s to FloatingActionButtons in `CoachDashboardScreen`, `AthletesListScreen`, and `AthleteDetailScreen`.
+  - Fixed 16px, 27px, and 127px `RenderFlex overflowed` issues in `athlete_onboarding_sheet.dart` and `master_program_builder_screen.dart` using responsive `Wrap` and `Expanded` layouts.
+  - Updated `android/app/build.gradle.kts` to `compileSdk = 36` and `targetSdk = 36` to support modern Android dependencies.
 - Android Gradle compilation error `:printing:checkDebugAarMetadata`:
   - Removed outdated native `printing` plugin from `pubspec.yaml` in favor of pure Dart `pdf` + `share_plus` architecture.
   - Upgraded `share_plus` to `^10.1.0` and `pdf` to `^3.11.1`.

@@ -1,13 +1,15 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../data/local/app_database.dart';
+import '../../../data/remote/supabase_sync_service.dart';
 
 final athleteSearchQueryProvider = StateProvider<String>((ref) => '');
 
 final athletesProvider =
     StateNotifierProvider<AthletesNotifier, List<AthleteEntity>>((ref) {
   final db = ref.watch(appDatabaseProvider);
-  return AthletesNotifier(db);
+  return AthletesNotifier(db, ref);
 });
 
 final athletesListProvider = athletesProvider;
@@ -25,9 +27,10 @@ final filteredAthletesProvider = Provider<List<AthleteEntity>>((ref) {
 
 class AthletesNotifier extends StateNotifier<List<AthleteEntity>> {
   final LocalAppDatabase _db;
+  final Ref? _ref;
   static const _uuid = Uuid();
 
-  AthletesNotifier(this._db) : super([]) {
+  AthletesNotifier(this._db, [this._ref]) : super([]) {
     refresh();
   }
 
@@ -60,7 +63,6 @@ class AthletesNotifier extends StateNotifier<List<AthleteEntity>> {
     final now = DateTime.now();
     final id = existingId ?? _uuid.v4();
 
-    // حفظ تاریخ ثبت‌نام، ایمیل و کد ورود ۶ رقمی اختصاصی ورزشکار در صورت ویرایش
     final existingRecord =
         existingId != null ? _db.getAthleteById(existingId) : null;
     final createdDate = existingRecord?.createdAt ?? now;
@@ -122,16 +124,31 @@ class AthletesNotifier extends StateNotifier<List<AthleteEntity>> {
     }
 
     refresh();
+
+    // ارسال آنی شاگرد و کد ورود ۶ رقمی او به سرور Supabase در پسزمینه
+    final r = _ref;
+    if (r != null) {
+      unawaited(r.read(supabaseSyncServiceProvider).syncAllPendingData());
+    }
+
     return athlete;
   }
 
   void addMeasurementCheckIn(MeasurementLogEntity log) {
     _db.insertMeasurementLog(log);
     refresh();
+    final r = _ref;
+    if (r != null) {
+      unawaited(r.read(supabaseSyncServiceProvider).syncAllPendingData());
+    }
   }
 
   void deleteAthlete(String id) {
     _db.softDeleteAthlete(id);
     refresh();
+    final r = _ref;
+    if (r != null) {
+      unawaited(r.read(supabaseSyncServiceProvider).syncAllPendingData());
+    }
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +14,7 @@ import '../../../core/utils/number_parser.dart';
 import '../../../data/local/app_database.dart';
 import '../../../data/local/database_models.dart';
 import '../../../data/local/seed_catalog_data.dart';
+import '../../../data/remote/supabase_sync_service.dart';
 import '../../athletes/domain/scientific_bio_calculator.dart';
 
 class MasterProgramBuilderScreen extends ConsumerStatefulWidget {
@@ -160,44 +163,50 @@ class _MasterProgramBuilderScreenState
         dayNameFa: namesFa[i],
         dayNameEn: namesEn[i],
         isRestDay: i == 2 || i == 6,
-        targetMuscles: const [],
-        exercises: const [],
+        targetMuscles: <String>[],
+        exercises: <WorkoutItemEntity>[],
       );
     });
   }
 
   List<DietMealSlot> _buildDefaultMealSlots() {
-    return const [
-      DietMealSlot(
-          slotId: 'breakfast',
-          titleFa: 'وعده اول: صبحانه',
-          titleEn: 'Meal 1: Breakfast',
-          timeRange: '08:00'),
-      DietMealSlot(
-          slotId: 'snack1',
-          titleFa: 'وعده دوم: میانوعده صبح',
-          titleEn: 'Meal 2: Morning Snack',
-          timeRange: '11:00'),
-      DietMealSlot(
-          slotId: 'lunch',
-          titleFa: 'وعده سوم: ناهار',
-          titleEn: 'Meal 3: Lunch',
-          timeRange: '14:00'),
-      DietMealSlot(
-          slotId: 'pre_workout',
-          titleFa: 'وعده چهارم: قبل از تمرین (انرژی)',
-          titleEn: 'Meal 4: Pre-Workout',
-          timeRange: '17:00'),
-      DietMealSlot(
-          slotId: 'post_workout',
-          titleFa: 'وعده پنجم: بعد از تمرین (ریکاوری)',
-          titleEn: 'Meal 5: Post-Workout',
-          timeRange: '19:30'),
-      DietMealSlot(
-          slotId: 'dinner',
-          titleFa: 'وعده ششم: شام',
-          titleEn: 'Meal 6: Dinner',
-          timeRange: '21:30'),
+    return [
+      const DietMealSlot(
+        slotId: 'breakfast',
+        titleFa: 'وعده اول: صبحانه',
+        titleEn: 'Meal 1: Breakfast',
+        timeRange: '08:00',
+      ),
+      const DietMealSlot(
+        slotId: 'snack1',
+        titleFa: 'وعده دوم: میانوعده صبح',
+        titleEn: 'Meal 2: Morning Snack',
+        timeRange: '11:00',
+      ),
+      const DietMealSlot(
+        slotId: 'lunch',
+        titleFa: 'وعده سوم: ناهار',
+        titleEn: 'Meal 3: Lunch',
+        timeRange: '14:00',
+      ),
+      const DietMealSlot(
+        slotId: 'pre_workout',
+        titleFa: 'وعده چهارم: قبل از تمرین (انرژی)',
+        titleEn: 'Meal 4: Pre-Workout',
+        timeRange: '17:00',
+      ),
+      const DietMealSlot(
+        slotId: 'post_workout',
+        titleFa: 'وعده پنجم: بعد از تمرین (ریکاوری)',
+        titleEn: 'Meal 5: Post-Workout',
+        timeRange: '19:30',
+      ),
+      const DietMealSlot(
+        slotId: 'dinner',
+        titleFa: 'وعده ششم: شام',
+        titleEn: 'Meal 6: Dinner',
+        timeRange: '21:30',
+      ),
     ];
   }
 
@@ -295,6 +304,9 @@ class _MasterProgramBuilderScreenState
 
     db.upsertProgram(program);
     db.clearProgramDraft(widget.athlete.id);
+
+    // Auto-sync immediately to Supabase
+    unawaited(ref.read(supabaseSyncServiceProvider).syncAllPendingData());
 
     if (_saveAsTemplate) {
       final templateCopy = FullProgramEntity(
@@ -1396,8 +1408,10 @@ class _MasterProgramBuilderScreenState
             color: theme.colorScheme.primary.withOpacity(0.12),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          child: Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            spacing: 12,
+            runSpacing: 6,
             children: [
               Text('🔥 ${bio.targetCalories} kcal',
                   style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -1866,15 +1880,17 @@ class _MasterProgramBuilderScreenState
           ),
         ),
         const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               isFa ? 'مدت اعتبار دوره (هفته):' : 'Program Duration (Weeks):',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: [4, 6, 8, 12].map((w) {
                 return ChoiceChip(
                   label: Text(isFa ? '$w هفته' : '${w}W'),

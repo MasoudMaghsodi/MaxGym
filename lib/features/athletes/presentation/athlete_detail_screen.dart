@@ -516,6 +516,7 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_athlete_detail_unique',
         onPressed: () {
           if (widget.onOpenWorkoutBuilder != null) {
             widget.onOpenWorkoutBuilder!(athlete);

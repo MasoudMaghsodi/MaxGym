@@ -760,9 +760,11 @@ class LocalAppDatabase {
 
   AthleteEntity? getAthleteByAccessCode(String code) {
     final normalized = code.trim().toUpperCase();
+    final stripped =
+        normalized.startsWith('PC-') ? normalized.substring(3) : normalized;
     final rows = _db.select(
-      'SELECT * FROM athletes WHERE UPPER(access_code) = ? AND is_deleted = 0 LIMIT 1',
-      [normalized],
+      'SELECT * FROM athletes WHERE (UPPER(access_code) = ? OR UPPER(access_code) = ?) AND is_deleted = 0 LIMIT 1',
+      [normalized, 'PC-$stripped'],
     );
     if (rows.isEmpty) return null;
     return _mapRowToAthlete(rows.first);

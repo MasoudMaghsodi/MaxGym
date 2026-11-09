@@ -364,15 +364,18 @@ class _AthleteOnboardingSheetState
       ),
       const SizedBox(height: 20),
       Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(LucideIcons.alertTriangle,
               size: 18, color: AppColors.warning),
           const SizedBox(width: 6),
-          Text(
-            isFa
-                ? 'آسیبدیدگیها و محدودیتهای مفصلی (هشدار هوشمند در تمرین):'
-                : 'Injuries & Joint Limitations:',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+          Expanded(
+            child: Text(
+              isFa
+                  ? 'آسیبدیدگیها و محدودیتهای مفصلی (هشدار هوشمند در تمرین):'
+                  : 'Injuries & Joint Limitations:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),

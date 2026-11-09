@@ -69,3 +69,4 @@ supabase/.branches/
 .vscode/
 *.swp
 *.swo
+devtools_options.yaml

@@ -346,6 +346,7 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_athletes_list_unique',
         onPressed: () {
           showModalBottomSheet(
             context: context,

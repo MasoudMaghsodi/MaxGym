@@ -276,6 +276,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_coach_dashboard_unique',
         onPressed: () {
           showModalBottomSheet(
             context: context,
