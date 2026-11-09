@@ -14,6 +14,7 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/branding_provider.dart';
 import '../../../data/local/app_database.dart';
 import '../../workout_builder/presentation/master_program_builder_screen.dart';
+import '../../athlete_portal/athlete_portal_screen.dart';
 import '../domain/scientific_bio_calculator.dart';
 import 'athlete_onboarding_sheet.dart';
 import 'athletes_provider.dart';
@@ -415,6 +416,41 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
       appBar: AppBar(
         title: Text(athlete.fullName),
         actions: [
+          // دکمه کپی کد ورود اختصاصی ورزشکار (PC-XXXXXX)
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: athlete.accessCode));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(isFa
+                        ? 'کد ورود اختصاصی شاگرد کپی شد: ${athlete.accessCode}'
+                        : 'Athlete Access Code copied: ${athlete.accessCode}'),
+                  ),
+                );
+              }
+            },
+            icon: const Icon(LucideIcons.keyRound, size: 16),
+            label: Text(athlete.accessCode),
+          ),
+          // دکمه باز کردن چت متنی مستقیم با شاگرد
+          IconButton(
+            tooltip: isFa ? 'چت متنی با شاگرد' : 'Direct Text Chat',
+            icon: const Icon(LucideIcons.messageSquare),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.78,
+                  child: PureTextChatView(
+                    athlete: athlete,
+                    currentSenderRole: 'coach',
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             tooltip: isFa ? 'استوری قبل و بعد (Before/After)' : 'Before/After',
             icon: const Icon(LucideIcons.camera),

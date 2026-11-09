@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -9,19 +10,23 @@ import '../../core/constants/app_colors.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/theme/branding_provider.dart';
 import '../../data/local/app_database.dart';
+import '../../data/local/database_models.dart';
+import '../athlete_portal/athlete_portal_screen.dart';
 
 enum SecurityGateStatus {
   loading,
   unauthenticated,
   pendingAdminApproval,
   suspendedKillSwitch,
-  authorizedAndActive,
+  authorizedAndActive, // ورود به پنل مربی
+  athletePortalActive, // ورود به پنل ورزشکار
 }
 
 class SecurityGateState {
   final SecurityGateStatus status;
   final String? coachFullName;
   final String? email;
+  final AthleteEntity? loggedInAthlete;
   final String lockTitle;
   final String lockMessage;
   final String developerContact;
@@ -31,9 +36,10 @@ class SecurityGateState {
     required this.status,
     this.coachFullName,
     this.email,
+    this.loggedInAthlete,
     this.lockTitle = 'دسترسی به اپلیکیشن مسدود شده است',
     this.lockMessage =
-        'به علت عدم تسویه حساب یا نقض قوانین، دسترسی شما توسط توسعهدهنده غیرفعال شده است.',
+        'به علت عدم تسویه حساب یا نقض قوانین، دسترسی شما توسط توسعه‌دهنده غیرفعال شده است.',
     this.developerContact = 'Support / Developer Contact',
     this.errorMessage,
   });
@@ -54,6 +60,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
   static const _kCachedSuspended = 'sec_cached_is_suspended';
   static const _kCachedLockMsg = 'sec_cached_lock_msg';
   static const _kCachedDevContact = 'sec_cached_dev_contact';
+  static const _kCachedAthleteCode = 'sec_cached_athlete_code';
 
   SecurityGateNotifier(this._ref)
       : super(const SecurityGateState(status: SecurityGateStatus.loading)) {
@@ -86,7 +93,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         final title = appControl['lock_title_fa'] as String? ??
             'دسترسی به اپلیکیشن غیرفعال است';
         final msg = appControl['lock_message_fa'] as String? ??
-            'لطفاً با توسعهدهنده تماس بگیرید.';
+            'لطفاً با توسعه‌دهنده تماس بگیرید.';
         final contact = appControl['developer_contact'] as String? ?? '';
 
         await _secureStore.write(key: _kCachedSuspended, value: 'true');
@@ -102,7 +109,15 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         return;
       }
 
-      // ۲. بررسی نشست (Session JWT)
+      // ۲. اگر قبلاً ورزشکار با کد اختصاصی لاگین کرده بود، مستقیم وارد پنل ورزشکار شو
+      final savedAthleteCode =
+          await _secureStore.read(key: _kCachedAthleteCode);
+      if (savedAthleteCode != null && savedAthleteCode.isNotEmpty) {
+        await signInAthleteByCode(savedAthleteCode);
+        return;
+      }
+
+      // ۳. بررسی نشست مربی (Session JWT)
       final session = client.auth.currentSession;
       final user = client.auth.currentUser;
       if (session == null || user == null) {
@@ -111,7 +126,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         return;
       }
 
-      // ۳. بررسی وضعیت تایید ادمین و مسدودیت تکی مربی در جدول coach_profiles
+      // ۴. بررسی وضعیت تایید ادمین و مسدودیت تکی مربی در جدول coach_profiles
       final profile = await client
           .from('coach_profiles')
           .select()
@@ -133,7 +148,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
       final lastName = profile['last_name'] as String? ?? '';
       final fullName = '$firstName $lastName'.trim();
       final lockReason = profile['lock_reason'] as String? ??
-          'حساب شما توسط توسعهدهنده غیرفعال شده است.';
+          'حساب شما توسط توسعه‌دهنده غیرفعال شده است.';
 
       await _secureStore.write(
           key: _kCachedSuspended, value: isSuspended ? 'true' : 'false');
@@ -164,7 +179,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
 
       if (fullName.isNotEmpty) {
         final currentBrand = _ref.read(brandingProvider);
-        if (currentBrand.coachName == 'مربی حرفهای') {
+        if (currentBrand.coachName == 'مربی حرفه‌ای') {
           await _ref
               .read(brandingProvider.notifier)
               .updateBranding(currentBrand.copyWith(coachName: fullName));
@@ -186,15 +201,30 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     final cachedApproved = await _secureStore.read(key: _kCachedApproved);
     final cachedMsg = await _secureStore.read(key: _kCachedLockMsg);
     final cachedContact = await _secureStore.read(key: _kCachedDevContact);
+    final cachedAthleteCode =
+        await _secureStore.read(key: _kCachedAthleteCode);
 
     if (cachedSuspended == 'true') {
       state = SecurityGateState(
         status: SecurityGateStatus.suspendedKillSwitch,
         lockMessage:
-            cachedMsg ?? 'دسترسی شما توسط توسعهدهنده مسدود شده است.',
+            cachedMsg ?? 'دسترسی شما توسط توسعه‌دهنده مسدود شده است.',
         developerContact: cachedContact ?? 'Developer Support',
       );
       return;
+    }
+
+    if (cachedAthleteCode != null && cachedAthleteCode.isNotEmpty) {
+      final localAth = _ref
+          .read(appDatabaseProvider)
+          .getAthleteByAccessCode(cachedAthleteCode);
+      if (localAth != null) {
+        state = SecurityGateState(
+          status: SecurityGateStatus.athletePortalActive,
+          loggedInAthlete: localAth,
+        );
+        return;
+      }
     }
 
     if (cachedApproved == 'true') {
@@ -204,6 +234,109 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     }
 
     state = const SecurityGateState(status: SecurityGateStatus.unauthenticated);
+  }
+
+  /// ورود ورزشکار با کد دعوت ۶ رقمی اختصاصی (آنلاین با RPC + پشتیبانی آفلاین)
+  Future<void> signInAthleteByCode(String rawCode) async {
+    final code = rawCode.trim().toUpperCase();
+    if (code.isEmpty) return;
+
+    state = const SecurityGateState(status: SecurityGateStatus.loading);
+    final db = _ref.read(appDatabaseProvider);
+
+    try {
+      final client = SupabaseConfig.clientOrNull;
+      if (client != null) {
+        final res = await client.rpc(
+          'athlete_login_by_code',
+          params: {'p_access_code': code},
+        ).timeout(const Duration(seconds: 6));
+
+        if (res != null && res is Map<String, dynamic>) {
+          final athMap = res['athlete'] as Map<String, dynamic>;
+          final progsList = res['programs'] as List<dynamic>? ?? [];
+
+          final rawTags = athMap['injury_tags'];
+          final List<String> tags = rawTags is String
+              ? List<String>.from(jsonDecode(rawTags))
+              : List<String>.from(rawTags ?? []);
+
+          final athlete = AthleteEntity(
+            id: athMap['id'] as String,
+            firstName: athMap['first_name'] as String? ?? '',
+            lastName: athMap['last_name'] as String? ?? '',
+            phone: athMap['phone'] as String? ?? '',
+            email: athMap['email'] as String? ?? '',
+            accessCode: athMap['access_code'] as String? ?? code,
+            gender: athMap['gender'] as String? ?? 'male',
+            age: (athMap['age'] as num?)?.toInt() ?? 25,
+            heightCm: (athMap['height_cm'] as num?)?.toDouble() ?? 175,
+            weightKg: (athMap['weight_kg'] as num?)?.toDouble() ?? 75,
+            fitnessGoal: athMap['fitness_goal'] as String? ?? 'lean_bulk',
+            injuryTags: tags,
+            createdAt: DateTime.parse(athMap['created_at'] as String).toLocal(),
+            updatedAt: DateTime.parse(athMap['updated_at'] as String).toLocal(),
+            syncStatus: 'synced',
+          );
+          db.upsertAthlete(athlete);
+
+          for (final pRow in progsList) {
+            if (pRow is! Map<String, dynamic>) continue;
+            final rawDays = pRow['days_json'];
+            final decodedDays =
+                (rawDays is String ? jsonDecode(rawDays) : rawDays)
+                    as List<dynamic>;
+            final rawMeals = pRow['diet_meals_json'];
+            final mealsStr =
+                rawMeals is String ? rawMeals : jsonEncode(rawMeals);
+            final rawSupps = pRow['supplements_json'];
+            final suppsStr =
+                rawSupps is String ? rawSupps : jsonEncode(rawSupps);
+
+            db.upsertProgram(FullProgramEntity(
+              id: pRow['id'] as String,
+              athleteId: athlete.id,
+              title: pRow['title'] as String? ?? '',
+              startDate: DateTime.parse(pRow['start_date'] as String).toLocal(),
+              durationWeeks: (pRow['duration_weeks'] as num?)?.toInt() ?? 4,
+              days: decodedDays
+                  .map((e) =>
+                      WorkoutDayPlan.fromJson(e as Map<String, dynamic>))
+                  .toList(),
+              dietMeals: DietMealSlot.decodeList(mealsStr),
+              waterLiters: (pRow['water_liters'] as num?)?.toDouble() ?? 3.5,
+              supplements: SupplementPrescriptionItem.decodeList(suppsStr),
+              updatedAt: DateTime.now(),
+              syncStatus: 'synced',
+            ));
+          }
+
+          await _secureStore.write(key: _kCachedAthleteCode, value: code);
+          state = SecurityGateState(
+            status: SecurityGateStatus.athletePortalActive,
+            loggedInAthlete: athlete,
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // بررسی دیتابیس محلی در صورت آفلاین بودن
+    final localAthlete = db.getAthleteByAccessCode(code);
+    if (localAthlete != null) {
+      await _secureStore.write(key: _kCachedAthleteCode, value: code);
+      state = SecurityGateState(
+        status: SecurityGateStatus.athletePortalActive,
+        loggedInAthlete: localAthlete,
+      );
+      return;
+    }
+
+    state = const SecurityGateState(
+      status: SecurityGateStatus.unauthenticated,
+      errorMessage:
+          'کد ورود ورزشکار یافت نشد. لطفاً کد ۶ رقمی (مثلاً PC-XXXXXX) را از مربی خود دریافت کنید.',
+    );
   }
 
   Future<void> signUpCoach({
@@ -218,7 +351,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
       if (client == null) {
         state = const SecurityGateState(
           status: SecurityGateStatus.unauthenticated,
-          errorMessage: 'برای ثبتنام اولیه، اتصال به اینترنت الزامی است.',
+          errorMessage: 'برای ثبت‌نام اولیه، اتصال به اینترنت الزامی است.',
         );
         return;
       }
@@ -248,7 +381,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     } catch (_) {
       state = const SecurityGateState(
         status: SecurityGateStatus.unauthenticated,
-        errorMessage: 'خطا در ثبتنام: لطفاً اتصال اینترنت را بررسی کنید.',
+        errorMessage: 'خطا در ثبت‌نام: لطفاً اتصال اینترنت را بررسی کنید.',
       );
     }
   }
@@ -287,7 +420,6 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     }
   }
 
-  /// خروج امن، پاکسازی کلیدهای رمزنگاریشده و پاکسازی دیتابیس محلی (OWASP M9)
   Future<void> signOut() async {
     try {
       await SupabaseConfig.clientOrNull?.auth.signOut();
@@ -300,38 +432,98 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
   }
 }
 
-class SecurityGateWrapper extends ConsumerWidget {
+/// ویجت دروازه امنیتی + محافظ مخفیسازی صفحه در Recent Apps اندروید/iOS (رفع عیب ۵ گزارش ممیزی)
+class SecurityGateWrapper extends ConsumerStatefulWidget {
   final Widget authorizedChild;
   const SecurityGateWrapper({super.key, required this.authorizedChild});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SecurityGateWrapper> createState() =>
+      _SecurityGateWrapperState();
+}
+
+class _SecurityGateWrapperState extends ConsumerState<SecurityGateWrapper>
+    with WidgetsBindingObserver {
+  bool _isInBackground = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    setState(() {
+      _isInBackground = state == AppLifecycleState.inactive ||
+          state == AppLifecycleState.paused;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final gate = ref.watch(securityGateProvider);
 
+    Widget activeScreen;
     switch (gate.status) {
       case SecurityGateStatus.loading:
-        return const Scaffold(
+        activeScreen = const Scaffold(
           body: Center(child: CircularProgressIndicator()),
         );
+        break;
       case SecurityGateStatus.unauthenticated:
-        return CoachAuthScreen(errorMessage: gate.errorMessage);
+        activeScreen = CoachAuthScreen(errorMessage: gate.errorMessage);
+        break;
       case SecurityGateStatus.pendingAdminApproval:
-        return PendingApprovalScreen(
+        activeScreen = PendingApprovalScreen(
           coachName: gate.coachFullName ?? '',
           email: gate.email ?? '',
         );
+        break;
       case SecurityGateStatus.suspendedKillSwitch:
-        return AppSuspendedKillSwitchScreen(
+        activeScreen = AppSuspendedKillSwitchScreen(
           title: gate.lockTitle,
           message: gate.lockMessage,
           developerContact: gate.developerContact,
         );
+        break;
+      case SecurityGateStatus.athletePortalActive:
+        activeScreen = AthletePortalScreen(
+          initialAthlete: gate.loggedInAthlete!,
+        );
+        break;
       case SecurityGateStatus.authorizedAndActive:
-        return authorizedChild;
+        activeScreen = widget.authorizedChild;
+        break;
     }
+
+    return Stack(
+      children: [
+        activeScreen,
+        // لایه امنیتی ضد اسکرین‌شات در پنجره برنامه‌های اخیر سیستم‌عامل (OWASP Privacy Shield)
+        if (_isInBackground)
+          Positioned.fill(
+            child: Container(
+              color: AppColors.darkBg,
+              alignment: Alignment.center,
+              child: const Icon(LucideIcons.shieldCheck,
+                  size: 64, color: Colors.white24),
+            ),
+          ),
+      ],
+    );
   }
 }
 
+// =============================================================================
+// صفحه ورود دوگانه: تب ۱ (مربی) | تب ۲ (ورزشکار با کد اختصاصی)
+// =============================================================================
 class CoachAuthScreen extends ConsumerStatefulWidget {
   final String? errorMessage;
   const CoachAuthScreen({super.key, this.errorMessage});
@@ -341,6 +533,7 @@ class CoachAuthScreen extends ConsumerStatefulWidget {
 }
 
 class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
+  bool _isAthleteMode = false; // false = مربی | true = ورزشکار
   bool _isLogin = true;
   bool _obscurePass = true;
 
@@ -348,6 +541,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
   final _lastNameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _athleteCodeCtrl = TextEditingController();
 
   @override
   void dispose() {
@@ -355,11 +549,30 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
     _lastNameCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _athleteCodeCtrl.dispose();
     super.dispose();
   }
 
   void _submit() {
     final isFa = AppStrings.of(context).isFa;
+
+    if (_isAthleteMode) {
+      final code = _athleteCodeCtrl.text.trim();
+      if (code.length < 4) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isFa
+                ? 'لطفاً کد اختصاصی ورزشکار (مثلاً PC-849201) را وارد کنید.'
+                : 'Please enter your Athlete Access Code.'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+        return;
+      }
+      ref.read(securityGateProvider.notifier).signInAthleteByCode(code);
+      return;
+    }
+
     final email = _emailCtrl.text.trim();
     final pass = _passwordCtrl.text;
 
@@ -404,7 +617,6 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
   @override
   Widget build(BuildContext context) {
     final isFa = AppStrings.of(context).isFa;
-    final theme = Theme.of(context);
 
     return Scaffold(
       body: Center(
@@ -418,39 +630,41 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircleAvatar(
-                      radius: 34,
-                      backgroundColor:
-                          theme.colorScheme.primary.withOpacity(0.15),
-                      child: Icon(LucideIcons.shieldCheck,
-                          size: 34, color: theme.colorScheme.primary),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      _isLogin
-                          ? (isFa
-                              ? 'ورود امن مربی به سامانه'
-                              : 'Secure Coach Sign-In')
-                          : (isFa
-                              ? 'ثبتنام مربی جدید'
-                              : 'New Coach Registration'),
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _isLogin
-                          ? (isFa
-                              ? 'اطلاعات حساب تاییدشده خود را وارد کنید'
-                              : 'Enter your approved credentials')
-                          : (isFa
-                              ? 'پس از ثبتنام، حساب شما باید توسط ادمین تایید شود'
-                              : 'Requires admin approval after registration'),
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.grey),
-                      textAlign: TextAlign.center,
+                    // سوییچر دوگانه: مربی / ورزشکار
+                    SegmentedButton<bool>(
+                      segments: [
+                        ButtonSegment(
+                          value: false,
+                          icon: const Icon(LucideIcons.shieldCheck, size: 16),
+                          label: Text(isFa ? 'پنل مربی' : 'Coach Mode'),
+                        ),
+                        ButtonSegment(
+                          value: true,
+                          icon: const Icon(LucideIcons.dumbbell, size: 16),
+                          label: Text(isFa ? 'پنل ورزشکار' : 'Athlete Mode'),
+                        ),
+                      ],
+                      selected: {_isAthleteMode},
+                      onSelectionChanged: (s) =>
+                          setState(() => _isAthleteMode = s.first),
                     ),
                     const SizedBox(height: 20),
+                    Text(
+                      _isAthleteMode
+                          ? (isFa
+                              ? 'ورود ورزشکار به برنامه آنلاین'
+                              : 'Athlete Portal Login')
+                          : (_isLogin
+                              ? (isFa
+                                  ? 'ورود امن مربی به سامانه'
+                                  : 'Secure Coach Sign-In')
+                              : (isFa
+                                  ? 'ثبت‌نام مربی جدید'
+                                  : 'New Coach Registration')),
+                      style: const TextStyle(
+                          fontSize: 19, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
                     if (widget.errorMessage != null) ...[
                       Container(
                         padding: const EdgeInsets.all(10),
@@ -467,87 +681,111 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    if (!_isLogin) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _firstNameCtrl,
-                              decoration: InputDecoration(
-                                labelText: isFa ? 'نام *' : 'First Name *',
-                                prefixIcon: const Icon(LucideIcons.user),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextField(
-                              controller: _lastNameCtrl,
-                              decoration: InputDecoration(
-                                labelText:
-                                    isFa ? 'نام خانوادگی *' : 'Last Name *',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    TextField(
-                      controller: _emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      autocorrect: false,
-                      decoration: InputDecoration(
-                        labelText: isFa ? 'ایمیل مربی' : 'Email Address',
-                        prefixIcon: const Icon(LucideIcons.mail),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _passwordCtrl,
-                      obscureText: _obscurePass,
-                      enableSuggestions: false,
-                      autocorrect: false,
-                      decoration: InputDecoration(
-                        labelText: isFa ? 'رمز عبور' : 'Password',
-                        prefixIcon: const Icon(LucideIcons.lock),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscurePass
-                              ? LucideIcons.eyeOff
-                              : LucideIcons.eye),
-                          onPressed: () =>
-                              setState(() => _obscurePass = !_obscurePass),
+                    if (_isAthleteMode) ...[
+                      TextField(
+                        controller: _athleteCodeCtrl,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: InputDecoration(
+                          labelText: isFa
+                              ? 'کد اختصاصی ورزشکار (مثلاً PC-849201)'
+                              : 'Athlete Access Code (e.g. PC-849201)',
+                          prefixIcon: const Icon(LucideIcons.keyRound),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _submit,
-                        icon: Icon(_isLogin
-                            ? LucideIcons.logIn
-                            : LucideIcons.userPlus),
-                        label: Text(_isLogin
-                            ? (isFa ? 'ورود به اپلیکیشن' : 'Sign In')
-                            : (isFa
-                                ? 'ثبتنام و ارسال درخواست تایید'
-                                : 'Register & Request Approval')),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _submit,
+                          icon: const Icon(LucideIcons.arrowRightCircle),
+                          label: Text(isFa
+                              ? 'مشاهده برنامه و چت با مربی'
+                              : 'Enter Athlete Portal'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: () => setState(() => _isLogin = !_isLogin),
-                      child: Text(
-                        _isLogin
-                            ? (isFa
-                                ? 'حساب کاربری ندارید؟ ثبتنام مربی جدید'
-                                : 'Don\'t have an account? Register')
-                            : (isFa
-                                ? 'قبلاً ثبتنام کردهاید؟ ورود به حساب'
-                                : 'Already registered? Sign In'),
+                    ] else ...[
+                      if (!_isLogin) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _firstNameCtrl,
+                                decoration: InputDecoration(
+                                  labelText: isFa ? 'نام *' : 'First Name *',
+                                  prefixIcon: const Icon(LucideIcons.user),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: _lastNameCtrl,
+                                decoration: InputDecoration(
+                                  labelText:
+                                      isFa ? 'نام خانوادگی *' : 'Last Name *',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      TextField(
+                        controller: _emailCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText: isFa ? 'ایمیل مربی' : 'Email Address',
+                          prefixIcon: const Icon(LucideIcons.mail),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _passwordCtrl,
+                        obscureText: _obscurePass,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText: isFa ? 'رمز عبور' : 'Password',
+                          prefixIcon: const Icon(LucideIcons.lock),
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscurePass
+                                ? LucideIcons.eyeOff
+                                : LucideIcons.eye),
+                            onPressed: () =>
+                                setState(() => _obscurePass = !_obscurePass),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _submit,
+                          icon: Icon(_isLogin
+                              ? LucideIcons.logIn
+                              : LucideIcons.userPlus),
+                          label: Text(_isLogin
+                              ? (isFa ? 'ورود به اپلیکیشن' : 'Sign In')
+                              : (isFa
+                                  ? 'ثبت‌نام و ارسال درخواست تایید'
+                                  : 'Register & Request Approval')),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () => setState(() => _isLogin = !_isLogin),
+                        child: Text(
+                          _isLogin
+                              ? (isFa
+                                  ? 'حساب کاربری ندارید؟ ثبت‌نام مربی جدید'
+                                  : 'Don\'t have an account? Register')
+                              : (isFa
+                                  ? 'قبلاً ثبت‌نام کرده‌اید؟ ورود به حساب'
+                                  : 'Already registered? Sign In'),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -597,7 +835,7 @@ class PendingApprovalScreen extends ConsumerWidget {
                   const SizedBox(height: 10),
                   Text(
                     isFa
-                        ? 'مربی گرامی ($coachName - $email)، ثبتنام شما با موفقیت انجام شد. پس از تایید دسترسی شما توسط توسعهدهنده در پنل مدیریت، روی دکمه زیر بزنید.'
+                        ? 'مربی گرامی ($coachName - $email)، ثبت‌نام شما با موفقیت انجام شد. پس از تایید دسترسی شما توسط توسعه‌دهنده در پنل مدیریت، روی دکمه زیر بزنید.'
                         : 'Your registration ($email) is complete. Once approved by the administrator, tap Refresh below.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.grey),

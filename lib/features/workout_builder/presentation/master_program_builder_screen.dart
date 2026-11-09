@@ -8,6 +8,7 @@ import '../../../core/cache/smart_cache_manager.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/branding_provider.dart';
+import '../../../core/utils/number_parser.dart';
 import '../../../data/local/app_database.dart';
 import '../../../data/local/database_models.dart';
 import '../../../data/local/seed_catalog_data.dart';
@@ -103,6 +104,34 @@ class _MasterProgramBuilderScreenState
           TextEditingController(text: defaultTotal.toStringAsFixed(0));
       _paidAmountCtrl =
           TextEditingController(text: defaultTotal.toStringAsFixed(0));
+    }
+
+    if (widget.initialProgramOrTemplate == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final draft = ref
+            .read(appDatabaseProvider)
+            .getProgramDraft(widget.athlete.id);
+        if (draft != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                  'یک پیش‌نویس ناتمام برای این شاگرد پیدا شد. بازیابی شود؟'),
+              action: SnackBarAction(
+                label: 'بازیابی پیش‌نویس',
+                onPressed: () {
+                  setState(() {
+                    _programTitleCtrl.text = draft.title;
+                    _days = List<WorkoutDayPlan>.from(draft.days);
+                    _dietMeals = List<DietMealSlot>.from(draft.dietMeals);
+                    _supplements =
+                        List<SupplementPrescriptionItem>.from(draft.supplements);
+                  });
+                },
+              ),
+            ),
+          );
+        }
+      });
     }
   }
 
@@ -233,8 +262,8 @@ class _MasterProgramBuilderScreenState
 
   void _saveProgram({bool exportPdfAfter = false}) {
     final db = ref.read(appDatabaseProvider);
-    final total = double.tryParse(_totalFeeCtrl.text) ?? 0;
-    final paid = double.tryParse(_paidAmountCtrl.text) ?? 0;
+    final total = _totalFeeCtrl.text.toSafeDouble() ?? 0;
+    final paid = _paidAmountCtrl.text.toSafeDouble() ?? 0;
     final status =
         paid >= total ? 'paid' : (paid > 0 ? 'partial' : 'unpaid');
 
@@ -265,6 +294,7 @@ class _MasterProgramBuilderScreenState
     );
 
     db.upsertProgram(program);
+    db.clearProgramDraft(widget.athlete.id);
 
     if (_saveAsTemplate) {
       final templateCopy = FullProgramEntity(
@@ -504,13 +534,30 @@ class _MasterProgramBuilderScreenState
                   }).toList(),
                 ),
                 const SizedBox(height: 14),
-                ElevatedButton.icon(
-                  onPressed: () =>
-                      _showExercisePickerSheet(activeDay, isFa, theme),
-                  icon: const Icon(LucideIcons.plus),
-                  label: Text(isFa
-                      ? 'افزودن حرکت به ${activeDay.dayNameFa} (جستجو / حرکت سفارشی)'
-                      : 'Add Exercise to ${activeDay.dayNameEn}'),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            _showExercisePickerSheet(activeDay, isFa, theme),
+                        icon: const Icon(LucideIcons.plus),
+                        label: Text(isFa
+                            ? 'افزودن حرکت به ${activeDay.dayNameFa} (جستجو / حرکت سفارشی)'
+                            : 'Add Exercise to ${activeDay.dayNameEn}'),
+                      ),
+                    ),
+                    if (activeDay.exercises.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      IconButton.outlined(
+                        tooltip: isFa
+                            ? 'کپی کل حرکات این روز به روز دیگر (Duplicate Day)'
+                            : 'Duplicate Day',
+                        icon: const Icon(LucideIcons.copyPlus),
+                        onPressed: () =>
+                            _showDuplicateDayDialog(activeDay, isFa),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 8),
                 if (activeDay.exercises.length > 1)
@@ -662,11 +709,36 @@ class _MasterProgramBuilderScreenState
                                       icon: const Icon(LucideIcons.trash2,
                                           size: 18, color: AppColors.danger),
                                       onPressed: () {
+                                        final removedItem =
+                                            activeDay.exercises[exIdx];
                                         final list =
                                             List<WorkoutItemEntity>.from(
                                                 activeDay.exercises)
                                               ..removeAt(exIdx);
                                         _updateActiveDayExercises(list);
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(isFa
+                                                ? 'حرکت ${removedItem.exerciseNameFa} حذف شد'
+                                                : '${removedItem.exerciseNameEn} removed'),
+                                            action: SnackBarAction(
+                                              label: isFa ? 'بازگردانی' : 'Undo',
+                                              onPressed: () {
+                                                final restoredList =
+                                                    List<WorkoutItemEntity>.from(
+                                                        _days[_selectedDayIndex]
+                                                            .exercises);
+                                                final insertPos = exIdx.clamp(
+                                                    0, restoredList.length);
+                                                restoredList.insert(
+                                                    insertPos, removedItem);
+                                                _updateActiveDayExercises(
+                                                    restoredList);
+                                              },
+                                            ),
+                                          ),
+                                        );
                                       },
                                     ),
                                   ],
@@ -747,6 +819,75 @@ class _MasterProgramBuilderScreenState
         exercises: updated,
       );
     });
+    // ذخیره خودکار پیش‌نویس (Auto-Draft - رفع عیب ۱ گزارش ممیزی)
+    ref.read(appDatabaseProvider).saveProgramDraft(
+          widget.athlete.id,
+          FullProgramEntity(
+            id: 'DRAFT_${widget.athlete.id}',
+            athleteId: widget.athlete.id,
+            title: _programTitleCtrl.text,
+            startDate: DateTime.now(),
+            durationWeeks: _durationWeeks,
+            days: _days,
+            dietMeals: _dietMeals,
+            waterLiters: _waterLiters,
+            dietGuidelines: _dietGuidelines,
+            supplements: _supplements,
+            updatedAt: DateTime.now(),
+          ),
+        );
+  }
+
+  /// کپی کردن تمام حرکات و سوپرستهای یک روز روی روز دیگر هفته (Duplicate Day)
+  void _showDuplicateDayDialog(WorkoutDayPlan sourceDay, bool isFa) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return ListView.builder(
+          shrinkWrap: true,
+          padding: const EdgeInsets.all(16),
+          itemCount: _days.length,
+          itemBuilder: (ctx, targetIdx) {
+            if (targetIdx == _selectedDayIndex) return const SizedBox.shrink();
+            final targetDay = _days[targetIdx];
+            return ListTile(
+              leading: const Icon(LucideIcons.copyPlus),
+              title: Text(isFa
+                  ? 'کپی حرکات ${sourceDay.dayNameFa} روی ${targetDay.dayNameFa}'
+                  : 'Copy ${sourceDay.dayNameEn} to ${targetDay.dayNameEn}'),
+              onTap: () {
+                setState(() {
+                  _days[targetIdx] = WorkoutDayPlan(
+                    dayNumber: targetDay.dayNumber,
+                    dayNameFa: targetDay.dayNameFa,
+                    dayNameEn: targetDay.dayNameEn,
+                    isRestDay: false,
+                    targetMuscles: List<String>.from(sourceDay.targetMuscles),
+                    exercises: sourceDay.exercises
+                        .map((e) => WorkoutItemEntity(
+                              id: _uuid.v4(),
+                              exerciseId: e.exerciseId,
+                              exerciseNameFa: e.exerciseNameFa,
+                              exerciseNameEn: e.exerciseNameEn,
+                              targetMuscle: e.targetMuscle,
+                              imageStartUrl: e.imageStartUrl,
+                              imageEndUrl: e.imageEndUrl,
+                              orderIndex: e.orderIndex,
+                              setType: e.setType,
+                              supersetGroupId: e.supersetGroupId,
+                              sets: List<SingleSetConfig>.from(e.sets),
+                              coachNote: e.coachNote,
+                            ))
+                        .toList(),
+                  );
+                });
+                Navigator.pop(ctx);
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   void _toggleSupersetLink(WorkoutDayPlan activeDay, int index) {

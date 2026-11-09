@@ -226,18 +226,23 @@ class AthleteWorkoutLogEntity {
   final DateTime loggedAt;
   final String syncStatus;
 
-  const AthleteWorkoutLogEntity({
+  AthleteWorkoutLogEntity({
     required this.id,
     required this.athleteId,
     required this.programId,
     required this.dayNumber,
-    this.exerciseMaxWeights = const {},
+    Map<String, double>? exerciseMaxWeights,
+    Map<String, dynamic>? exerciseWeightsKg,
     this.waterGlasses = 0,
     this.sessionRpe = 7,
     this.athleteFeedback = '',
     required this.loggedAt,
     this.syncStatus = 'pending_insert',
-  });
+  }) : exerciseMaxWeights = exerciseMaxWeights ??
+            (exerciseWeightsKg != null
+                ? exerciseWeightsKg.map((k, v) => MapEntry(
+                    k, (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0.0)))
+                : const {});
 
   Map<String, dynamic> toSupabaseJson() => {
         'id': id,
@@ -858,6 +863,9 @@ class LocalAppDatabase {
     ''', [DateTime.now().toUtc().toIso8601String(), log.athleteId]);
   }
 
+  void upsertWorkoutLog(AthleteWorkoutLogEntity log) =>
+      insertWorkoutSessionLog(log);
+
   List<AthleteWorkoutLogEntity> getWorkoutLogsForAthlete(String athleteId) {
     final rows = _db.select(
       'SELECT * FROM athlete_workout_logs WHERE athlete_id = ? ORDER BY logged_at DESC',
@@ -1329,7 +1337,16 @@ class LocalAppDatabase {
   // ===========================================================================
   // ۷. عملیات پیش‌نویس خودکار برنامه (Auto-Draft DAO)
   // ===========================================================================
-  void saveProgramDraft(String athleteId, String draftJson) {
+  void saveProgramDraft(String athleteId, dynamic draft) {
+    final String draftJson;
+    if (draft is String) {
+      draftJson = draft;
+    } else if (draft is FullProgramEntity) {
+      draftJson = jsonEncode(draft.toSupabaseJson());
+    } else {
+      draftJson = jsonEncode(draft);
+    }
+
     _db.execute('''
       INSERT INTO program_drafts (athlete_id, draft_json, updated_at)
       VALUES (?, ?, ?)
@@ -1348,9 +1365,66 @@ class LocalAppDatabase {
     return rows.first['draft_json'] as String?;
   }
 
+  FullProgramEntity? getProgramDraft(String athleteId) {
+    final raw = loadProgramDraft(athleteId);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final rawDays = decoded['days_json'] ?? decoded['days'];
+      final List<dynamic> decodedDays;
+      if (rawDays is String) {
+        decodedDays = jsonDecode(rawDays) as List<dynamic>;
+      } else if (rawDays is List) {
+        decodedDays = rawDays;
+      } else {
+        decodedDays = [];
+      }
+
+      final rawMeals = decoded['diet_meals_json'] ?? decoded['diet_meals'];
+      final mealsStr =
+          rawMeals is String ? rawMeals : jsonEncode(rawMeals ?? []);
+
+      final rawSupps = decoded['supplements_json'] ?? decoded['supplements'];
+      final suppsStr =
+          rawSupps is String ? rawSupps : jsonEncode(rawSupps ?? []);
+
+      final rawGuides =
+          decoded['diet_guidelines_json'] ?? decoded['diet_guidelines'];
+      final List<String> guides = rawGuides is String
+          ? List<String>.from(jsonDecode(rawGuides))
+          : List<String>.from(rawGuides ?? []);
+
+      return FullProgramEntity(
+        id: decoded['id'] as String? ?? 'DRAFT_$athleteId',
+        athleteId: athleteId,
+        title: decoded['title'] as String? ?? '',
+        startDate: decoded['start_date'] != null
+            ? DateTime.parse(decoded['start_date'] as String).toLocal()
+            : DateTime.now(),
+        durationWeeks: (decoded['duration_weeks'] as num?)?.toInt() ?? 4,
+        days: decodedDays
+            .map((e) => WorkoutDayPlan.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        dietMeals: DietMealSlot.decodeList(mealsStr),
+        waterLiters: (decoded['water_liters'] as num?)?.toDouble() ?? 3.5,
+        dietGuidelines: guides,
+        supplements: SupplementPrescriptionItem.decodeList(suppsStr),
+        totalFee: (decoded['total_fee'] as num?)?.toDouble() ?? 0,
+        paidAmount: (decoded['paid_amount'] as num?)?.toDouble() ?? 0,
+        paymentStatus: decoded['payment_status'] as String? ?? 'paid',
+        isTemplate: (decoded['is_template'] as bool?) ?? false,
+        updatedAt: DateTime.now(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   void deleteProgramDraft(String athleteId) {
     _db.execute('DELETE FROM program_drafts WHERE athlete_id = ?', [athleteId]);
   }
+
+  void clearProgramDraft(String athleteId) => deleteProgramDraft(athleteId);
 
   List<AthleteWorkoutLogEntity> getPendingSyncWorkoutLogs() {
     final rows = _db.select(
@@ -1375,7 +1449,82 @@ class LocalAppDatabase {
     }).toList();
   }
 
-  Future<int> importGlobal800ExercisesBatch() => syncGlobal873ExercisesIntoCatalog();
+  int importGlobal800ExercisesBatch([List<dynamic>? rawList]) {
+    if (rawList == null || rawList.isEmpty) {
+      syncGlobal873ExercisesIntoCatalog();
+      return 0;
+    }
+    final stmt = _db.prepare('''
+      INSERT OR IGNORE INTO exercises_catalog (
+        id, name_fa, name_en, target_muscle, equipment,
+        image_start_url, image_end_url, contraindicated_injuries
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''');
+
+    int inserted = 0;
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      for (final raw in rawList) {
+        if (raw is! Map<String, dynamic>) continue;
+        final id = raw['id'] as String? ?? '';
+        final nameEn = raw['name'] as String? ?? '';
+        if (id.isEmpty || nameEn.isEmpty) continue;
+
+        final primaryMuscles =
+            List<String>.from(raw['primaryMuscles'] ?? const ['chest']);
+        final rawMuscle =
+            primaryMuscles.isNotEmpty ? primaryMuscles.first : 'chest';
+        final targetMuscle = SeedCatalogData.mapGlobalMuscleGroup(rawMuscle);
+        final equipment = (raw['equipment'] as String?) ?? 'bodyweight';
+
+        final images = List<String>.from(raw['images'] ?? const []);
+        const cdnBase =
+            'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises';
+        final imgStart = images.isNotEmpty
+            ? '$cdnBase/${images.first}'
+            : '$cdnBase/$id/0.jpg';
+        final imgEnd = images.length > 1
+            ? '$cdnBase/${images[1]}'
+            : '$cdnBase/$id/1.jpg';
+
+        final List<String> injuries = [];
+        final lowerName = nameEn.toLowerCase();
+        if (lowerName.contains('deadlift') ||
+            lowerName.contains('bent over') ||
+            lowerName.contains('good morning')) {
+          injuries.add('lower_back');
+        }
+        if (lowerName.contains('squat') ||
+            lowerName.contains('lunge') ||
+            lowerName.contains('leg extension')) {
+          injuries.add('knee');
+        }
+        if (lowerName.contains('press') ||
+            lowerName.contains('dip') ||
+            lowerName.contains('upright')) {
+          injuries.add('shoulder');
+        }
+
+        stmt.execute([
+          id,
+          SeedCatalogData.translateExerciseNameToPersian(nameEn),
+          nameEn,
+          targetMuscle,
+          equipment,
+          imgStart,
+          imgEnd,
+          jsonEncode(injuries),
+        ]);
+        inserted++;
+      }
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+    } finally {
+      stmt.dispose();
+    }
+    return inserted;
+  }
 
   /// پاکسازی کامل داده‌های شخصی مربی از SQLite گوشی هنگام خروج از حساب (OWASP M9)
   void clearAllUserDataOnLogout() {

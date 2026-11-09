@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Phase 2 Dual-Role (Coach & Athlete Portal) & Audit Gaps Resolution:
+  - Athlete Portal (`AthletePortalScreen`) with interactive workout session tracker, PR weight logger, rest countdown timer, water intake gamified counter, and athlete PDF downloads.
+  - Mandatory profile completion gate (`_MandatoryAthleteProfileCompletionGate`) enforcing required biometrics before unlocking training.
+  - Zero-battery pure text chat (`PureTextChatView`) with lifecycle pausing via `WidgetsBindingObserver`.
+  - Dual Login Screen (`CoachAuthScreen`) toggling seamlessly between Coach Mode and Athlete Mode (via 6-character access code `PC-XXXXXX`).
+  - Recent Apps background screenshot privacy shield (`_SecurityGateWrapperState`) covering financial/athlete data when backgrounded.
+  - Cloud pagination (`.range(offset, offset + pageSize - 1)`) in `SupabaseSyncService` overcoming PostgREST 1000 row limit.
+  - Automatic download and bilingual caching of all 873 exercises from GitHub CDN (`ensureGlobal800ExerciseLibraryLoaded`).
+  - Program builder Auto-Draft restoration on interruption/call and automatic save on change.
+  - Duplicate Day (`_showDuplicateDayDialog`) and Undo SnackBar on exercise removal in `MasterProgramBuilderScreen`.
+  - Direct access code display and 1-tap modal text chat in `AthleteDetailScreen`.
+  - 4 new automated unit/widget tests in `phase2_dual_role_portal_test.dart` bringing test suite to 26/26 green.
 - Phase 1 Dual-Role (Coach & Athlete Portal) Architecture:
   - Persian/Arabic number sanitizer extension (`PersianNumberSanitizer`) preventing parser crashes from mobile keyboards.
   - Bilingual catalog expansion to 60+ offline exercises, 40 sports/Iranian foods, 30 supplements, and GitHub 873 global exercises engine (`SeedCatalogData`).

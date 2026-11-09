@@ -41,6 +41,7 @@ class SeedCatalogData {
   /// آدرس مستقیم فایل JSON شامل کل ۸۷۳ حرکت استاندارد جهانی روی CDN رایگان
   static const String global873ExercisesJsonUrl =
       'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/dist/exercises.json';
+  static const String global800ExercisesJsonUrl = global873ExercisesJsonUrl;
 
   /// مترجم هوشمند خودکار نام حرکات انگلیسی به اصطلاحات رایج باشگاهی فارسی
   static String translateExerciseNameToPersian(String enName) {

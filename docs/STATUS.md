@@ -1,7 +1,7 @@
 # Project Status
 
-## Current Phase: Production-Grade Hardening & Commercial Features Complete
-- **Status:** Commercial-grade fitness coaching platform complete, 14/14 automated tests passing green, 0 analysis issues.
+## Current Phase: Dual-Role Coach & Athlete Ecosystem Complete
+- **Status:** Complete dual-role system (Coach & Athlete Portal) with live workout player, auto-draft, pure-text chat, background screenshot shield, 26/26 automated tests passing green, 0 analysis issues.
 - **Updated:** 2026-11-10
 
 ## Summary
@@ -39,13 +39,23 @@
     - Server-side PostgreSQL RLS function `public.is_active_approved_coach()` preventing unauthorized API bypass.
     - Offline-cached Kill-Switch state preventing bypass via Airplane mode.
     - Sign out and secure key destruction action in Settings.
-  - Dual-Role Upgrade (Phase 1 Complete):
+  - Dual-Role Upgrade (Phase 1 & Phase 2 Complete):
+    - Athlete Portal (`AthletePortalScreen`) with interactive workout session tracker, PR weight logger, rest countdown timer, water intake gamified counter, and athlete PDF downloads.
+    - Mandatory profile completion gate (`_MandatoryAthleteProfileCompletionGate`) enforcing required biometrics before unlocking training.
+    - Zero-battery pure text chat (`PureTextChatView`) with lifecycle pausing via `WidgetsBindingObserver`.
+    - Dual Login Screen (`CoachAuthScreen`) toggling seamlessly between Coach Mode and Athlete Mode (via 6-character access code `PC-XXXXXX`).
+    - Recent Apps background screenshot privacy shield (`_SecurityGateWrapperState`) covering financial/athlete data when backgrounded.
+    - Cloud pagination (`.range(offset, offset + pageSize - 1)`) in `SupabaseSyncService` overcoming PostgREST 1000 row limit.
+    - Automatic download and bilingual caching of all 873 exercises from GitHub CDN (`ensureGlobal800ExerciseLibraryLoaded`).
+    - Program builder Auto-Draft restoration on interruption/call and automatic save on change.
+    - Duplicate Day (`_showDuplicateDayDialog`) and Undo SnackBar on exercise removal in `MasterProgramBuilderScreen`.
+    - Direct access code display and 1-tap modal text chat in `AthleteDetailScreen`.
     - Persian/Arabic number sanitizer extension (`PersianNumberSanitizer` in `lib/core/utils/number_parser.dart`).
     - Bilingual catalog enriched to 60+ offline exercises, 40 sports & Iranian foods, 30 supplements, and GitHub 873 global exercises engine (`SeedCatalogData`).
-    - Supabase Phase 1 migration script (`supabase/migrations/20261110000004_phase1_athlete_portal_chat_logs.sql`) with composite performance indexes, RLS, and RPC functions (`athlete_login_by_code`, `athlete_complete_profile`).
+    - Supabase Phase 1 & 2 migration script (`supabase/migrations/20261110000004_phase1_athlete_portal_chat_logs.sql`) with composite performance indexes, RLS, and RPC functions (`athlete_login_by_code`, `athlete_complete_profile`).
     - Upgraded offline SQLite database (`lib/data/local/app_database.dart`) with `access_code` lookup, pure text chat (`chat_messages`), athlete workout log (`athlete_workout_logs`), and auto-draft (`program_drafts`).
     - Two-way sync service updated (`lib/data/remote/supabase_sync_service.dart`) with chat and workout logs synchronization.
-    - Test suite expanded to 22 tests across 5 files, all passing green.
+    - Test suite expanded to 26 tests across 6 files, all passing green.
   - Comprehensive test suite passing with 100% green tests.
   - Static analysis clean (0 errors, 0 warnings, 0 infos).
   - GitHub Actions CI/CD pipeline and Supabase free-tier keep-alive cron active.

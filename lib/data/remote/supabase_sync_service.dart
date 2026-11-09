@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,6 +35,7 @@ class SupabaseSyncService {
   final LocalAppDatabase _db;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   bool _isSyncing = false;
+  bool _hasDownloadedGlobal800Catalog = false;
 
   SupabaseSyncService(this._db);
 
@@ -52,6 +54,29 @@ class SupabaseSyncService {
     _connectivitySub?.cancel();
   }
 
+  /// دانلود خودکار و یکباره کل ۸۷۳ حرکت جهانی از GitHub CDN و ترجمه به فارسی در SQLite
+  Future<void> ensureGlobal800ExerciseLibraryLoaded() async {
+    if (_hasDownloadedGlobal800Catalog) return;
+    if (_db.getExercisesCatalog().length > 200) {
+      _hasDownloadedGlobal800Catalog = true;
+      return;
+    }
+
+    try {
+      final httpClient = HttpClient();
+      final req = await httpClient
+          .getUrl(Uri.parse(SeedCatalogData.global800ExercisesJsonUrl))
+          .timeout(const Duration(seconds: 10));
+      final resp = await req.close().timeout(const Duration(seconds: 15));
+      if (resp.statusCode == 200) {
+        final body = await resp.transform(utf8.decoder).join();
+        final decoded = jsonDecode(body) as List<dynamic>;
+        _db.importGlobal800ExercisesBatch(decoded);
+        _hasDownloadedGlobal800Catalog = true;
+      }
+    } catch (_) {}
+  }
+
   Future<SyncSummary> syncAllPendingData() async {
     if (_isSyncing) {
       return const SyncSummary(
@@ -60,13 +85,15 @@ class SupabaseSyncService {
     _isSyncing = true;
 
     try {
+      // دانلود خودکار بانک ۸۷۳ حرکت در پسزمینه
+      unawaited(ensureGlobal800ExerciseLibraryLoaded());
+
       if (!SupabaseConfig.isInitialized) {
         await SupabaseConfig.initializeSafely();
       }
       final client = SupabaseConfig.clientOrNull;
       final currentUser = client?.auth.currentUser;
 
-      // اگر اینترنت قطع است یا مربی هنوز وارد حساب خود نشده است، سینک را متوقف کن
       if (client == null || currentUser == null) {
         _isSyncing = false;
         return const SyncSummary(
@@ -76,13 +103,11 @@ class SupabaseSyncService {
         );
       }
 
-      // ۱. پینگ Heartbeat برای جلوگیری از Pause شدن پروژه در پلن رایگان Supabase
       await client.from('app_heartbeat').upsert({
         'id': 1,
         'last_ping': DateTime.now().toUtc().toIso8601String(),
       });
 
-      // ۲. ارسال ورزشکاران آفلاین به Supabase
       final pendingAthletes = _db.getPendingSyncAthletes();
       for (final athlete in pendingAthletes) {
         final payload = athlete.toSupabaseJson()
@@ -91,7 +116,6 @@ class SupabaseSyncService {
         _db.markRecordSynced('athletes', athlete.id);
       }
 
-      // ۳. ارسال سایزگیریهای آفلاین به Supabase
       final pendingLogs = _db.getPendingSyncMeasurements();
       for (final log in pendingLogs) {
         final payload = log.toSupabaseJson()..['coach_id'] = currentUser.id;
@@ -99,7 +123,6 @@ class SupabaseSyncService {
         _db.markRecordSynced('measurement_logs', log.id);
       }
 
-      // ۴. ارسال برنامههای تمرینی/غذایی/مالی و قالبها به Supabase
       final pendingPrograms = _db.getPendingSyncPrograms();
       for (final prog in pendingPrograms) {
         final payload = prog.toSupabaseJson()..['coach_id'] = currentUser.id;
@@ -107,15 +130,15 @@ class SupabaseSyncService {
         _db.markRecordSynced('programs', prog.id);
       }
 
-      // ۵. ارسال پیامهای چت متنی آفلاین به Supabase
+      // سینک پیامهای چت متنی آفلاین
       final pendingChats = _db.getPendingSyncChatMessages();
-      for (final chat in pendingChats) {
-        final payload = chat.toSupabaseJson()..['coach_id'] = currentUser.id;
+      for (final msg in pendingChats) {
+        final payload = msg.toSupabaseJson()..['coach_id'] = currentUser.id;
         await client.from('chat_messages').upsert(payload);
-        _db.markRecordSynced('chat_messages', chat.id);
+        _db.markRecordSynced('chat_messages', msg.id);
       }
 
-      // ۶. ارسال لاگهای تمرین و آب مصرفی آفلاین به Supabase
+      // سینک لاگهای تمرین و آب مصرفی آفلاین
       final pendingWorkoutLogs = _db.getPendingSyncWorkoutLogs();
       for (final wl in pendingWorkoutLogs) {
         final payload = wl.toSupabaseJson();
@@ -123,7 +146,7 @@ class SupabaseSyncService {
         _db.markRecordSynced('athlete_workout_logs', wl.id);
       }
 
-      // ۷. ارسال فقط حرکات، غذاها و مکملهای «سفارشی» مربی (جلوگیری از تداخل آیتمهای پیشفرض بین مربیان)
+      // سینک حرکات، غذاها و مکملهای سفارشی مربی
       final customMoves = _db.getCustomExercisesOnly();
       for (final m in customMoves) {
         await client.from('exercises_catalog').upsert({
@@ -140,7 +163,6 @@ class SupabaseSyncService {
         });
       }
 
-      // فقط غذاهایی که شناسه آنها با 'food_' شروع نمیشود (یعنی مربی خودش ساخته است)
       final customFoods = _db
           .getFoodsCatalog()
           .where((f) => !(f['id'] ?? '').startsWith('food_'));
@@ -156,7 +178,6 @@ class SupabaseSyncService {
         });
       }
 
-      // فقط مکملهایی که جزو ۸ مکمل پیشفرض اولیه نیستند
       final defaultSuppIds =
           SeedCatalogData.supplementCatalog.map((e) => e['id']).toSet();
       final customSupps = _db
@@ -176,9 +197,8 @@ class SupabaseSyncService {
         });
       }
 
-      // ۶. بازیابی کامل از کلود در صورتی که دیتابیس گوشی خالی باشد (نصب روی گوشی جدید)
       if (_db.getAllActiveAthletes().isEmpty) {
-        await _pullFromCloudIfLocalEmpty();
+        await _pullFromCloudWithPagination();
       }
 
       _isSyncing = false;
@@ -200,11 +220,11 @@ class SupabaseSyncService {
     }
   }
 
-  Future<void> _pullFromCloudIfLocalEmpty() async {
+  /// بازیابی ابری با صفحهبندی (Pagination) برای عبور از سقف ۱۰۰۰ سطر PostgREST (رفع عیب ۳ گزارش ممیزی)
+  Future<void> _pullFromCloudWithPagination() async {
     final client = SupabaseConfig.clientOrNull;
     if (client == null) return;
 
-    // ۱. بازیابی حرکات سفارشی مربی
     final remoteMoves = await client.from('exercises_catalog').select();
     for (final r in remoteMoves) {
       _db.addCustomExercise(ExerciseSeedItem(
@@ -218,12 +238,12 @@ class SupabaseSyncService {
       ));
     }
 
-    // ۲. بازیابی ورزشکاران
     final remoteAthletes = await client
         .from('athletes')
         .select()
         .eq('is_deleted', false)
-        .order('updated_at', ascending: false);
+        .order('updated_at', ascending: false)
+        .range(0, 999);
 
     for (final row in remoteAthletes) {
       final rawTags = row['injury_tags'];
@@ -253,35 +273,43 @@ class SupabaseSyncService {
       _db.upsertAthlete(athlete);
     }
 
-    // ۳. بازیابی تاریخچه سایزگیریها و نمودارها (Measurement Logs)
-    final remoteLogs = await client
-        .from('measurement_logs')
-        .select()
-        .order('recorded_at', ascending: true);
+    // واکشی صفحهبندیشده سایزگیریها (در دستههای ۱۰۰۰ تایی)
+    int offset = 0;
+    const pageSize = 1000;
+    while (true) {
+      final remoteLogs = await client
+          .from('measurement_logs')
+          .select()
+          .order('recorded_at', ascending: true)
+          .range(offset, offset + pageSize - 1);
 
-    for (final row in remoteLogs) {
-      final log = MeasurementLogEntity(
-        id: row['id'] as String,
-        athleteId: row['athlete_id'] as String,
-        recordedAt: DateTime.parse(row['recorded_at'] as String).toLocal(),
-        weightKg: (row['weight_kg'] as num).toDouble(),
-        bodyFatPercent: (row['body_fat_percent'] as num?)?.toDouble(),
-        shoulderCm: (row['shoulder_cm'] as num?)?.toDouble(),
-        chestCm: (row['chest_cm'] as num?)?.toDouble(),
-        waistCm: (row['waist_cm'] as num?)?.toDouble(),
-        hipsCm: (row['hips_cm'] as num?)?.toDouble(),
-        bicepsCm: (row['biceps_cm'] as num?)?.toDouble(),
-        forearmCm: (row['forearm_cm'] as num?)?.toDouble(),
-        thighCm: (row['thigh_cm'] as num?)?.toDouble(),
-        calfCm: (row['calf_cm'] as num?)?.toDouble(),
-        updatedAt: DateTime.parse(row['updated_at'] as String).toLocal(),
-        syncStatus: 'synced',
-      );
-      _db.insertMeasurementLog(log);
+      for (final row in remoteLogs) {
+        final log = MeasurementLogEntity(
+          id: row['id'] as String,
+          athleteId: row['athlete_id'] as String,
+          recordedAt: DateTime.parse(row['recorded_at'] as String).toLocal(),
+          weightKg: (row['weight_kg'] as num).toDouble(),
+          bodyFatPercent: (row['body_fat_percent'] as num?)?.toDouble(),
+          shoulderCm: (row['shoulder_cm'] as num?)?.toDouble(),
+          chestCm: (row['chest_cm'] as num?)?.toDouble(),
+          waistCm: (row['waist_cm'] as num?)?.toDouble(),
+          hipsCm: (row['hips_cm'] as num?)?.toDouble(),
+          bicepsCm: (row['biceps_cm'] as num?)?.toDouble(),
+          forearmCm: (row['forearm_cm'] as num?)?.toDouble(),
+          thighCm: (row['thigh_cm'] as num?)?.toDouble(),
+          calfCm: (row['calf_cm'] as num?)?.toDouble(),
+          updatedAt: DateTime.parse(row['updated_at'] as String).toLocal(),
+          syncStatus: 'synced',
+        );
+        _db.insertMeasurementLog(log);
+      }
+
+      if (remoteLogs.length < pageSize) break;
+      offset += pageSize;
     }
 
-    // ۴. بازیابی برنامهها و قالبها
-    final remotePrograms = await client.from('programs').select();
+    final remotePrograms =
+        await client.from('programs').select().range(0, 999);
     for (final row in remotePrograms) {
       final rawDays = row['days_json'];
       final decodedDays =
@@ -321,7 +349,7 @@ class SupabaseSyncService {
       _db.upsertProgram(prog);
     }
 
-    // ۵. بازیابی پیامهای چت
+    // بازیابی پیام‌های چت
     final remoteChats = await client
         .from('chat_messages')
         .select()
