@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Enterprise Hardening & Needle-Audit Edge Case Resolution:
+  - Preserved athlete `email` and `access_code` during profile editing and updates in `athletes_provider.dart`.
+  - Advanced input sanitization utilities `toSafeDouble`, `toSafeInt`, and `toSanitizedText` (Anti-XSS, Anti-SQLi, strip control characters) in `number_parser.dart`.
+  - Seamless sync and local SQLite storage of athlete historical anthropometric measurements in `security_gate_screen.dart` via `athlete_login_by_code` RPC.
+  - Printed athlete access code (`کد ورود اپ: PC-XXXXXX`) on PDF export cover cards in `pdf_export_engine.dart`.
+  - Database JSON Backup & Restore dialog and export viewer in `branding_settings_screen.dart`.
+  - Table name validation whitelist (`athletes`, `measurement_logs`, `programs`, `chat_messages`, `athlete_workout_logs`) in `LocalAppDatabase.markRecordSynced`.
+  - Secure athlete chat RPC routing (`athlete_fetch_chat` & `athlete_send_chat`) preventing access code forgery and data sniff leaks.
+  - ProGuard/R8 code shrinking and resource minification configuration with keep rules for Flutter and SQLite native interop in `android/app/build.gradle.kts` and `proguard-rules.pro`.
+  - Master all-in-one idempotent SQL migration script (`supabase/migrations/20261110000005_master_all_in_one_and_rpc_chat.sql`) and synced remote schema.
+  - Updated all test suites (`unit_bio_and_pdf_test.dart`, `database_and_models_test.dart`, `supabase_api_sync_test.dart`, `app_widget_ui_test.dart`) to 100% green pass.
 - Phase 2 Dual-Role (Coach & Athlete Portal) & Audit Gaps Resolution:
   - Athlete Portal (`AthletePortalScreen`) with interactive workout session tracker, PR weight logger, rest countdown timer, water intake gamified counter, and athlete PDF downloads.
   - Mandatory profile completion gate (`_MandatoryAthleteProfileCompletionGate`) enforcing required biometrics before unlocking training.

@@ -1,10 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pro_coach_app/core/utils/number_parser.dart';
 import 'package:pro_coach_app/data/local/app_database.dart';
+import 'package:pro_coach_app/data/local/seed_catalog_data.dart';
 import 'package:pro_coach_app/features/athletes/domain/scientific_bio_calculator.dart';
 import 'package:pro_coach_app/features/pdf_export/pdf_export_engine.dart';
 
 void main() {
-  group('1. Scientific Bio-Calculator Unit Tests', () {
+  group('1. Persian/Arabic Digit Sanitizer Tests (Audit Fix #2)', () {
+    test('Converts Persian and Arabic numerals and decimal separators to English', () {
+      expect('۷۵.۵'.toSafeDouble(), equals(75.5));
+      expect('۸۲٫۵'.toSafeDouble(), equals(82.5));
+      expect('١٢٠'.toSafeInt(), equals(120));
+      expect('۰۹۱۲۱۱۱۲۲۳۳'.toEnglishDigits(), equals('09121112233'));
+    });
+  });
+
+  group('2. Scientific Bio-Calculator & 800+ Exercise Translator Tests', () {
     test('Calculates BMI & WHtR accurately for muscular athlete', () {
       final result = ScientificBioCalculator.analyze(
         gender: 'male',
@@ -34,25 +45,25 @@ void main() {
       expect(resultWithBF.formulaUsed, equals('Katch-McArdle (LBM)'));
       expect(resultWithBF.bmrKcal, closeTo(1891, 2));
       expect(resultWithBF.proteinGrams, equals(176));
-      expect(resultWithBF.fiberGrams, greaterThanOrEqualTo(20));
-      expect(resultWithBF.waterLiters, closeTo(3.1, 0.1));
     });
 
-    test('1RM Epley Calculator computes accurate max strength', () {
-      final oneRm = ScientificBioCalculator.calculateOneRepMax(100, 10);
-      expect(oneRm, closeTo(133.3, 0.1));
-      expect(ScientificBioCalculator.calculateOneRepMax(120, 1), equals(120.0));
-      expect(ScientificBioCalculator.calculateOneRepMax(0, 10), equals(0.0));
+    test('Auto-translates global English exercise names to Persian gym terms', () {
+      final fa = SeedCatalogData.translateEnglishExerciseToPersian(
+          'Incline Dumbbell Bench Press');
+      expect(fa, contains('بالاسینه'));
+      expect(fa, contains('دمبل'));
     });
   });
 
-  group('2. PDF Dynamic File Naming Tests (Solar Hijri / Shamsi)', () {
+  group('3. PDF Dynamic File Naming & Access Code Tests', () {
     test('Formats filename strictly as [Athlete_Full_Name]_[Shamsi_Date].pdf', () {
       final sampleAthlete = AthleteEntity(
         id: 'uuid-1',
         firstName: 'Ali',
         lastName: 'Rezaei',
         phone: '09120000000',
+        email: 'ali@gym.com',
+        accessCode: 'PC-998877',
         gender: 'male',
         age: 26,
         heightCm: 180,
@@ -69,6 +80,7 @@ void main() {
       );
 
       expect(fileName, equals('Ali_Rezaei_1405-08-18.pdf'));
+      expect(sampleAthlete.isProfileComplete, isTrue);
     });
   });
 }

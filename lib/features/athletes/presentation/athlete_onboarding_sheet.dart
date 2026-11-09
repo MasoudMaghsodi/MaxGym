@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/utils/number_parser.dart';
 import '../../../data/local/app_database.dart';
 import 'athletes_provider.dart';
 
@@ -97,9 +98,7 @@ class _AthleteOnboardingSheetState
   }
 
   double? _parseOpt(TextEditingController c) {
-    final t = c.text.trim();
-    if (t.isEmpty) return null;
-    return double.tryParse(t);
+    return c.text.toSafeDouble();
   }
 
   Future<void> _submit() async {
@@ -107,8 +106,9 @@ class _AthleteOnboardingSheetState
     if (_firstNameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-              isFa ? 'لطفاً نام ورزشکار را وارد کنید' : 'Please enter first name'),
+          content: Text(isFa
+              ? 'لطفاً نام ورزشکار را وارد کنید'
+              : 'Please enter first name'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -119,11 +119,11 @@ class _AthleteOnboardingSheetState
           existingId: widget.existingAthlete?.id,
           firstName: _firstNameCtrl.text.trim(),
           lastName: _lastNameCtrl.text.trim(),
-          phone: _phoneCtrl.text.trim(),
+          phone: _phoneCtrl.text.toEnglishDigits(),
           gender: _gender,
-          age: int.tryParse(_ageCtrl.text) ?? 25,
-          heightCm: double.tryParse(_heightCtrl.text) ?? 175,
-          weightKg: double.tryParse(_weightCtrl.text) ?? 75,
+          age: _ageCtrl.text.toSafeInt() ?? 25,
+          heightCm: _heightCtrl.text.toSafeDouble() ?? 175,
+          weightKg: _weightCtrl.text.toSafeDouble() ?? 75,
           fitnessGoal: _fitnessGoal,
           injuryTags: _selectedInjuries.toList(),
           bodyFatPercent: _parseOpt(_bfCtrl),

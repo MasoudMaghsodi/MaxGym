@@ -1077,7 +1077,8 @@ class LocalAppDatabase {
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
       final q = searchQuery.trim().toLowerCase();
       return list.where((ex) {
-        return ex.nameFa.toLowerCase().contains(q) ||
+        return ex.id.toLowerCase().contains(q) ||
+            ex.nameFa.toLowerCase().contains(q) ||
             ex.nameEn.toLowerCase().contains(q);
       }).toList();
     }
@@ -1222,6 +1223,16 @@ class LocalAppDatabase {
   }
 
   void markRecordSynced(String table, String id) {
+    const allowedTables = {
+      'athletes',
+      'measurement_logs',
+      'programs',
+      'chat_messages',
+      'athlete_workout_logs',
+    };
+    if (!allowedTables.contains(table)) {
+      throw ArgumentError('Invalid table name for sync: $table');
+    }
     _db.execute("UPDATE $table SET sync_status = 'synced' WHERE id = ?", [id]);
   }
 

@@ -240,3 +240,90 @@ BEGIN
   RETURN FOUND;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- =============================================================================
+-- RPC CHAT & ATHLETE PORTAL ISOLATION
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.athlete_fetch_chat(
+    p_athlete_id TEXT,
+    p_access_code TEXT
+)
+RETURNS JSONB AS $$
+DECLARE
+    v_valid BOOLEAN;
+    v_messages JSONB;
+BEGIN
+    SELECT EXISTS (
+        SELECT 1 FROM public.athletes
+        WHERE id = p_athlete_id::UUID
+          AND UPPER(TRIM(access_code)) = UPPER(TRIM(p_access_code))
+          AND is_deleted = FALSE
+    ) INTO v_valid;
+
+    IF NOT v_valid THEN
+        RETURN '[]'::jsonb;
+    END IF;
+
+    SELECT COALESCE(
+        jsonb_agg(
+            jsonb_build_object(
+                'id', id,
+                'athlete_id', athlete_id,
+                'coach_id', coach_id,
+                'sender_role', sender_role,
+                'message_text', message_text,
+                'created_at', created_at
+            ) ORDER BY created_at ASC
+        ),
+        '[]'::jsonb
+    )
+    INTO v_messages
+    FROM (
+        SELECT * FROM public.chat_messages
+        WHERE athlete_id = p_athlete_id::UUID
+        ORDER BY created_at DESC
+        LIMIT 100
+    ) sub;
+
+    RETURN v_messages;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.athlete_send_chat(
+    p_id TEXT,
+    p_athlete_id TEXT,
+    p_access_code TEXT,
+    p_message_text TEXT
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_coach_id UUID;
+BEGIN
+    SELECT coach_id INTO v_coach_id
+    FROM public.athletes
+    WHERE id = p_athlete_id::UUID
+      AND UPPER(TRIM(access_code)) = UPPER(TRIM(p_access_code))
+      AND is_deleted = FALSE;
+
+    IF NOT FOUND THEN
+        RETURN FALSE;
+    END IF;
+
+    INSERT INTO public.chat_messages (id, athlete_id, coach_id, sender_role, message_text, created_at)
+    VALUES (
+        p_id::UUID,
+        p_athlete_id::UUID,
+        v_coach_id,
+        'athlete',
+        p_message_text,
+        NOW()
+    )
+    ON CONFLICT (id) DO NOTHING;
+
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.athlete_fetch_chat TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.athlete_send_chat TO anon, authenticated;

@@ -10,6 +10,9 @@ import '../../../core/cache/smart_cache_manager.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/branding_provider.dart';
+import '../../../core/utils/number_parser.dart';
+import '../../../data/local/app_database.dart';
+import '../../athletes/presentation/athletes_provider.dart';
 import '../../auth/security_gate_screen.dart';
 
 class BrandingSettingsScreen extends ConsumerStatefulWidget {
@@ -89,10 +92,14 @@ class _BrandingSettingsScreenState
       coachCredentials: _credentialsCtrl.text.trim(),
       gymName: _gymNameCtrl.text.trim(),
       socialHandle: _socialCtrl.text.trim(),
-      defaultTuitionFee: double.tryParse(_tuitionFeeCtrl.text) ?? 0,
-      defaultWorkoutFee: double.tryParse(_workoutFeeCtrl.text) ?? 0,
-      defaultDietFee: double.tryParse(_dietFeeCtrl.text) ?? 0,
-      defaultSupplementFee: double.tryParse(_supplementFeeCtrl.text) ?? 0,
+      defaultTuitionFee:
+          _tuitionFeeCtrl.text.toSafeDouble(min: 0, max: 1000000000),
+      defaultWorkoutFee:
+          _workoutFeeCtrl.text.toSafeDouble(min: 0, max: 1000000000),
+      defaultDietFee:
+          _dietFeeCtrl.text.toSafeDouble(min: 0, max: 1000000000),
+      defaultSupplementFee:
+          _supplementFeeCtrl.text.toSafeDouble(min: 0, max: 1000000000),
     );
     await ref.read(brandingProvider.notifier).updateBranding(updated);
 
@@ -102,6 +109,109 @@ class _BrandingSettingsScreenState
         SnackBar(
           content: Text(s.tr('settings_saved')),
           backgroundColor: AppColors.success,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showRestoreBackupDialog(bool isFa) async {
+    final textCtrl = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isFa
+            ? '📥 بازیابی دیتابیس از بکاپ JSON'
+            : '📥 Restore Database from JSON'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isFa
+                  ? 'متن کامل فایل بکاپ JSON را در کادر زیر وارد کنید:'
+                  : 'Paste the full JSON backup content below:',
+              style: const TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: textCtrl,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                hintText: '{"version": "2.0", ...}',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(isFa ? 'انصراف' : 'Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final jsonStr = textCtrl.text.trim();
+              if (jsonStr.isEmpty) return;
+              try {
+                final db = ref.read(appDatabaseProvider);
+                final restoredCount =
+                    db.restoreFullDatabaseFromJson(jsonStr);
+                ref.invalidate(athletesListProvider);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(isFa
+                        ? '✅ دیتابیس با موفقیت بازیابی شد ($restoredCount رکورد).'
+                        : '✅ Database restored successfully ($restoredCount records).'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(isFa
+                        ? '❌ فرمت بکاپ نامعتبر است: $e'
+                        : '❌ Invalid backup format: $e'),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+              }
+            },
+            child: Text(isFa ? 'بازیابی داده‌ها' : 'Restore'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _exportBackup(bool isFa) {
+    try {
+      final db = ref.read(appDatabaseProvider);
+      final jsonBackup = db.exportFullDatabaseToJson();
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(isFa ? '📤 خروجی بکاپ JSON' : '📤 Database Backup JSON'),
+          content: SingleChildScrollView(
+            child: SelectableText(
+              jsonBackup,
+              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(isFa ? 'بستن' : 'Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              isFa ? 'خطا در استخراج بکاپ: $e' : 'Error exporting backup: $e'),
+          backgroundColor: AppColors.danger,
         ),
       );
     }
@@ -374,6 +484,47 @@ class _BrandingSettingsScreenState
                             labelText: s.tr('supplement_fee'),
                             prefixIcon: const Icon(LucideIcons.pill),
                           ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // مدیریت پشتیبان‌گیری آفلاین
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    s.isFa
+                        ? '💾 پشتیبان‌گیری و بازیابی اطلاعات'
+                        : '💾 Database Backup & Restore',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _exportBackup(s.isFa),
+                          icon: const Icon(LucideIcons.fileDown, size: 18),
+                          label: Text(s.isFa ? 'خروجی بکاپ' : 'Export Backup'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showRestoreBackupDialog(s.isFa),
+                          icon: const Icon(LucideIcons.fileUp, size: 18),
+                          label:
+                              Text(s.isFa ? 'بازیابی دیتابیس' : 'Restore Backup'),
                         ),
                       ),
                     ],

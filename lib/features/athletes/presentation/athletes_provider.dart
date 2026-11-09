@@ -10,12 +10,16 @@ final athletesProvider =
   return AthletesNotifier(db);
 });
 
+final athletesListProvider = athletesProvider;
+
 final filteredAthletesProvider = Provider<List<AthleteEntity>>((ref) {
   final all = ref.watch(athletesProvider);
   final query = ref.watch(athleteSearchQueryProvider).trim().toLowerCase();
   if (query.isEmpty) return all;
   return all.where((a) {
-    return a.fullName.toLowerCase().contains(query) || a.phone.contains(query);
+    return a.fullName.toLowerCase().contains(query) ||
+        a.phone.contains(query) ||
+        a.accessCode.toLowerCase().contains(query);
   }).toList();
 });
 
@@ -36,6 +40,7 @@ class AthletesNotifier extends StateNotifier<List<AthleteEntity>> {
     required String firstName,
     required String lastName,
     required String phone,
+    String? email,
     required String gender,
     required int age,
     required double heightCm,
@@ -55,16 +60,23 @@ class AthletesNotifier extends StateNotifier<List<AthleteEntity>> {
     final now = DateTime.now();
     final id = existingId ?? _uuid.v4();
 
-    // حفظ تاریخ ثبتنام اولیه در صورت ویرایش پروفایل شاگرد
+    // حفظ تاریخ ثبت‌نام، ایمیل و کد ورود ۶ رقمی اختصاصی ورزشکار در صورت ویرایش
     final existingRecord =
         existingId != null ? _db.getAthleteById(existingId) : null;
     final createdDate = existingRecord?.createdAt ?? now;
+    final preservedEmail = email ?? existingRecord?.email ?? '';
+    final preservedAccessCode =
+        (existingRecord != null && existingRecord.accessCode.isNotEmpty)
+            ? existingRecord.accessCode
+            : AthleteEntity.generateAccessCode();
 
     final athlete = AthleteEntity(
       id: id,
       firstName: firstName,
       lastName: lastName,
       phone: phone,
+      email: preservedEmail,
+      accessCode: preservedAccessCode,
       gender: gender,
       age: age,
       heightCm: heightCm,

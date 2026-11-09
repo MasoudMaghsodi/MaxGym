@@ -311,6 +311,29 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
             ));
           }
 
+          final measList = res['measurements'] as List<dynamic>? ?? [];
+          for (final mRow in measList) {
+            if (mRow is! Map<String, dynamic>) continue;
+            db.insertMeasurementLog(MeasurementLogEntity(
+              id: mRow['id'] as String,
+              athleteId: athlete.id,
+              recordedAt:
+                  DateTime.parse(mRow['recorded_at'] as String).toLocal(),
+              weightKg: (mRow['weight_kg'] as num).toDouble(),
+              bodyFatPercent: (mRow['body_fat_percent'] as num?)?.toDouble(),
+              shoulderCm: (mRow['shoulder_cm'] as num?)?.toDouble(),
+              chestCm: (mRow['chest_cm'] as num?)?.toDouble(),
+              waistCm: (mRow['waist_cm'] as num?)?.toDouble(),
+              hipsCm: (mRow['hips_cm'] as num?)?.toDouble(),
+              bicepsCm: (mRow['biceps_cm'] as num?)?.toDouble(),
+              forearmCm: (mRow['forearm_cm'] as num?)?.toDouble(),
+              thighCm: (mRow['thigh_cm'] as num?)?.toDouble(),
+              calfCm: (mRow['calf_cm'] as num?)?.toDouble(),
+              updatedAt: DateTime.now(),
+              syncStatus: 'synced',
+            ));
+          }
+
           await _secureStore.write(key: _kCachedAthleteCode, value: code);
           state = SecurityGateState(
             status: SecurityGateStatus.athletePortalActive,
@@ -495,6 +518,7 @@ class _SecurityGateWrapperState extends ConsumerState<SecurityGateWrapper>
         break;
       case SecurityGateStatus.athletePortalActive:
         activeScreen = AthletePortalScreen(
+          key: ValueKey(gate.loggedInAthlete!.id),
           initialAthlete: gate.loggedInAthlete!,
         );
         break;

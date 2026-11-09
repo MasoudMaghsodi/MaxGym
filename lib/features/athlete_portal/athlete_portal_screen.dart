@@ -49,6 +49,14 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant AthletePortalScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialAthlete != widget.initialAthlete) {
+      _athlete = widget.initialAthlete;
+    }
+  }
+
+  @override
   void dispose() {
     _restTimer?.cancel();
     super.dispose();
@@ -853,14 +861,31 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
     try {
       final client = SupabaseConfig.clientOrNull;
       if (client == null) return;
-      final rows = await client
-          .from('chat_messages')
-          .select()
-          .eq('athlete_id', widget.athlete.id)
-          .order('created_at', ascending: true)
-          .limit(100);
 
-      for (final r in rows) {
+      List<Map<String, dynamic>> rawRows = [];
+
+      if (widget.currentSenderRole == 'athlete') {
+        final res = await client.rpc(
+          'athlete_fetch_chat',
+          params: {
+            'p_athlete_id': widget.athlete.id,
+            'p_access_code': widget.athlete.accessCode,
+          },
+        ).timeout(const Duration(seconds: 5));
+        if (res is List<dynamic>) {
+          rawRows = res.whereType<Map<String, dynamic>>().toList();
+        }
+      } else {
+        final rows = await client
+            .from('chat_messages')
+            .select()
+            .eq('athlete_id', widget.athlete.id)
+            .order('created_at', ascending: true)
+            .limit(100);
+        rawRows = List<Map<String, dynamic>>.from(rows);
+      }
+
+      for (final r in rawRows) {
         db.insertChatMessage(ChatMessageEntity(
           id: r['id'] as String,
           athleteId: r['athlete_id'] as String,
@@ -879,7 +904,7 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
   }
 
   Future<void> _sendTextMessage() async {
-    final text = _msgCtrl.text.trim();
+    final text = _msgCtrl.text.toSanitizedText(maxLength: 500);
     if (text.isEmpty) return;
     _msgCtrl.clear();
 
@@ -887,7 +912,7 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
       id: const Uuid().v4(),
       athleteId: widget.athlete.id,
       senderRole: widget.currentSenderRole,
-      messageText: text.length > 500 ? text.substring(0, 500) : text,
+      messageText: text,
       createdAt: DateTime.now(),
     );
 
@@ -898,10 +923,23 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
     });
 
     try {
-      await SupabaseConfig.clientOrNull
-          ?.from('chat_messages')
-          .upsert(msg.toSupabaseJson());
-      db.markRecordSynced('chat_messages', msg.id);
+      final client = SupabaseConfig.clientOrNull;
+      if (client != null) {
+        if (widget.currentSenderRole == 'athlete') {
+          await client.rpc(
+            'athlete_send_chat',
+            params: {
+              'p_id': msg.id,
+              'p_athlete_id': widget.athlete.id,
+              'p_access_code': widget.athlete.accessCode,
+              'p_message_text': msg.messageText,
+            },
+          ).timeout(const Duration(seconds: 5));
+        } else {
+          await client.from('chat_messages').upsert(msg.toSupabaseJson());
+        }
+        db.markRecordSynced('chat_messages', msg.id);
+      }
     } catch (_) {}
   }
 

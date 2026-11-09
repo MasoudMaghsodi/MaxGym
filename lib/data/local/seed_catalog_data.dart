@@ -44,6 +44,9 @@ class SeedCatalogData {
   static const String global800ExercisesJsonUrl = global873ExercisesJsonUrl;
 
   /// مترجم هوشمند خودکار نام حرکات انگلیسی به اصطلاحات رایج باشگاهی فارسی
+  static String translateEnglishExerciseToPersian(String enName) =>
+      translateExerciseNameToPersian(enName);
+
   static String translateExerciseNameToPersian(String enName) {
     final dictionary = <String, String>{
       'Barbell': 'هالتر',
@@ -1244,6 +1247,60 @@ class SeedCatalogData {
       'defaultDosageEn': '1 Tablet (200mcg)',
       'defaultTimingFa': 'قبل از وعده اصلی کربوهیدراتی',
       'defaultTimingEn': 'Before High-Carb Meal',
+    },
+    {
+      'id': 'curcumin',
+      'nameFa': 'عصاره کورکومین و زردچوبه (ضدالتهاب مفاصل و ریکاوری)',
+      'nameEn': 'Curcumin & Piperine Extract (500mg)',
+      'defaultDosageFa': '۱ کپسول ۵۰۰ میلیگرم',
+      'defaultDosageEn': '1 Capsule (500mg)',
+      'defaultTimingFa': 'همراه ناهار یا شام',
+      'defaultTimingEn': 'With Lunch or Dinner',
+    },
+    {
+      'id': 'probiotics',
+      'nameFa': 'پروبیوتیک پیشرفته (بهبود گوارش و جذب پروتئین)',
+      'nameEn': 'Multi-Strain Probiotics & Prebiotics',
+      'defaultDosageFa': '۱ عدد کپسول',
+      'defaultDosageEn': '1 Capsule Daily',
+      'defaultTimingFa': 'صبح ناشتا با یک لیوان آب',
+      'defaultTimingEn': 'Morning Fasted with Water',
+    },
+    {
+      'id': 'glucosamine',
+      'nameFa': 'گلوکزامین، کندرویتین و MSM (محافظت و غضروف‌سازی مفاصل)',
+      'nameEn': 'Glucosamine, Chondroitin & MSM Complex',
+      'defaultDosageFa': '۱ تا ۲ قرص',
+      'defaultDosageEn': '1-2 Tablets',
+      'defaultTimingFa': 'همراه با وعده غذایی اصلی',
+      'defaultTimingEn': 'With Main Meal',
+    },
+    {
+      'id': 'coq10',
+      'nameFa': 'کوآنزیم کیوتن CoQ10 (سلامت قلب و تولید انرژی سلولی)',
+      'nameEn': 'Coenzyme Q10 (100mg)',
+      'defaultDosageFa': '۱ عدد کپسول ۱۰۰ میلیگرم',
+      'defaultDosageEn': '1 Softgel (100mg)',
+      'defaultTimingFa': 'همراه صبحانه حاوی چربی مفید',
+      'defaultTimingEn': 'With Healthy Fat Breakfast',
+    },
+    {
+      'id': 'cordyceps',
+      'nameFa': 'قارچ کوردیسپس (افزایش اکسیژن‌رسانی و استقامت هوازی)',
+      'nameEn': 'Cordyceps Mushroom Extract (750mg)',
+      'defaultDosageFa': '۱ تا ۲ کپسول',
+      'defaultDosageEn': '1-2 Capsules',
+      'defaultTimingFa': '۴۵ دقیقه قبل از تمرین',
+      'defaultTimingEn': '45 Mins Pre-Workout',
+    },
+    {
+      'id': 'tribulus',
+      'nameFa': 'تریبولوس ترستریس (بهینه‌سازی طبیعی سطح تستوسترون)',
+      'nameEn': 'Tribulus Terrestris Extract (1000mg)',
+      'defaultDosageFa': '۱ قرص ۱۰۰۰ میلیگرم',
+      'defaultDosageEn': '1 Tablet (1000mg)',
+      'defaultTimingFa': 'صبح‌ها یا قبل از تمرین',
+      'defaultTimingEn': 'Morning or Pre-Workout',
     },
   ];
 

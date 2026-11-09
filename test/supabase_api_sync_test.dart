@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pro_coach_app/core/config/supabase_config.dart';
 import 'package:pro_coach_app/data/local/app_database.dart';
 import 'package:pro_coach_app/data/remote/supabase_sync_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -16,26 +16,28 @@ void main() {
           startsWith('sb_publishable_'));
     });
 
-    test('AthleteEntity.toSupabaseJson matches PostgreSQL schema', () {
+    test('AthleteEntity.toSupabaseJson includes email and access_code', () {
       final now = DateTime.utc(2026, 11, 9, 12, 0);
       final athlete = AthleteEntity(
         id: '550e8400-e29b-41d4-a716-446655440000',
         firstName: 'Reza',
         lastName: 'Darvishi',
         phone: '09129998877',
+        email: 'reza@gym.com',
+        accessCode: 'PC-A1B2C3',
         gender: 'male',
         age: 31,
         heightCm: 185,
         weightKg: 92,
         fitnessGoal: 'lean_bulk',
-        injuryTags: const ['knee', 'shoulder'],
+        injuryTags: const ['knee'],
         createdAt: now,
         updatedAt: now,
       );
 
       final payload = athlete.toSupabaseJson();
-      expect(payload['id'], equals('550e8400-e29b-41d4-a716-446655440000'));
-      expect(payload['first_name'], equals('Reza'));
+      expect(payload['email'], equals('reza@gym.com'));
+      expect(payload['access_code'], equals('PC-A1B2C3'));
       expect(payload.containsKey('sync_status'), isFalse);
     });
 

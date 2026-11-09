@@ -414,8 +414,8 @@ class PdfExportEngine {
             children: [
               pw.Text(
                 isRtl
-                    ? 'نام ورزشکار: ${athlete.fullName}'
-                    : 'Athlete: ${athlete.fullName}',
+                    ? 'نام ورزشکار: ${athlete.fullName}  |  کد ورود اپ: ${athlete.accessCode}'
+                    : 'Athlete: ${athlete.fullName}  |  Portal Code: ${athlete.accessCode}',
                 style:
                     const pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
               ),
