@@ -107,7 +107,23 @@ class SupabaseSyncService {
         _db.markRecordSynced('programs', prog.id);
       }
 
-      // ۵. ارسال فقط حرکات، غذاها و مکملهای «سفارشی» مربی (جلوگیری از تداخل آیتمهای پیشفرض بین مربیان)
+      // ۵. ارسال پیامهای چت متنی آفلاین به Supabase
+      final pendingChats = _db.getPendingSyncChatMessages();
+      for (final chat in pendingChats) {
+        final payload = chat.toSupabaseJson()..['coach_id'] = currentUser.id;
+        await client.from('chat_messages').upsert(payload);
+        _db.markRecordSynced('chat_messages', chat.id);
+      }
+
+      // ۶. ارسال لاگهای تمرین و آب مصرفی آفلاین به Supabase
+      final pendingWorkoutLogs = _db.getPendingSyncWorkoutLogs();
+      for (final wl in pendingWorkoutLogs) {
+        final payload = wl.toSupabaseJson();
+        await client.from('athlete_workout_logs').upsert(payload);
+        _db.markRecordSynced('athlete_workout_logs', wl.id);
+      }
+
+      // ۷. ارسال فقط حرکات، غذاها و مکملهای «سفارشی» مربی (جلوگیری از تداخل آیتمهای پیشفرض بین مربیان)
       final customMoves = _db.getCustomExercisesOnly();
       for (final m in customMoves) {
         await client.from('exercises_catalog').upsert({
@@ -220,6 +236,9 @@ class SupabaseSyncService {
         firstName: row['first_name'] as String? ?? '',
         lastName: row['last_name'] as String? ?? '',
         phone: row['phone'] as String? ?? '',
+        email: row['email'] as String? ?? '',
+        accessCode: row['access_code'] as String? ?? '',
+        streakDays: (row['streak_days'] as num?)?.toInt() ?? 1,
         gender: row['gender'] as String? ?? 'male',
         age: (row['age'] as num?)?.toInt() ?? 25,
         heightCm: (row['height_cm'] as num?)?.toDouble() ?? 175,
@@ -300,6 +319,22 @@ class SupabaseSyncService {
         syncStatus: 'synced',
       );
       _db.upsertProgram(prog);
+    }
+
+    // ۵. بازیابی پیامهای چت
+    final remoteChats = await client
+        .from('chat_messages')
+        .select()
+        .order('created_at', ascending: true);
+    for (final row in remoteChats) {
+      _db.insertChatMessage(ChatMessageEntity(
+        id: row['id'] as String,
+        athleteId: row['athlete_id'] as String,
+        senderRole: row['sender_role'] as String? ?? 'coach',
+        messageText: row['message_text'] as String? ?? '',
+        createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+        syncStatus: 'synced',
+      ));
     }
   }
 }

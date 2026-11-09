@@ -39,6 +39,13 @@
     - Server-side PostgreSQL RLS function `public.is_active_approved_coach()` preventing unauthorized API bypass.
     - Offline-cached Kill-Switch state preventing bypass via Airplane mode.
     - Sign out and secure key destruction action in Settings.
+  - Dual-Role Upgrade (Phase 1 Complete):
+    - Persian/Arabic number sanitizer extension (`PersianNumberSanitizer` in `lib/core/utils/number_parser.dart`).
+    - Bilingual catalog enriched to 60+ offline exercises, 40 sports & Iranian foods, 30 supplements, and GitHub 873 global exercises engine (`SeedCatalogData`).
+    - Supabase Phase 1 migration script (`supabase/migrations/20261110000004_phase1_athlete_portal_chat_logs.sql`) with composite performance indexes, RLS, and RPC functions (`athlete_login_by_code`, `athlete_complete_profile`).
+    - Upgraded offline SQLite database (`lib/data/local/app_database.dart`) with `access_code` lookup, pure text chat (`chat_messages`), athlete workout log (`athlete_workout_logs`), and auto-draft (`program_drafts`).
+    - Two-way sync service updated (`lib/data/remote/supabase_sync_service.dart`) with chat and workout logs synchronization.
+    - Test suite expanded to 22 tests across 5 files, all passing green.
   - Comprehensive test suite passing with 100% green tests.
   - Static analysis clean (0 errors, 0 warnings, 0 infos).
   - GitHub Actions CI/CD pipeline and Supabase free-tier keep-alive cron active.

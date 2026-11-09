@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -19,6 +20,9 @@ class AthleteEntity {
   final String firstName;
   final String lastName;
   final String phone;
+  final String email;
+  final String accessCode; // کد ۶ رقمی اختصاصی ورود ورزشکار به پرتال شاگرد
+  final int streakDays;
   final String gender;
   final int age;
   final double heightCm;
@@ -35,6 +39,9 @@ class AthleteEntity {
     required this.firstName,
     required this.lastName,
     required this.phone,
+    this.email = '',
+    this.accessCode = '',
+    this.streakDays = 1,
     required this.gender,
     required this.age,
     required this.heightCm,
@@ -49,11 +56,69 @@ class AthleteEntity {
 
   String get fullName => '$firstName $lastName'.trim();
 
+  /// بررسی اینکه آیا تمام اطلاعات ضروری ورزشکار (نام، نام خانوادگی، سن، قد، وزن، شماره تماس و ایمیل) کامل ثبت شده است یا خیر
+  bool get isProfileComplete {
+    return firstName.trim().isNotEmpty &&
+        lastName.trim().isNotEmpty &&
+        phone.trim().length >= 8 &&
+        email.trim().contains('@') &&
+        age >= 10 &&
+        heightCm >= 100 &&
+        weightKg >= 30;
+  }
+
+  static String generateAccessCode() {
+    final rng = Random.secure();
+    final digits = List.generate(6, (_) => rng.nextInt(10)).join();
+    return 'PC-$digits';
+  }
+
+  AthleteEntity copyWith({
+    String? firstName,
+    String? lastName,
+    String? phone,
+    String? email,
+    String? accessCode,
+    int? streakDays,
+    String? gender,
+    int? age,
+    double? heightCm,
+    double? weightKg,
+    String? fitnessGoal,
+    List<String>? injuryTags,
+    DateTime? updatedAt,
+    String? syncStatus,
+  }) {
+    return AthleteEntity(
+      id: id,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      accessCode: accessCode ?? this.accessCode,
+      streakDays: streakDays ?? this.streakDays,
+      gender: gender ?? this.gender,
+      age: age ?? this.age,
+      heightCm: heightCm ?? this.heightCm,
+      weightKg: weightKg ?? this.weightKg,
+      fitnessGoal: fitnessGoal ?? this.fitnessGoal,
+      injuryTags: injuryTags ?? this.injuryTags,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isDeleted: isDeleted,
+      syncStatus: syncStatus ?? this.syncStatus,
+    );
+  }
+
   Map<String, dynamic> toSupabaseJson() => {
         'id': id,
         'first_name': firstName,
         'last_name': lastName,
         'phone': phone,
+        'email': email,
+        'access_code':
+            accessCode.isNotEmpty ? accessCode : generateAccessCode(),
+        'streak_days': streakDays,
         'gender': gender,
         'age': age,
         'height_cm': heightCm,
@@ -116,6 +181,74 @@ class MeasurementLogEntity {
         'thigh_cm': thighCm,
         'calf_cm': calfCm,
         'updated_at': updatedAt.toUtc().toIso8601String(),
+      };
+}
+
+/// مدل پیام چت متنی خالص (Pure Text Chat) بین مربی و ورزشکار
+class ChatMessageEntity {
+  final String id;
+  final String athleteId;
+  final String senderRole; // 'coach' | 'athlete'
+  final String messageText;
+  final DateTime createdAt;
+  final String syncStatus;
+
+  const ChatMessageEntity({
+    required this.id,
+    required this.athleteId,
+    required this.senderRole,
+    required this.messageText,
+    required this.createdAt,
+    this.syncStatus = 'pending_insert',
+  });
+
+  Map<String, dynamic> toSupabaseJson() => {
+        'id': id,
+        'athlete_id': athleteId,
+        'sender_role': senderRole,
+        'message_text': messageText.length > 600
+            ? messageText.substring(0, 600)
+            : messageText,
+        'created_at': createdAt.toUtc().toIso8601String(),
+      };
+}
+
+/// مدل ثبت لاگ جلسه تمرینی، رکوردهای وزنه (PR) و آب مصرفی شاگرد
+class AthleteWorkoutLogEntity {
+  final String id;
+  final String athleteId;
+  final String programId;
+  final int dayNumber;
+  final Map<String, double> exerciseMaxWeights; // exerciseId -> maxKgMoved
+  final int waterGlasses;
+  final int sessionRpe;
+  final String athleteFeedback;
+  final DateTime loggedAt;
+  final String syncStatus;
+
+  const AthleteWorkoutLogEntity({
+    required this.id,
+    required this.athleteId,
+    required this.programId,
+    required this.dayNumber,
+    this.exerciseMaxWeights = const {},
+    this.waterGlasses = 0,
+    this.sessionRpe = 7,
+    this.athleteFeedback = '',
+    required this.loggedAt,
+    this.syncStatus = 'pending_insert',
+  });
+
+  Map<String, dynamic> toSupabaseJson() => {
+        'id': id,
+        'athlete_id': athleteId,
+        'program_id': programId,
+        'day_number': dayNumber,
+        'completed_sets_json': jsonEncode(exerciseMaxWeights),
+        'water_glasses': waterGlasses,
+        'session_rpe': sessionRpe,
+        'athlete_feedback': athleteFeedback,
+        'logged_at': loggedAt.toUtc().toIso8601String(),
       };
 }
 
@@ -328,11 +461,6 @@ class LocalAppDatabase {
     return instance;
   }
 
-  /// سازنده مخصوص اجرای سریع Unit Test و Widget Test در حافظه RAM
-    static LocalAppDatabase inMemory() => initInMemoryForTesting();
-
-  void close() => _db.dispose();
-
   static LocalAppDatabase initInMemoryForTesting() {
     final db = sqlite3.openInMemory();
     final instance = LocalAppDatabase._(db);
@@ -347,6 +475,9 @@ class LocalAppDatabase {
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
         phone TEXT NOT NULL,
+        email TEXT DEFAULT '',
+        access_code TEXT DEFAULT '',
+        streak_days INTEGER DEFAULT 1,
         gender TEXT NOT NULL,
         age INTEGER NOT NULL,
         height_cm REAL NOT NULL,
@@ -396,6 +527,35 @@ class LocalAppDatabase {
         sync_status TEXT DEFAULT 'pending_insert'
       );
 
+      -- جدول ذخیره خودکار پیشنویس برنامه تمرینی/غذایی (Auto-Draft - رفع عیب ۱ گزارش ممیزی)
+      CREATE TABLE IF NOT EXISTS program_drafts (
+        athlete_id TEXT PRIMARY KEY,
+        draft_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        athlete_id TEXT NOT NULL,
+        sender_role TEXT NOT NULL,
+        message_text TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        sync_status TEXT DEFAULT 'pending_insert'
+      );
+
+      CREATE TABLE IF NOT EXISTS athlete_workout_logs (
+        id TEXT PRIMARY KEY,
+        athlete_id TEXT NOT NULL,
+        program_id TEXT NOT NULL,
+        day_number INTEGER NOT NULL,
+        completed_sets_json TEXT NOT NULL,
+        water_glasses INTEGER NOT NULL DEFAULT 0,
+        session_rpe INTEGER NOT NULL DEFAULT 7,
+        athlete_feedback TEXT NOT NULL DEFAULT '',
+        logged_at TEXT NOT NULL,
+        sync_status TEXT DEFAULT 'pending_insert'
+      );
+
       CREATE TABLE IF NOT EXISTS exercises_catalog (
         id TEXT PRIMARY KEY,
         name_fa TEXT NOT NULL,
@@ -426,18 +586,99 @@ class LocalAppDatabase {
       );
     ''');
 
-    // Seed کردن حرکات ورزشی پایه
-    final exCount =
+    // مهاجرت ایمن ستونهای جدید در صورت وجود دیتابیس از نسخه قبلی
+    try {
+      _db.execute("ALTER TABLE athletes ADD COLUMN email TEXT DEFAULT '';");
+    } catch (_) {}
+    try {
+      _db.execute(
+          "ALTER TABLE athletes ADD COLUMN access_code TEXT DEFAULT '';");
+    } catch (_) {}
+    try {
+      _db.execute(
+          'ALTER TABLE athletes ADD COLUMN streak_days INTEGER DEFAULT 1;');
+    } catch (_) {}
+
+    // Seed کردن حرکات پایه (INSERT OR IGNORE تا همیشه همه حرکات جدید اضافه شوند)
+    final exStmt = _db.prepare('''
+      INSERT OR IGNORE INTO exercises_catalog (
+        id, name_fa, name_en, target_muscle, equipment,
+        image_start_url, image_end_url, contraindicated_injuries
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''');
+    for (final ex in SeedCatalogData.initialExercises) {
+      exStmt.execute([
+        ex.id,
+        ex.nameFa,
+        ex.nameEn,
+        ex.targetMuscle,
+        ex.equipment,
+        ex.imageStartUrl,
+        ex.imageEndUrl,
+        jsonEncode(ex.contraindicatedInjuries),
+      ]);
+    }
+    exStmt.dispose();
+
+    // Seed کردن بانک جامع ۴۰ غذای پایه
+    final foodStmt = _db.prepare('''
+      INSERT OR IGNORE INTO custom_foods_catalog (id, name_fa, name_en, unit_fa, unit_en)
+      VALUES (?, ?, ?, ?, ?)
+    ''');
+    int i = 1;
+    for (final f in SeedCatalogData.quickFoodCatalog) {
+      foodStmt.execute([
+        'food_$i',
+        f['nameFa']!,
+        f['nameEn']!,
+        f['unitFa']!,
+        f['unitEn']!
+      ]);
+      i++;
+    }
+    foodStmt.dispose();
+
+    // Seed کردن بانک جامع ۳۰ مکمل، ویتامین و مینرال
+    final suppStmt = _db.prepare('''
+      INSERT OR IGNORE INTO custom_supplements_catalog (
+        id, name_fa, name_en, dosage_fa, dosage_en, timing_fa, timing_en
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''');
+    for (final s in SeedCatalogData.supplementCatalog) {
+      suppStmt.execute([
+        s['id']!,
+        s['nameFa']!,
+        s['nameEn']!,
+        s['defaultDosageFa']!,
+        s['defaultDosageEn']!,
+        s['defaultTimingFa']!,
+        s['defaultTimingEn']!,
+      ]);
+    }
+    suppStmt.dispose();
+  }
+
+  /// دانلود و ایمپورت خودکار کل ۸۷۳ حرکت جهانی از GitHub در دیتابیس محلی SQLite
+  Future<int> syncGlobal873ExercisesIntoCatalog() async {
+    final currentCount =
         _db.select('SELECT COUNT(*) as cnt FROM exercises_catalog').first['cnt']
             as int;
-    if (exCount == 0) {
-      final stmt = _db.prepare('''
-        INSERT INTO exercises_catalog (
-          id, name_fa, name_en, target_muscle, equipment,
-          image_start_url, image_end_url, contraindicated_injuries
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ''');
-      for (final ex in SeedCatalogData.initialExercises) {
+    // اگر قبلاً بالای ۵۰۰ حرکت ایمپورت شده، دوباره دانلود نکن
+    if (currentCount > 500) return currentCount;
+
+    final globalMoves = await SeedCatalogData.fetchAll873GlobalExercises();
+    if (globalMoves.isEmpty) return currentCount;
+
+    final stmt = _db.prepare('''
+      INSERT OR IGNORE INTO exercises_catalog (
+        id, name_fa, name_en, target_muscle, equipment,
+        image_start_url, image_end_url, contraindicated_injuries
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''');
+
+    _db.execute('BEGIN TRANSACTION;');
+    try {
+      for (final ex in globalMoves) {
         stmt.execute([
           ex.id,
           ex.nameFa,
@@ -449,72 +690,40 @@ class LocalAppDatabase {
           jsonEncode(ex.contraindicatedInjuries),
         ]);
       }
+      _db.execute('COMMIT;');
+    } catch (_) {
+      _db.execute('ROLLBACK;');
+    } finally {
       stmt.dispose();
     }
 
-    // Seed کردن بانک غذاها
-    final foodCount = _db
-        .select('SELECT COUNT(*) as cnt FROM custom_foods_catalog')
+    return _db
+        .select('SELECT COUNT(*) as cnt FROM exercises_catalog')
         .first['cnt'] as int;
-    if (foodCount == 0) {
-      final stmt = _db.prepare('''
-        INSERT INTO custom_foods_catalog (id, name_fa, name_en, unit_fa, unit_en)
-        VALUES (?, ?, ?, ?, ?)
-      ''');
-      int i = 1;
-      for (final f in SeedCatalogData.quickFoodCatalog) {
-        stmt.execute([
-          'food_$i',
-          f['nameFa']!,
-          f['nameEn']!,
-          f['unitFa']!,
-          f['unitEn']!
-        ]);
-        i++;
-      }
-      stmt.dispose();
-    }
-
-    // Seed کردن بانک مکملها
-    final suppCount = _db
-        .select('SELECT COUNT(*) as cnt FROM custom_supplements_catalog')
-        .first['cnt'] as int;
-    if (suppCount == 0) {
-      final stmt = _db.prepare('''
-        INSERT INTO custom_supplements_catalog (
-          id, name_fa, name_en, dosage_fa, dosage_en, timing_fa, timing_en
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ''');
-      for (final s in SeedCatalogData.supplementCatalog) {
-        stmt.execute([
-          s['id']!,
-          s['nameFa']!,
-          s['nameEn']!,
-          s['defaultDosageFa']!,
-          s['defaultDosageEn']!,
-          s['defaultTimingFa']!,
-          s['defaultTimingEn']!,
-        ]);
-      }
-      stmt.dispose();
-    }
   }
 
   // ===========================================================================
-  // ۱. عملیات ورزشکاران (Athletes DAO)
+  // ۱. عملیات ورزشکاران و ورود با کد دعوت (Athletes & Access Code DAO)
   // ===========================================================================
   void upsertAthlete(AthleteEntity athlete) {
+    final code = athlete.accessCode.trim().isNotEmpty
+        ? athlete.accessCode.trim().toUpperCase()
+        : AthleteEntity.generateAccessCode();
+
     _db.execute('''
       INSERT OR REPLACE INTO athletes (
-        id, first_name, last_name, phone, gender, age,
-        height_cm, weight_kg, fitness_goal, injury_tags,
+        id, first_name, last_name, phone, email, access_code, streak_days,
+        gender, age, height_cm, weight_kg, fitness_goal, injury_tags,
         created_at, updated_at, is_deleted, sync_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', [
       athlete.id,
       athlete.firstName,
       athlete.lastName,
       athlete.phone,
+      athlete.email,
+      code,
+      athlete.streakDays,
       athlete.gender,
       athlete.age,
       athlete.heightCm,
@@ -541,6 +750,16 @@ class LocalAppDatabase {
     return _mapRowToAthlete(rows.first);
   }
 
+  AthleteEntity? getAthleteByAccessCode(String code) {
+    final normalized = code.trim().toUpperCase();
+    final rows = _db.select(
+      'SELECT * FROM athletes WHERE UPPER(access_code) = ? AND is_deleted = 0 LIMIT 1',
+      [normalized],
+    );
+    if (rows.isEmpty) return null;
+    return _mapRowToAthlete(rows.first);
+  }
+
   void softDeleteAthlete(String id) {
     _db.execute('''
       UPDATE athletes
@@ -550,11 +769,20 @@ class LocalAppDatabase {
   }
 
   AthleteEntity _mapRowToAthlete(Row row) {
+    String code = (row['access_code'] as String?) ?? '';
+    if (code.isEmpty) {
+      code = AthleteEntity.generateAccessCode();
+      _db.execute('UPDATE athletes SET access_code = ? WHERE id = ?',
+          [code, row['id']]);
+    }
     return AthleteEntity(
       id: row['id'] as String,
       firstName: row['first_name'] as String,
       lastName: row['last_name'] as String,
       phone: row['phone'] as String,
+      email: (row['email'] as String?) ?? '',
+      accessCode: code,
+      streakDays: (row['streak_days'] as int?) ?? 1,
       gender: row['gender'] as String,
       age: row['age'] as int,
       heightCm: (row['height_cm'] as num).toDouble(),
@@ -569,7 +797,94 @@ class LocalAppDatabase {
   }
 
   // ===========================================================================
-  // ۲. عملیات سایزگیری (Measurements DAO)
+  // ۲. عملیات چت متنی خالص (Pure Text Chat DAO) و گزارش تمرین شاگرد
+  // ===========================================================================
+  void insertChatMessage(ChatMessageEntity msg) {
+    _db.execute('''
+      INSERT OR REPLACE INTO chat_messages (
+        id, athlete_id, sender_role, message_text, created_at, sync_status
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    ''', [
+      msg.id,
+      msg.athleteId,
+      msg.senderRole,
+      msg.messageText,
+      msg.createdAt.toUtc().toIso8601String(),
+      msg.syncStatus,
+    ]);
+  }
+
+  List<ChatMessageEntity> getChatMessagesForAthlete(String athleteId) {
+    final rows = _db.select(
+      'SELECT * FROM chat_messages WHERE athlete_id = ? ORDER BY created_at ASC',
+      [athleteId],
+    );
+    return rows.map((r) {
+      return ChatMessageEntity(
+        id: r['id'] as String,
+        athleteId: r['athlete_id'] as String,
+        senderRole: r['sender_role'] as String,
+        messageText: r['message_text'] as String,
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+        syncStatus: r['sync_status'] as String,
+      );
+    }).toList();
+  }
+
+  void insertWorkoutSessionLog(AthleteWorkoutLogEntity log) {
+    _db.execute('''
+      INSERT OR REPLACE INTO athlete_workout_logs (
+        id, athlete_id, program_id, day_number, completed_sets_json,
+        water_glasses, session_rpe, athlete_feedback, logged_at, sync_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      log.id,
+      log.athleteId,
+      log.programId,
+      log.dayNumber,
+      jsonEncode(log.exerciseMaxWeights),
+      log.waterGlasses,
+      log.sessionRpe,
+      log.athleteFeedback,
+      log.loggedAt.toUtc().toIso8601String(),
+      log.syncStatus,
+    ]);
+
+    // افزایش خودکار روزهای استمرار (Streak) ورزشکار پس از ثبت جلسه تمرینی
+    _db.execute('''
+      UPDATE athletes
+      SET streak_days = streak_days + 1, updated_at = ?, sync_status = 'pending_update'
+      WHERE id = ?
+    ''', [DateTime.now().toUtc().toIso8601String(), log.athleteId]);
+  }
+
+  List<AthleteWorkoutLogEntity> getWorkoutLogsForAthlete(String athleteId) {
+    final rows = _db.select(
+      'SELECT * FROM athlete_workout_logs WHERE athlete_id = ? ORDER BY logged_at DESC',
+      [athleteId],
+    );
+    return rows.map((r) {
+      final rawMap =
+          jsonDecode(r['completed_sets_json'] as String) as Map<String, dynamic>;
+      final weights =
+          rawMap.map((k, v) => MapEntry(k, (v as num).toDouble()));
+      return AthleteWorkoutLogEntity(
+        id: r['id'] as String,
+        athleteId: r['athlete_id'] as String,
+        programId: r['program_id'] as String,
+        dayNumber: r['day_number'] as int,
+        exerciseMaxWeights: weights,
+        waterGlasses: r['water_glasses'] as int,
+        sessionRpe: r['session_rpe'] as int,
+        athleteFeedback: (r['athlete_feedback'] as String?) ?? '',
+        loggedAt: DateTime.parse(r['logged_at'] as String).toLocal(),
+        syncStatus: r['sync_status'] as String,
+      );
+    }).toList();
+  }
+
+  // ===========================================================================
+  // ۳. عملیات سایزگیری (Measurements DAO)
   // ===========================================================================
   void insertMeasurementLog(MeasurementLogEntity log) {
     _db.execute('''
@@ -633,7 +948,7 @@ class LocalAppDatabase {
   }
 
   // ===========================================================================
-  // ۳. عملیات برنامهها، قالبها و تسویه بدهی مالی (Programs & Billing DAO)
+  // ۴. عملیات برنامهها، قالبها و تسویه بدهی مالی (Programs & Billing DAO)
   // ===========================================================================
   void upsertProgram(FullProgramEntity program) {
     _db.execute('''
@@ -663,7 +978,6 @@ class LocalAppDatabase {
     ]);
   }
 
-  /// تسویه آنی بدهی مالی یک برنامه با یک کلیک
   void settleProgramDebt(String programId) {
     _db.execute('''
       UPDATE programs
@@ -672,7 +986,6 @@ class LocalAppDatabase {
     ''', [DateTime.now().toUtc().toIso8601String(), programId]);
   }
 
-  /// حذف برنامه یا قالب آماده
   void deleteProgramOrTemplate(String programId) {
     _db.execute('DELETE FROM programs WHERE id = ?', [programId]);
   }
@@ -726,7 +1039,7 @@ class LocalAppDatabase {
   }
 
   // ===========================================================================
-  // ۴. کاتالوگ حرکات، غذاها و مکملها + افزودن آیتم سفارشی توسط مربی
+  // ۵. کاتالوگ حرکات، غذاها و مکملها
   // ===========================================================================
   List<ExerciseSeedItem> getExercisesCatalog({
     String? muscleFilter,
@@ -763,7 +1076,6 @@ class LocalAppDatabase {
     return list;
   }
 
-  /// افزودن حرکت جدید سفارشی توسط مربی به بانک حرکات
   void addCustomExercise(ExerciseSeedItem item) {
     _db.execute('''
       INSERT OR REPLACE INTO exercises_catalog (
@@ -796,7 +1108,6 @@ class LocalAppDatabase {
     }).toList();
   }
 
-  /// افزودن ماده غذایی جدید توسط مربی به بانک غذاها
   void addCustomFood({
     required String nameFa,
     required String nameEn,
@@ -825,7 +1136,6 @@ class LocalAppDatabase {
     }).toList();
   }
 
-  /// افزودن مکمل جدید توسط مربی به بانک مکملها
   void addCustomSupplement({
     required String nameFa,
     required String nameEn,
@@ -850,7 +1160,7 @@ class LocalAppDatabase {
   }
 
   // ===========================================================================
-  // ۵. متدهای صف همگامسازی ابری (Outbox Queue for Supabase Sync)
+  // ۶. صف همگامسازی ابری (Outbox Queue) + بکاپ و بازیابی کامل دوطرفه JSON
   // ===========================================================================
   List<AthleteEntity> getPendingSyncAthletes() {
     final rows =
@@ -888,13 +1198,25 @@ class LocalAppDatabase {
     return rows.map(_mapRowToProgram).toList();
   }
 
+  List<ChatMessageEntity> getPendingSyncChatMessages() {
+    final rows =
+        _db.select("SELECT * FROM chat_messages WHERE sync_status != 'synced'");
+    return rows.map((r) {
+      return ChatMessageEntity(
+        id: r['id'] as String,
+        athleteId: r['athlete_id'] as String,
+        senderRole: r['sender_role'] as String,
+        messageText: r['message_text'] as String,
+        createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+        syncStatus: r['sync_status'] as String,
+      );
+    }).toList();
+  }
+
   void markRecordSynced(String table, String id) {
     _db.execute("UPDATE $table SET sync_status = 'synced' WHERE id = ?", [id]);
   }
 
-  // ===========================================================================
-  // ۶. سینک کاتالوگهای سفارشی و بکاپ/بازیابی کامل آفلاین (Full JSON Backup)
-  // ===========================================================================
   List<ExerciseSeedItem> getCustomExercisesOnly() {
     final rows = _db.select(
         "SELECT * FROM exercises_catalog WHERE id LIKE 'custom_%' OR equipment = 'custom'");
@@ -913,28 +1235,158 @@ class LocalAppDatabase {
     }).toList();
   }
 
-  /// تولید فایل JSON پشتیبان کامل از کل دیتابیس (شاگردان + سایزها + برنامهها + بانک سفارشی)
+  /// خروجی کامل بکاپ به فرمت JSON
   String exportFullDatabaseToJson() {
     final payload = {
+      'version': '2.0',
       'exported_at': DateTime.now().toUtc().toIso8601String(),
-      'athletes': getAllActiveAthletes().map((a) => a.toSupabaseJson()).toList(),
+      'athletes':
+          getAllActiveAthletes().map((a) => a.toSupabaseJson()).toList(),
       'programs': getAllPrograms(includeTemplates: true)
           .map((p) => p.toSupabaseJson())
           .toList(),
-      'custom_exercises':
-          getCustomExercisesOnly().map((e) => e.toJson()).toList(),
       'custom_foods': getFoodsCatalog(),
       'custom_supplements': getSupplementsCatalog(),
     };
     return const JsonEncoder.withIndent('  ').convert(payload);
   }
 
+  /// بازیابی کامل اطلاعات از رشته JSON بکاپ (Restore Engine)
+  int restoreFullDatabaseFromJson(String jsonStr) {
+    final Map<String, dynamic> decoded = jsonDecode(jsonStr);
+    int restoredCount = 0;
+
+    final athletesList = (decoded['athletes'] as List<dynamic>? ?? []);
+    for (final raw in athletesList) {
+      final row = raw as Map<String, dynamic>;
+      final rawTags = row['injury_tags'];
+      final List<String> parsedTags = rawTags is String
+          ? List<String>.from(jsonDecode(rawTags))
+          : List<String>.from(rawTags ?? []);
+
+      upsertAthlete(AthleteEntity(
+        id: row['id'] as String,
+        firstName: row['first_name'] as String? ?? '',
+        lastName: row['last_name'] as String? ?? '',
+        phone: row['phone'] as String? ?? '',
+        email: row['email'] as String? ?? '',
+        accessCode: row['access_code'] as String? ?? '',
+        streakDays: (row['streak_days'] as num?)?.toInt() ?? 1,
+        gender: row['gender'] as String? ?? 'male',
+        age: (row['age'] as num?)?.toInt() ?? 25,
+        heightCm: (row['height_cm'] as num?)?.toDouble() ?? 175,
+        weightKg: (row['weight_kg'] as num?)?.toDouble() ?? 75,
+        fitnessGoal: row['fitness_goal'] as String? ?? 'lean_bulk',
+        injuryTags: parsedTags,
+        createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+        updatedAt: DateTime.parse(row['updated_at'] as String).toLocal(),
+        syncStatus: 'pending_insert',
+      ));
+      restoredCount++;
+    }
+
+    final programsList = (decoded['programs'] as List<dynamic>? ?? []);
+    for (final raw in programsList) {
+      final row = raw as Map<String, dynamic>;
+      final rawDays = row['days_json'];
+      final decodedDays =
+          (rawDays is String ? jsonDecode(rawDays) : rawDays) as List<dynamic>;
+      final rawMeals = row['diet_meals_json'];
+      final mealsStr = rawMeals is String ? rawMeals : jsonEncode(rawMeals);
+      final rawSupps = row['supplements_json'];
+      final suppsStr = rawSupps is String ? rawSupps : jsonEncode(rawSupps);
+      final rawGuides = row['diet_guidelines_json'];
+      final List<String> guides = rawGuides is String
+          ? List<String>.from(jsonDecode(rawGuides))
+          : List<String>.from(rawGuides ?? []);
+
+      upsertProgram(FullProgramEntity(
+        id: row['id'] as String,
+        athleteId: row['athlete_id'] as String,
+        title: row['title'] as String? ?? '',
+        startDate: DateTime.parse(row['start_date'] as String).toLocal(),
+        durationWeeks: (row['duration_weeks'] as num?)?.toInt() ?? 4,
+        days: decodedDays
+            .map((e) => WorkoutDayPlan.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        dietMeals: DietMealSlot.decodeList(mealsStr),
+        waterLiters: (row['water_liters'] as num?)?.toDouble() ?? 3.5,
+        dietGuidelines: guides,
+        supplements: SupplementPrescriptionItem.decodeList(suppsStr),
+        totalFee: (row['total_fee'] as num?)?.toDouble() ?? 0,
+        paidAmount: (row['paid_amount'] as num?)?.toDouble() ?? 0,
+        paymentStatus: row['payment_status'] as String? ?? 'paid',
+        isTemplate: (row['is_template'] as bool?) ?? false,
+        updatedAt: DateTime.parse(row['updated_at'] as String).toLocal(),
+        syncStatus: 'pending_insert',
+      ));
+    }
+
+    return restoredCount;
+  }
+
+
+  // ===========================================================================
+  // ۷. عملیات پیش‌نویس خودکار برنامه (Auto-Draft DAO)
+  // ===========================================================================
+  void saveProgramDraft(String athleteId, String draftJson) {
+    _db.execute('''
+      INSERT INTO program_drafts (athlete_id, draft_json, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(athlete_id) DO UPDATE SET
+        draft_json = excluded.draft_json,
+        updated_at = excluded.updated_at
+    ''', [athleteId, draftJson, DateTime.now().toUtc().toIso8601String()]);
+  }
+
+  String? loadProgramDraft(String athleteId) {
+    final rows = _db.select(
+      'SELECT draft_json FROM program_drafts WHERE athlete_id = ? LIMIT 1',
+      [athleteId],
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['draft_json'] as String?;
+  }
+
+  void deleteProgramDraft(String athleteId) {
+    _db.execute('DELETE FROM program_drafts WHERE athlete_id = ?', [athleteId]);
+  }
+
+  List<AthleteWorkoutLogEntity> getPendingSyncWorkoutLogs() {
+    final rows = _db.select(
+        "SELECT * FROM athlete_workout_logs WHERE sync_status != 'synced'");
+    return rows.map((r) {
+      final rawMap =
+          jsonDecode(r['completed_sets_json'] as String) as Map<String, dynamic>;
+      final weights =
+          rawMap.map((k, v) => MapEntry(k, (v as num).toDouble()));
+      return AthleteWorkoutLogEntity(
+        id: r['id'] as String,
+        athleteId: r['athlete_id'] as String,
+        programId: r['program_id'] as String,
+        dayNumber: r['day_number'] as int,
+        exerciseMaxWeights: weights,
+        waterGlasses: r['water_glasses'] as int,
+        sessionRpe: r['session_rpe'] as int,
+        athleteFeedback: (r['athlete_feedback'] as String?) ?? '',
+        loggedAt: DateTime.parse(r['logged_at'] as String).toLocal(),
+        syncStatus: r['sync_status'] as String,
+      );
+    }).toList();
+  }
+
+  Future<int> importGlobal800ExercisesBatch() => syncGlobal873ExercisesIntoCatalog();
+
   /// پاکسازی کامل داده‌های شخصی مربی از SQLite گوشی هنگام خروج از حساب (OWASP M9)
   void clearAllUserDataOnLogout() {
     _db.execute('DELETE FROM athletes;');
     _db.execute('DELETE FROM measurement_logs;');
     _db.execute('DELETE FROM programs;');
+    _db.execute('DELETE FROM program_drafts;');
+    _db.execute('DELETE FROM chat_messages;');
+    _db.execute('DELETE FROM athlete_workout_logs;');
     _db.execute("DELETE FROM exercises_catalog WHERE id LIKE 'custom_%';");
     _db.execute("DELETE FROM custom_foods_catalog WHERE id NOT LIKE 'food_%';");
+    _db.execute("DELETE FROM custom_supplements_catalog WHERE id NOT LIKE 'supp_%';");
   }
 }

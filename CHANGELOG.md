@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Phase 1 Dual-Role (Coach & Athlete Portal) Architecture:
+  - Persian/Arabic number sanitizer extension (`PersianNumberSanitizer`) preventing parser crashes from mobile keyboards.
+  - Bilingual catalog expansion to 60+ offline exercises, 40 sports/Iranian foods, 30 supplements, and GitHub 873 global exercises engine (`SeedCatalogData`).
+  - Supabase Phase 1 migration script (`20261110000004_phase1_athlete_portal_chat_logs.sql`) with composite performance indexes, RLS, and RPC functions (`athlete_login_by_code`, `athlete_complete_profile`).
+  - Upgraded offline SQLite database (`LocalAppDatabase`) with `access_code` lookup, pure text chat (`chat_messages`), athlete workout log (`athlete_workout_logs`), and auto-draft (`program_drafts`).
+  - Two-way sync service updated (`SupabaseSyncService`) with chat and workout logs synchronization.
+  - 12 new automated unit tests in `phase1_portal_chat_catalog_test.dart` bringing test suite to 22/22 green.
 - Commercial-grade feature set bridging development gaps:
   - Custom Exercise, Food, and Supplement creation in SQLite with search query filtering.
   - Drag-and-drop exercise reordering using `ReorderableListView`.
