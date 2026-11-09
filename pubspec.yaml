@@ -1,0 +1,67 @@
+name: pro_coach_app
+description: Offline-First Bilingual Fitness Coaching & Athlete Management App.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State Management & Architecture
+  flutter_riverpod: ^2.5.1
+  shared_preferences: ^2.2.3
+  uuid: ^4.4.0
+  equatable: ^2.0.5
+
+  # Offline-First Local Database (Drift SQLite)
+  drift: ^2.18.0
+  sqlite3: ^2.4.0
+  sqlite3_flutter_libs: ^0.5.21
+  path_provider: ^2.1.3
+  path: ^1.9.0
+
+  # Cloud Backend & Connectivity
+  supabase_flutter: ^2.5.6
+  connectivity_plus: ^6.0.3
+
+  # Media, Smart Caching & File Handling
+  cached_network_image: ^3.3.1
+  flutter_cache_manager: ^3.3.2
+  image_picker: ^1.1.2
+  share_plus: ^9.0.0
+
+  # Charts, Dates & UI Components
+  fl_chart: ^0.68.0
+  shamsi_date: ^1.0.2
+  intl: ^0.20.2
+  lucide_icons_flutter: ^4.0.2
+
+  # PDF Engine & Printing
+  pdf: ^3.10.8
+  printing: ^5.12.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  drift_dev: ^2.18.0
+  build_runner: ^2.4.9
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/fonts/
+
+  fonts:
+    - family: Vazirmatn
+      fonts:
+        - asset: assets/fonts/Vazirmatn-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Vazirmatn-Bold.ttf
+          weight: 700
