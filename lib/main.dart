@@ -13,6 +13,7 @@ import 'data/local/app_database.dart';
 import 'data/remote/supabase_sync_service.dart';
 import 'features/athletes/presentation/athletes_list_screen.dart';
 import 'features/athletes/presentation/athletes_provider.dart';
+import 'features/auth/security_gate_screen.dart';
 import 'features/dashboard/presentation/coach_dashboard_screen.dart';
 import 'features/pdf_export/pdf_export_engine.dart';
 import 'features/settings/presentation/branding_settings_screen.dart';
@@ -81,7 +82,9 @@ class _ProCoachAppState extends ConsumerState<ProCoachApp> {
       themeMode: branding.themeMode,
       theme: AppTheme.buildTheme(branding, Brightness.light),
       darkTheme: AppTheme.buildTheme(branding, Brightness.dark),
-      home: const MainNavigationShell(),
+      home: const SecurityGateWrapper(
+        authorizedChild: MainNavigationShell(),
+      ),
     );
   }
 }

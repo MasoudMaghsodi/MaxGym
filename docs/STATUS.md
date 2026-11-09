@@ -26,11 +26,14 @@
 - **Done:**
   - Steps 1 through 6 fully integrated.
   - Commercial feature upgrades completed across 5 core files.
-  - Closed 4 final technical gaps:
-    1. Full Supabase two-way sync for custom exercises, foods, and supplements.
-    2. Full offline database JSON backup export (`exportFullDatabaseToJson`).
-    3. Athletes list quick filters (All / Unpaid / Expiring), swipe-to-delete dismissible, and backup export action.
-    4. Smart template direct assignment and customization sheet from `TemplatesScreen`.
+  - Closed 4 final technical gaps (sync, backup, quick filters, template assignment).
+  - OWASP Mobile Top 10 Hardening:
+    - Hardware Keystore / Keychain AES-256-GCM encryption for JWT and session tokens (`flutter_secure_storage`).
+    - PKCE authorization flow against code interception and replay attacks.
+    - Security Gate wrapper (`SecurityGateWrapper`) covering Login, Sign-up, Pending Admin Approval, and App Suspended Kill-Switch.
+    - Server-side PostgreSQL RLS function `public.is_active_approved_coach()` preventing unauthorized API bypass.
+    - Offline-cached Kill-Switch state preventing bypass via Airplane mode.
+    - Sign out and secure key destruction action in Settings.
   - Comprehensive test suite passing with 100% green tests.
   - Static analysis clean (0 errors, 0 warnings, 0 infos).
   - GitHub Actions CI/CD pipeline and Supabase free-tier keep-alive cron active.

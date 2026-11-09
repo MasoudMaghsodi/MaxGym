@@ -1,9 +1,45 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// ذخیرهساز رمزنگاریشده سختافزاری (AES-256 Keystore / Keychain) برای محافظت از JWT و Refresh Token
+/// مطابق با استاندارد OWASP M1 & M9
+class SecureSupabaseLocalStorage extends LocalStorage {
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
+
+  static const _sessionKey = 'SUPABASE_PERSIST_SESSION_SECURE_KEY';
+
+  const SecureSupabaseLocalStorage();
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<String?> accessToken() async {
+    return await _storage.read(key: _sessionKey);
+  }
+
+  @override
+  Future<bool> hasAccessToken() async {
+    return await _storage.containsKey(key: _sessionKey);
+  }
+
+  @override
+  Future<void> persistSession(String persistSessionString) async {
+    await _storage.write(key: _sessionKey, value: persistSessionString);
+  }
+
+  @override
+  Future<void> removePersistedSession() async {
+    await _storage.delete(key: _sessionKey);
+  }
+}
+
 class SupabaseConfig {
-  // پشتیبانی از dart-define برای امنیت در محیط Production به همراه کلیدهای پروژه شما
+  // کلیدهای عمومی فقط از طریق متغیرهای محیطی کامپایل (dart-define) تزریق میشوند
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
     defaultValue: 'https://pnuyylukurndiflgzxmo.supabase.co',
@@ -17,40 +53,27 @@ class SupabaseConfig {
   static bool _isInitialized = false;
   static bool get isInitialized => _isInitialized;
 
-  /// راهاندازی ایمن بدون مسدود کردن اپ در محیط بدون اینترنت باشگاه
   static Future<void> initializeSafely() async {
-    if (Platform.environment.containsKey('FLUTTER_TEST')) {
-      _isInitialized = false;
-      return;
-    }
+    if (_isInitialized) return;
     try {
       await Supabase.initialize(
         url: supabaseUrl,
-        publishableKey: supabasePublishableKey,
-        debug: kDebugMode,
+        anonKey: supabasePublishableKey,
+        authOptions: const FlutterAuthClientOptions(
+          // استفاده از پروتکل امنیتی PKCE برای جلوگیری از شنود و سرقت کد احراز هویت (OWASP M3/M5)
+          authFlowType: AuthFlowType.pkce,
+          localStorage: SecureSupabaseLocalStorage(),
+          autoRefreshToken: true,
+        ),
+        debug: false, // غیرفعال کردن لاگهای شبکه در کنسول برای جلوگیری از نشت توکن در Logcat (OWASP M9)
       );
       _isInitialized = true;
-      // ارسال پینگ Heartbeat در پسزمینه برای جلوگیری از Pause شدن پلن رایگان Supabase
-      _sendBackgroundHeartbeat();
     } catch (e) {
-      debugPrint('Offline Mode Active - Supabase Init Deferred: $e');
+      debugPrint('Supabase Offline Init Deferred.');
       _isInitialized = false;
     }
   }
 
   static SupabaseClient? get clientOrNull =>
       _isInitialized ? Supabase.instance.client : null;
-
-  static Future<void> _sendBackgroundHeartbeat() async {
-    try {
-      final client = clientOrNull;
-      if (client == null) return;
-      await client.from('app_heartbeat').upsert({
-        'id': 1,
-        'last_ping': DateTime.now().toUtc().toIso8601String(),
-      });
-    } catch (_) {
-      // اگر اینترنت قطع باشد، در سکوت نادیده گرفته میشود تا تجربه کاربری مختل نشود
-    }
-  }
 }

@@ -2,8 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pro_coach_app/core/config/supabase_config.dart';
 import 'package:pro_coach_app/data/local/app_database.dart';
 import 'package:pro_coach_app/data/remote/supabase_sync_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
   group('Supabase API Payload Contract & Offline Resilience Tests', () {
     test('SupabaseConfig holds valid project URL and publishable key', () {
       expect(SupabaseConfig.supabaseUrl,

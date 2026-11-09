@@ -23,4 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Offline JSON database full backup generator (`exportFullDatabaseToJson`) and AppBar export action.
   - Quick filter chips (`All`, `Unpaid Debt`, `Expiring Programs`) and swipe-to-delete in `AthletesListScreen`.
   - Direct template assignment and customization modal in `TemplatesScreen`.
+  - OWASP Mobile Top 10 Hardening:
+    - Hardware-encrypted session storage with `flutter_secure_storage` (AES-256 Android Keystore / iOS Keychain).
+    - PKCE authorization flow for Supabase Auth.
+    - Security Gate Screen with Sign-In, Sign-Up, Pending Admin Approval, and Global/Per-coach Kill-Switch screens.
+    - Offline-cached Kill-Switch state preventing Airplane Mode bypass.
+    - Sign out action in Settings with complete secure storage purge.
   - Complete UI, Unit, and Database test suite with 100% pass rate.

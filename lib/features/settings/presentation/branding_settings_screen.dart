@@ -10,6 +10,7 @@ import '../../../core/cache/smart_cache_manager.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/branding_provider.dart';
+import '../../auth/security_gate_screen.dart';
 
 class BrandingSettingsScreen extends ConsumerStatefulWidget {
   const BrandingSettingsScreen({super.key});
@@ -130,6 +131,11 @@ class _BrandingSettingsScreenState
                   : LucideIcons.moon,
             ),
             onPressed: notifier.toggleThemeMode,
+          ),
+          IconButton(
+            tooltip: s.isFa ? 'خروج امن از حساب' : 'Sign Out',
+            icon: const Icon(LucideIcons.logOut, color: AppColors.danger),
+            onPressed: () => ref.read(securityGateProvider.notifier).signOut(),
           ),
         ],
       ),
