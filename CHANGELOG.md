@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- Android Gradle compilation error `:printing:checkDebugAarMetadata`:
+  - Removed outdated native `printing` plugin from `pubspec.yaml` in favor of pure Dart `pdf` + `share_plus` architecture.
+  - Upgraded `share_plus` to `^10.1.0` and `pdf` to `^3.11.1`.
+  - Configured `android/app/build.gradle.kts` with `compileSdk = 35`, `minSdk = 23`, `targetSdk = 35`, and Java 17.
+  - Replaced `PdfGoogleFonts` with direct offline font loading from `assets/fonts/Vazirmatn-*.ttf` and Helvetica fallback in `pdf_export_engine.dart`.
 ### Added
 - Final 3% Product Loops & 100/100 Commercial Sign-Off:
   - Secure athlete RPC tunnel `athlete_submit_workout_log` allowing athletes to submit PRs, RPE, hydration, and sets with 6-digit access code authentication.
