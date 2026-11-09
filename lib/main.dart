@@ -4,16 +4,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/config/supabase_config.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/branding_provider.dart';
 import 'data/local/app_database.dart';
+import 'features/athletes/presentation/athletes_list_screen.dart';
 import 'features/settings/presentation/branding_settings_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final database = await LocalAppDatabase.init();
+
+  // مقداردهی اولیه امن Supabase (در صورت عدم اتصال اینترنت مسدود نمیکند)
+  await SupabaseConfig.initializeSafely();
 
   runApp(
     ProviderScope(
@@ -72,14 +77,14 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
     final branding = ref.watch(brandingProvider);
 
     final pages = [
-      // در گام ۳ تا ۵ این ۳ تب با صفحات واقعی داشبورد، ورزشکاران و قالبها جایگزین میشوند
+      // در گام ۴ و ۵ تب داشبورد و قالبها با صفحات واقعی جایگزین میشوند
       Center(
         child: Text(
           '${s.tr('dashboard')} - ${branding.gymName}',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ),
-      Center(child: Text(s.tr('athletes'))),
+      const AthletesListScreen(),
       Center(child: Text(s.tr('templates'))),
       const BrandingSettingsScreen(),
     ];

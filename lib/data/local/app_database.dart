@@ -313,6 +313,13 @@ class LocalAppDatabase {
     return instance;
   }
 
+  static LocalAppDatabase inMemory() {
+    final db = sqlite3.openInMemory();
+    final instance = LocalAppDatabase._(db);
+    instance._createTablesAndSeed();
+    return instance;
+  }
+
   void _createTablesAndSeed() {
     _db.execute('''
       CREATE TABLE IF NOT EXISTS athletes (
