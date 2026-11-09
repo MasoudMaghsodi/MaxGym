@@ -5,7 +5,6 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -43,18 +42,13 @@ class PdfExportEngine {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
   }
 
-  /// بارگذاری فونت فارسی از پوشه assets یا دانلود ایمن فونت وزیرمتن در صورت عدم وجود فایل
+  /// بارگذاری فونت فارسی از پوشه assets یا فونت استاندارد در صورت عدم وجود فایل
   static Future<pw.Font> _loadRegularFont() async {
     try {
       final data = await rootBundle.load('assets/fonts/Vazirmatn-Regular.ttf');
       return pw.Font.ttf(data);
     } catch (_) {
-      try {
-        return await PdfGoogleFonts.vazirmatnRegular()
-            .timeout(const Duration(seconds: 3));
-      } catch (_) {
-        return pw.Font.helvetica();
-      }
+      return pw.Font.helvetica();
     }
   }
 
@@ -63,12 +57,7 @@ class PdfExportEngine {
       final data = await rootBundle.load('assets/fonts/Vazirmatn-Bold.ttf');
       return pw.Font.ttf(data);
     } catch (_) {
-      try {
-        return await PdfGoogleFonts.vazirmatnBold()
-            .timeout(const Duration(seconds: 3));
-      } catch (_) {
-        return pw.Font.helveticaBold();
-      }
+      return pw.Font.helveticaBold();
     }
   }
 

@@ -34,7 +34,7 @@ dependencies:
   cached_network_image: ^3.3.1
   flutter_cache_manager: ^3.3.2
   image_picker: ^1.1.2
-  share_plus: ^9.0.0
+  share_plus: ^10.1.0
 
   # Charts, Dates & UI Components
   fl_chart: ^0.68.0
@@ -42,9 +42,8 @@ dependencies:
   intl: ^0.20.2
   lucide_icons_flutter: ^4.0.2
 
-  # PDF Engine & Printing
-  pdf: ^3.10.8
-  printing: ^5.12.0
+  # PDF Engine
+  pdf: ^3.11.1
 
 dev_dependencies:
   flutter_test:
