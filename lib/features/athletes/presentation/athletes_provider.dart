@@ -15,8 +15,7 @@ final filteredAthletesProvider = Provider<List<AthleteEntity>>((ref) {
   final query = ref.watch(athleteSearchQueryProvider).trim().toLowerCase();
   if (query.isEmpty) return all;
   return all.where((a) {
-    return a.fullName.toLowerCase().contains(query) ||
-        a.phone.contains(query);
+    return a.fullName.toLowerCase().contains(query) || a.phone.contains(query);
   }).toList();
 });
 
@@ -32,7 +31,6 @@ class AthletesNotifier extends StateNotifier<List<AthleteEntity>> {
     state = _db.getAllActiveAthletes();
   }
 
-  /// ثبت سریع پروفایل ورزشکار (مرحله ۱) + ثبت سایزگیری اولیه (مرحله ۲ اختیاری)
   Future<AthleteEntity> createOrUpdateAthlete({
     String? existingId,
     required String firstName,
@@ -44,7 +42,6 @@ class AthletesNotifier extends StateNotifier<List<AthleteEntity>> {
     required double weightKg,
     required String fitnessGoal,
     required List<String> injuryTags,
-    // فیلدهای مرحله ۲ (سایزگیری آنتروپومتریک)
     double? bodyFatPercent,
     double? shoulderCm,
     double? chestCm,
@@ -58,6 +55,11 @@ class AthletesNotifier extends StateNotifier<List<AthleteEntity>> {
     final now = DateTime.now();
     final id = existingId ?? _uuid.v4();
 
+    // حفظ تاریخ ثبتنام اولیه در صورت ویرایش پروفایل شاگرد
+    final existingRecord =
+        existingId != null ? _db.getAthleteById(existingId) : null;
+    final createdDate = existingRecord?.createdAt ?? now;
+
     final athlete = AthleteEntity(
       id: id,
       firstName: firstName,
@@ -69,20 +71,22 @@ class AthletesNotifier extends StateNotifier<List<AthleteEntity>> {
       weightKg: weightKg,
       fitnessGoal: fitnessGoal,
       injuryTags: injuryTags,
-      createdAt: now,
+      createdAt: createdDate,
       updatedAt: now,
       syncStatus: existingId == null ? 'pending_insert' : 'pending_update',
     );
 
     _db.upsertAthlete(athlete);
 
-    // اگر سایزگیری یا وزن ثبت شده، یک رکورد تاریخدار در جدول آنتروپومتریک ثبت کن
     final hasAnyMeasurement = bodyFatPercent != null ||
         shoulderCm != null ||
         chestCm != null ||
         waistCm != null ||
+        hipsCm != null ||
         bicepsCm != null ||
+        forearmCm != null ||
         thighCm != null ||
+        calfCm != null ||
         existingId == null;
 
     if (hasAnyMeasurement) {

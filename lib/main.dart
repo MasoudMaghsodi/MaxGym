@@ -5,37 +5,63 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/config/supabase_config.dart';
+import 'core/constants/app_colors.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/branding_provider.dart';
 import 'data/local/app_database.dart';
+import 'data/remote/supabase_sync_service.dart';
 import 'features/athletes/presentation/athletes_list_screen.dart';
+import 'features/athletes/presentation/athletes_provider.dart';
+import 'features/dashboard/presentation/coach_dashboard_screen.dart';
+import 'features/pdf_export/pdf_export_engine.dart';
 import 'features/settings/presentation/branding_settings_screen.dart';
+import 'features/workout_builder/presentation/master_program_builder_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final prefs = await SharedPreferences.getInstance();
-  final database = await LocalAppDatabase.init();
 
-  // مقداردهی اولیه امن Supabase (در صورت عدم اتصال اینترنت مسدود نمیکند)
+  // ۱. راهاندازی SharedPreferences برای برندینگ و تم
+  final prefs = await SharedPreferences.getInstance();
+
+  // ۲. راهاندازی دیتابیس آفلاین SQLite به عنوان Single Source of Truth
+  final localDb = await LocalAppDatabase.init();
+
+  // ۳. راهاندازی ایمن Supabase با URL و Publishable Key شما (بدون بلاک کردن حالت آفلاین)
   await SupabaseConfig.initializeSafely();
 
   runApp(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
-        appDatabaseProvider.overrideWithValue(database),
+        appDatabaseProvider.overrideWithValue(localDb),
       ],
       child: const ProCoachApp(),
     ),
   );
 }
 
-class ProCoachApp extends ConsumerWidget {
+class ProCoachApp extends ConsumerStatefulWidget {
   const ProCoachApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProCoachApp> createState() => _ProCoachAppState();
+}
+
+class _ProCoachAppState extends ConsumerState<ProCoachApp> {
+  @override
+  void initState() {
+    super.initState();
+    // فعالسازی شنود خودکار اتصال اینترنت برای سینک پسزمینه با Supabase
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final syncService = ref.read(supabaseSyncServiceProvider);
+      syncService.startAutoSyncListener();
+      syncService.syncAllPendingData();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final branding = ref.watch(brandingProvider);
 
     return MaterialApp(
@@ -71,21 +97,141 @@ class MainNavigationShell extends ConsumerStatefulWidget {
 class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
   int _selectedIndex = 0;
 
+  /// باز کردن طراح جامع برنامه (تمرین + تغذیه + مکمل + پکیج مالی) برای ورزشکار
+  Future<void> _openProgramBuilderForAthlete(AthleteEntity athlete) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MasterProgramBuilderScreen(
+          athlete: athlete,
+          onSavedAndExportPdf: (ath, prog) {
+            _showPdfLanguageSelectorAndExport(ath, prog);
+          },
+        ),
+      ),
+    );
+    ref.read(athletesProvider.notifier).refresh();
+    setState(() {});
+  }
+
+  /// انتخاب زبان خروجی PDF (فارسی، انگلیسی یا دوزبانه) و تولید فایل با نام داینامیک شمسی
+  void _showPdfLanguageSelectorAndExport(
+      AthleteEntity athlete, FullProgramEntity program) {
+    final isFa = AppStrings.of(context).isFa;
+    final db = ref.read(appDatabaseProvider);
+    final branding = ref.read(brandingProvider);
+    final measurements = db.getMeasurementsForAthlete(athlete.id);
+    final previewFileName =
+        PdfExportEngine.buildDynamicFileName(athlete, program.startDate);
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isFa
+                    ? 'تولید و اشتراکگذاری PDF اختصاصی'
+                    : 'Export Custom White-Label PDF',
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '📄 $previewFileName',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const Divider(height: 24),
+              ListTile(
+                leading: const Icon(LucideIcons.languages),
+                title: Text(isFa
+                    ? 'دوزبانه تخصصی (فارسی + اصطلاحات انگلیسی)'
+                    : 'Bilingual (Persian + English Terms)'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  PdfExportEngine.generateAndShareProgramPdf(
+                    context: context,
+                    branding: branding,
+                    athlete: athlete,
+                    program: program,
+                    measurements: measurements,
+                    langMode: PdfLanguageMode.bilingual,
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(LucideIcons.fileText),
+                title: Text(isFa ? 'فقط فارسی (RTL)' : 'Persian Only (RTL)'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  PdfExportEngine.generateAndShareProgramPdf(
+                    context: context,
+                    branding: branding,
+                    athlete: athlete,
+                    program: program,
+                    measurements: measurements,
+                    langMode: PdfLanguageMode.persianOnly,
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(LucideIcons.globe),
+                title: Text(
+                    isFa ? 'فقط انگلیسی (بینالمللی - LTR)' : 'English Only (LTR)'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  PdfExportEngine.generateAndShareProgramPdf(
+                    context: context,
+                    branding: branding,
+                    athlete: athlete,
+                    program: program,
+                    measurements: measurements,
+                    langMode: PdfLanguageMode.englishOnly,
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _triggerManualSync() async {
+    final res =
+        await ref.read(supabaseSyncServiceProvider).syncAllPendingData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res.message),
+          backgroundColor: res.success ? AppColors.success : AppColors.warning,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppStrings.of(context);
-    final branding = ref.watch(brandingProvider);
 
     final pages = [
-      // در گام ۴ و ۵ تب داشبورد و قالبها با صفحات واقعی جایگزین میشوند
-      Center(
-        child: Text(
-          '${s.tr('dashboard')} - ${branding.gymName}',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
+      CoachDashboardScreen(
+        onTriggerCloudSync: _triggerManualSync,
+        onOpenWorkoutBuilder: _openProgramBuilderForAthlete,
+        onExportPdf: _showPdfLanguageSelectorAndExport,
       ),
-      const AthletesListScreen(),
-      Center(child: Text(s.tr('templates'))),
+      AthletesListScreen(
+        onOpenWorkoutBuilder: _openProgramBuilderForAthlete,
+        onExportPdf: _showPdfLanguageSelectorAndExport,
+      ),
+      const TemplatesScreen(),
       const BrandingSettingsScreen(),
     ];
 

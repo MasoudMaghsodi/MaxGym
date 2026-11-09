@@ -4,6 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pro_coach_app/main.dart';
 import 'package:pro_coach_app/core/theme/branding_provider.dart';
 import 'package:pro_coach_app/data/local/app_database.dart';
+import 'package:pro_coach_app/data/remote/supabase_sync_service.dart';
+
+class FakeSupabaseSyncService extends SupabaseSyncService {
+  FakeSupabaseSyncService(super.db);
+
+  @override
+  Future<SyncSummary> syncAllPendingData() async {
+    return const SyncSummary(success: true, message: 'Test Mode');
+  }
+}
 
 void main() {
   testWidgets('ProCoachApp smoke test', (WidgetTester tester) async {
@@ -16,6 +26,7 @@ void main() {
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
           appDatabaseProvider.overrideWithValue(database),
+          supabaseSyncServiceProvider.overrideWithValue(FakeSupabaseSyncService(database)),
         ],
         child: const ProCoachApp(),
       ),

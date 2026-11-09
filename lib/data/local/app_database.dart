@@ -320,6 +320,10 @@ class LocalAppDatabase {
     return instance;
   }
 
+  void close() {
+    _db.dispose();
+  }
+
   void _createTablesAndSeed() {
     _db.execute('''
       CREATE TABLE IF NOT EXISTS athletes (
