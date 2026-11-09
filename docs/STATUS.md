@@ -1,25 +1,23 @@
 # Project Status
 
-## Current Phase: 0 - Discovery / Kickoff
-- **Status:** Initialized virtual product team, project rules, and subagents.
+## Current Phase: Build (Steps 1 & 2 Completed)
+- **Status:** Steps 1 & 2 implemented, tested, and committed.
 - **Updated:** 2026-11-09
 
 ## Summary
-- Virtual product team configuration and project rules loaded from `AGENTS.md` and `.agents/`.
-- 11 specialized subagents defined and ready for orchestration.
-- Ready for Phase 0 (Discovery) & Phase 1 (Architecture).
+- Step 1: Project structure, dependencies, fonts, Smart Cache Manager (50MB), localization engine (FA/EN), dynamic branding/theme engine, and settings screen.
+- Step 2: Offline SQLite database (`Drift`/`sqlite3`), JSON data models, bilingual seed catalog (exercises, foods, supplements), DAOs, and Supabase schema with Heartbeat table.
+- Flutter analyze and tests verified green.
 
 ## Work Stream Status
 - **Done:**
-  - Team rules and structure applied.
-  - Subagents created and registered.
-  - Initial repository layout and `.gitignore` setup.
+  - Step 1 (Project setup, pubspec, fonts, branding, theme, cache manager, settings screen).
+  - Step 2 (Database models, seed catalog, local SQLite DB, sync outbox, Supabase SQL schema).
 - **In Progress:**
-  - Awaiting product requirements / initial briefing from user to create `docs/PRD.md`.
+  - Awaiting Step 3 instructions from user.
 - **Blocked:** None
 - **Next:**
-  - Gather initial MaxGym feature requirements and create `docs/PRD.md`.
-  - Begin Phase 1 (Architecture & ADRs).
+  - Implement Step 3 (Athlete Onboarding 2-step flow, Scientific Bio-Calculator, and anthropometric analytics charts).
 
 ## Decisions Needed from User
 - None at this moment. Ready for your input / feature specs!
