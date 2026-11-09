@@ -72,11 +72,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: _isPrivacyMode
-                ? (isFa ? 'نمایش مبالغ مالی' : 'Show Financial Amounts')
-                : (isFa
-                    ? 'حالت حریم خصوصی (مخفی‌سازی درآمد در حضور شاگرد)'
-                    : 'Privacy Mode (Hide Amounts)'),
+            tooltip: 'مخفی/نمایش مبالغ مالی در حضور شاگرد',
             icon: Icon(
               _isPrivacyMode ? LucideIcons.eyeOff : LucideIcons.eye,
               color: _isPrivacyMode ? AppColors.warning : null,
@@ -107,7 +103,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
               _statCard(
                 title: isFa ? 'درآمد دریافت‌شده' : 'Collected Revenue',
                 value: _isPrivacyMode
-                    ? '******'
+                    ? '••••••'
                     : totalRevenue.toStringAsFixed(0),
                 icon: LucideIcons.wallet,
                 color: AppColors.success,
@@ -127,7 +123,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
               _statCard(
                 title: isFa ? 'مطالبات / بدهکاران' : 'Pending Debt',
                 value: _isPrivacyMode
-                    ? '******'
+                    ? '••••••'
                     : totalPendingDebt.toStringAsFixed(0),
                 icon: LucideIcons.alertCircle,
                 color: AppColors.danger,
@@ -239,7 +235,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                     children: [
                       Text(
                         _isPrivacyMode
-                            ? '******'
+                            ? '••••••'
                             : '${p.remainingDebt.toStringAsFixed(0)} T',
                         style: const TextStyle(
                           color: AppColors.danger,

@@ -66,7 +66,41 @@ INSERT INTO public.app_heartbeat (id, last_ping)
 VALUES (1, NOW())
 ON CONFLICT (id) DO UPDATE SET last_ping = NOW();
 
--- ایجاد ایندکس برای سرعت بالای کوئریها تا بیش از ۵۰۰ ورزشکار
+-- ۵. جداول کاتالوگ سفارشی مربی
+CREATE TABLE IF NOT EXISTS public.exercises_catalog (
+    id TEXT PRIMARY KEY,
+    name_fa TEXT NOT NULL,
+    name_en TEXT NOT NULL,
+    target_muscle TEXT NOT NULL,
+    equipment TEXT NOT NULL DEFAULT 'custom',
+    image_start_url TEXT NOT NULL DEFAULT '',
+    image_end_url TEXT NOT NULL DEFAULT '',
+    contraindicated_injuries JSONB NOT NULL DEFAULT '[]'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.custom_foods_catalog (
+    id TEXT PRIMARY KEY,
+    name_fa TEXT NOT NULL,
+    name_en TEXT NOT NULL,
+    unit_fa TEXT NOT NULL,
+    unit_en TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.custom_supplements_catalog (
+    id TEXT PRIMARY KEY,
+    name_fa TEXT NOT NULL,
+    name_en TEXT NOT NULL,
+    dosage_fa TEXT NOT NULL,
+    dosage_en TEXT NOT NULL,
+    timing_fa TEXT NOT NULL,
+    timing_en TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ایجاد ایندکس برای سرعت بالای کوئری‌ها تا بیش از ۵۰۰ ورزشکار
 CREATE INDEX IF NOT EXISTS idx_athletes_updated ON public.athletes(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_measurements_athlete ON public.measurement_logs(athlete_id, recorded_at ASC);
 CREATE INDEX IF NOT EXISTS idx_programs_athlete ON public.programs(athlete_id, start_date DESC);
+

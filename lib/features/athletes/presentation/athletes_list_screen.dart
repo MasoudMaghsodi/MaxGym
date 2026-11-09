@@ -127,19 +127,21 @@ class AthletesListScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              onChanged: (v) =>
-                  ref.read(athleteSearchQueryProvider.notifier).state = v,
-              decoration: InputDecoration(
-                hintText: isFa
-                    ? 'جستجوی نام یا شماره موبایل شاگرد...'
-                    : 'Search athlete name or phone...',
-                prefixIcon: const Icon(LucideIcons.search),
+          if (athletes.isNotEmpty ||
+              ref.watch(athleteSearchQueryProvider).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: TextField(
+                onChanged: (v) =>
+                    ref.read(athleteSearchQueryProvider.notifier).state = v,
+                decoration: InputDecoration(
+                  hintText: isFa
+                      ? 'جستجوی نام یا شماره موبایل شاگرد...'
+                      : 'Search athlete name or phone...',
+                  prefixIcon: const Icon(LucideIcons.search),
+                ),
               ),
             ),
-          ),
           Expanded(
             child: athletes.isEmpty
                 ? Center(

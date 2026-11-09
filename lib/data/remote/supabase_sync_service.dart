@@ -116,7 +116,7 @@ class SupabaseSyncService {
     } catch (e) {
       debugPrint('Supabase Sync Error: $e');
       _isSyncing = false;
-      return SyncSummary(
+      return const SyncSummary(
         success: false,
         message: 'کار در حالت آفلاین ادامه دارد (عدم ارتباط با سرور ابری).',
       );

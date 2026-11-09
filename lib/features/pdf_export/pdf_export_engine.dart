@@ -370,7 +370,7 @@ class PdfExportEngine {
             children: [
               pw.Text(
                 isRtl ? 'تاریخ شمسی: $shamsiDate' : 'Shamsi: $shamsiDate',
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                   color: PdfColors.white,
                   fontSize: 9,
                   fontWeight: pw.FontWeight.bold,
@@ -417,7 +417,7 @@ class PdfExportEngine {
                     ? 'نام ورزشکار: ${athlete.fullName}'
                     : 'Athlete: ${athlete.fullName}',
                 style:
-                    pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+                    const pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
               ),
               pw.SizedBox(height: 4),
               pw.Text(
@@ -436,7 +436,7 @@ class PdfExportEngine {
                     ? 'سن: ${athlete.age} | قد: ${athlete.heightCm.toStringAsFixed(0)}cm | وزن: ${athlete.weightKg.toStringAsFixed(1)}kg'
                     : 'Age: ${athlete.age} | Height: ${athlete.heightCm.toStringAsFixed(0)}cm | Weight: ${athlete.weightKg.toStringAsFixed(1)}kg',
                 style:
-                    pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+                    const pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
               ),
               if (athlete.injuryTags.isNotEmpty)
                 pw.Text(
@@ -456,7 +456,7 @@ class PdfExportEngine {
   static pw.Widget _buildScientificBioTable(BioAnalysisResult bio, bool isRtl) {
     return pw.TableHelper.fromTextArray(
       headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#222630')),
-      headerStyle: pw.TextStyle(
+      headerStyle: const pw.TextStyle(
         color: PdfColors.white,
         fontSize: 9,
         fontWeight: pw.FontWeight.bold,
@@ -518,7 +518,7 @@ class PdfExportEngine {
     String fmt(double? v) => v != null ? v.toStringAsFixed(1) : '-';
     return pw.TableHelper.fromTextArray(
       headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
-      headerStyle: pw.TextStyle(
+      headerStyle: const pw.TextStyle(
           color: PdfColors.white, fontSize: 9, fontWeight: pw.FontWeight.bold),
       cellStyle: const pw.TextStyle(fontSize: 9),
       cellAlignment: pw.Alignment.center,
@@ -711,7 +711,7 @@ class PdfExportEngine {
                             pw.Expanded(
                               child: pw.Text(
                                 '${ex.orderIndex}. $displayMoveName',
-                                style: pw.TextStyle(
+                                style: const pw.TextStyle(
                                   fontSize: 10,
                                   fontWeight: pw.FontWeight.bold,
                                 ),
@@ -727,7 +727,7 @@ class PdfExportEngine {
                                 ),
                                 child: pw.Text(
                                   'SUPERSET (${ex.supersetGroupId})',
-                                  style: pw.TextStyle(
+                                  style: const pw.TextStyle(
                                     fontSize: 8,
                                     fontWeight: pw.FontWeight.bold,
                                   ),
@@ -747,7 +747,7 @@ class PdfExportEngine {
                           pw.SizedBox(height: 2),
                           pw.Text(
                             'Note: ${ex.coachNote}',
-                            style: pw.TextStyle(
+                            style: const pw.TextStyle(
                               fontSize: 8,
                               color: PdfColors.blueGrey800,
                               fontStyle: pw.FontStyle.italic,
@@ -794,7 +794,7 @@ class PdfExportEngine {
 
     return pw.TableHelper.fromTextArray(
       headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#222630')),
-      headerStyle: pw.TextStyle(
+      headerStyle: const pw.TextStyle(
           color: PdfColors.white, fontSize: 9, fontWeight: pw.FontWeight.bold),
       cellStyle: const pw.TextStyle(fontSize: 9),
       headers: isRtl
@@ -811,7 +811,7 @@ class PdfExportEngine {
   ) {
     return pw.TableHelper.fromTextArray(
       headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#222630')),
-      headerStyle: pw.TextStyle(
+      headerStyle: const pw.TextStyle(
           color: PdfColors.white, fontSize: 9, fontWeight: pw.FontWeight.bold),
       cellStyle: const pw.TextStyle(fontSize: 9),
       headers: isRtl

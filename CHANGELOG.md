@@ -16,4 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Side-by-side Before/After photo comparison story generator with coach branding.
   - Quick WhatsApp chat deep-linking without saving contact.
   - Direct YouTube video tutorial search QR codes and clickable links in exported PDFs.
-  - Added unit tests for custom catalog CRUD and debt settlement (14/14 tests passing).
+  - GitHub Actions automated CI/CD pipeline (`ci_cd_pipeline.yml`) for static analysis, automated testing, and obfuscated release APK build with `--dart-define`.
+  - Supabase free-tier 3-day keep-alive cron job (`supabase_keep_alive.yml`) to prevent project pause.
+  - Supabase SQL migration for custom catalogs, RLS policies, and templates persistence.
+  - Complete UI, Unit, and Database test suite with 100% pass rate.

@@ -1,0 +1,21 @@
+name: Supabase Free-Tier Keep-Alive Cron
+
+on:
+  schedule:
+    # اجرا به صورت خودکار در ساعت 08:00 صبح هر ۳ روز یکبار
+    - cron: '0 8 */3 * *'
+  workflow_dispatch: # امکان اجرای دستی از تب Actions گیتهاب
+
+jobs:
+  ping_supabase:
+    name: Ping Supabase Heartbeat Table
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send REST Heartbeat to Supabase
+        run: |
+          curl -X POST 'https://pnuyylukurndiflgzxmo.supabase.co/rest/v1/app_heartbeat' \
+          -H "apikey: ${{ secrets.SUPABASE_KEY || 'sb_publishable_WwWRmaKsCVi9tlvlH3Kf1g_63q_rlid' }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY || 'sb_publishable_WwWRmaKsCVi9tlvlH3Kf1g_63q_rlid' }}" \
+          -H "Content-Type: application/json" \
+          -H "Prefer: resolution=merge-duplicates" \
+          -d '{"id": 1, "last_ping": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}'

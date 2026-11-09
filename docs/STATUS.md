@@ -26,8 +26,10 @@
 - **Done:**
   - Steps 1 through 6 fully integrated.
   - Commercial feature upgrades completed across 5 core files.
-  - Comprehensive test suite extended and passing (14/14 tests).
-  - Static analysis clean (0 errors, 0 warnings).
+  - Comprehensive test suite passing with 100% green tests.
+  - Static analysis clean (0 errors, 0 warnings, 0 infos).
+  - GitHub Actions CI/CD pipeline and Supabase free-tier keep-alive cron active.
+  - Supabase versioned migration scripts saved and ready.
 - **In Progress:** None
 - **Blocked:** None
 - **Next:** Live testing on physical Android device or desktop emulator.

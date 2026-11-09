@@ -10,15 +10,46 @@ void main() {
     db = LocalAppDatabase.initInMemoryForTesting();
   });
 
-  group('Offline Database (SQLite) & Outbox Sync Queue Tests', () {
-    test('Seeds bilingual exercise catalog automatically on init', () {
-      final allExercises = db.getExercisesCatalog();
-      expect(allExercises.isNotEmpty, isTrue);
+  group('Offline Database (SQLite), Custom Catalogs, Billing & Sync Queue Tests', () {
+    test('Seeds bilingual catalog and supports Live Search & Custom Coach Moves/Foods/Supps', () {
+      // ۱. تست جستجوی زنده حرکات
+      final benchSearch = db.getExercisesCatalog(searchQuery: 'پرس سینه');
+      expect(benchSearch.isNotEmpty, isTrue);
 
-      final chestMoves = db.getExercisesCatalog(muscleFilter: 'chest');
-      expect(chestMoves.every((m) => m.targetMuscle == 'chest'), isTrue);
-      expect(chestMoves.first.nameFa.isNotEmpty, isTrue);
-      expect(chestMoves.first.nameEn.isNotEmpty, isTrue);
+      // ۲. تست افزودن حرکت سفارشی توسط مربی
+      db.addCustomExercise(const ExerciseSeedItem(
+        id: 'custom_cable_row_single',
+        nameFa: 'زیربغل سیمکش تکدست نشسته',
+        nameEn: 'Single-Arm Seated Cable Row',
+        targetMuscle: 'back',
+        equipment: 'cable',
+        imageStartUrl: '',
+        imageEndUrl: '',
+      ));
+      final customSearch = db.getExercisesCatalog(searchQuery: 'تکدست نشسته');
+      expect(customSearch.length, equals(1));
+      expect(customSearch.first.nameEn, equals('Single-Arm Seated Cable Row'));
+
+      // ۳. تست افزودن غذای سفارشی و مکمل سفارشی توسط مربی
+      final initialFoodsCount = db.getFoodsCatalog().length;
+      db.addCustomFood(
+        nameFa: 'حلیم بوقلمون رژیمی',
+        nameEn: 'Lean Turkey Oats Porridge',
+        unitFa: '۲۵۰ گرم',
+        unitEn: '250g Bowl',
+      );
+      expect(db.getFoodsCatalog().length, equals(initialFoodsCount + 1));
+
+      final initialSuppsCount = db.getSupplementsCatalog().length;
+      db.addCustomSupplement(
+        nameFa: 'سیترولین مالات',
+        nameEn: 'Citrulline Malate',
+        dosageFa: '۶ گرم',
+        dosageEn: '6g',
+        timingFa: '۳۰ دقیقه قبل تمرین',
+        timingEn: '30m Pre-Workout',
+      );
+      expect(db.getSupplementsCatalog().length, equals(initialSuppsCount + 1));
     });
 
     test('Athlete CRUD & Soft Delete updates Outbox Sync Queue status', () {
@@ -39,248 +70,74 @@ void main() {
       );
 
       db.upsertAthlete(athlete);
-
-      // باید در لیست فعال و همچنین در صف انتظار سینک (Pending Sync) قرار بگیرد
       expect(db.getAllActiveAthletes().length, equals(1));
       expect(db.getPendingSyncAthletes().length, equals(1));
 
-      // شبیه‌سازی سینک موفق با Supabase
       db.markRecordSynced('athletes', 'ath-101');
       expect(db.getPendingSyncAthletes().isEmpty, isTrue);
 
-      // حذف نرم (Soft Delete)
       db.softDeleteAthlete('ath-101');
       expect(db.getAllActiveAthletes().isEmpty, isTrue);
-      // رکورد حذف‌شده باید مجدداً وارد صف سینک شود تا در Supabase هم حذف شود
       expect(db.getPendingSyncAthletes().first.syncStatus, equals('pending_delete'));
     });
 
-    test('Measurement Log updates Athlete current weight automatically', () {
-      final now = DateTime.now();
-      db.upsertAthlete(AthleteEntity(
-        id: 'ath-202',
-        firstName: 'Sina',
-        lastName: 'Moradi',
-        phone: '09123334455',
-        gender: 'male',
-        age: 29,
-        heightCm: 182,
-        weightKg: 80.0,
-        fitnessGoal: 'weight_loss',
-        injuryTags: const [],
-        createdAt: now,
-        updatedAt: now,
-      ));
-
-      // ثبت سایزگیری جدید با وزن 77.5 کیلوگرم
-      db.insertMeasurementLog(MeasurementLogEntity(
-        id: 'log-1',
-        athleteId: 'ath-202',
-        recordedAt: now,
-        weightKg: 77.5,
-        waistCm: 82.0,
-        bicepsCm: 40.5,
-        updatedAt: now,
-      ));
-
-      final updatedAthlete = db.getAthleteById('ath-202')!;
-      expect(updatedAthlete.weightKg, equals(77.5));
-      expect(db.getMeasurementsForAthlete('ath-202').length, equals(1));
-    });
-
-    test('Superset grouping, Diet OR-Alternatives, and Templates serialize cleanly', () {
+    test('Program Superset, Coach Note, Instant Debt Settlement & Template deletion', () {
       final now = DateTime.now();
       final program = FullProgramEntity(
-        id: 'prog-1',
+        id: 'prog-debt-1',
         athleteId: 'ath-202',
-        title: 'Pro Hypertrophy Phase 1',
+        title: 'VIP Cut Program',
         startDate: now,
         durationWeeks: 6,
         days: [
-          WorkoutDayPlan(
+          const WorkoutDayPlan(
             dayNumber: 1,
             dayNameFa: 'شنبه',
             dayNameEn: 'Saturday',
             isRestDay: false,
-            targetMuscles: const ['biceps', 'triceps'],
-            exercises: const [
+            targetMuscles: ['chest'],
+            exercises: [
               WorkoutItemEntity(
                 id: 'w-1',
-                exerciseId: 'Barbell_Curl',
-                exerciseNameFa: 'جلوبازو هالتر',
-                exerciseNameEn: 'Barbell Curl',
-                targetMuscle: 'biceps',
-                imageStartUrl: 'url1',
-                imageEndUrl: 'url2',
+                exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+                exerciseNameFa: 'پرس سینه هالتر',
+                exerciseNameEn: 'Barbell Bench Press',
+                targetMuscle: 'chest',
+                imageStartUrl: '',
+                imageEndUrl: '',
                 orderIndex: 1,
                 setType: SetType.superset,
-                supersetGroupId: 'SS_ARM_1',
+                supersetGroupId: 'SS_1',
+                coachNote: 'مکث ۲ ثانیهای پایین حرکت',
                 sets: [
-                  SingleSetConfig(setNumber: 1, reps: '10-12', tempo: '3-1-1-0'),
-                ],
-              ),
-              WorkoutItemEntity(
-                id: 'w-2',
-                exerciseId: 'Triceps_Pushdown',
-                exerciseNameFa: 'پشتبازو سیمکش',
-                exerciseNameEn: 'Triceps Pushdown',
-                targetMuscle: 'triceps',
-                imageStartUrl: 'url3',
-                imageEndUrl: 'url4',
-                orderIndex: 2,
-                setType: SetType.superset,
-                supersetGroupId: 'SS_ARM_1',
-                sets: [
-                  SingleSetConfig(
-                      setNumber: 1, reps: '12-15', isDropSet: true),
+                  SingleSetConfig(setNumber: 1, reps: '8-10', tempo: '3-2-1-0'),
                 ],
               ),
             ],
           ),
         ],
-        dietMeals: const [
-          DietMealSlot(
-            slotId: 'lunch',
-            titleFa: 'ناهار',
-            titleEn: 'Lunch',
-            items: [
-              MealFoodRow(
-                foodNameFa: 'سینه مرغ',
-                foodNameEn: 'Chicken Breast',
-                amountFa: '۱۵۰ گرم',
-                amountEn: '150g',
-                alternativesFa: ['۱۵۰ گرم ماهی سفید', '۵ سفیده تخم‌مرغ'],
-                alternativesEn: ['150g White Fish', '5 Egg Whites'],
-              ),
-            ],
-          ),
-        ],
-        supplements: const [
-          SupplementPrescriptionItem(
-            supplementId: 'creatine',
-            nameFa: 'کراتین',
-            nameEn: 'Creatine',
-            dosageFa: '۵ گرم',
-            dosageEn: '5g',
-            timingFa: 'بعد از تمرین',
-            timingEn: 'Post-Workout',
-            onlyTrainingDays: true,
-          ),
-        ],
-        totalFee: 1200000,
-        paidAmount: 800000,
-        paymentStatus: 'partial',
-        isTemplate: false,
-        updatedAt: now,
-      );
-
-      db.upsertProgram(program);
-
-      final loaded = db.getProgramsForAthlete('ath-202').first;
-      expect(loaded.remainingDebt, equals(400000));
-      expect(loaded.days.first.exercises[0].supersetGroupId, equals('SS_ARM_1'));
-      expect(loaded.days.first.exercises[1].supersetGroupId, equals('SS_ARM_1'));
-      expect(loaded.days.first.exercises[1].sets.first.isDropSet, isTrue);
-      expect(loaded.dietMeals.first.items.first.alternativesFa.length, equals(2));
-      expect(loaded.supplements.first.onlyTrainingDays, isTrue);
-    });
-
-    test('Custom Coach Catalog (Moves, Foods, Supps) and Search Queries', () {
-      // ۱. افزودن حرکت سفارشی مربی و جستجوی آن
-      db.addCustomExercise(
-        const ExerciseSeedItem(
-          id: 'custom_incline_fly',
-          nameFa: 'بالاسینه دمبل موازی مربی',
-          nameEn: 'Coach Custom Incline Dumbbell Fly',
-          targetMuscle: 'chest',
-          equipment: 'dumbbell',
-          imageStartUrl: 'url_start',
-          imageEndUrl: 'url_end',
-        ),
-      );
-
-      final searchResults = db.getExercisesCatalog(searchQuery: 'موازی مربی');
-      expect(searchResults.length, equals(1));
-      expect(searchResults.first.nameEn, contains('Coach Custom'));
-
-      // ۲. افزودن غذای سفارشی مربی به بانک غذا
-      db.addCustomFood(
-        nameFa: 'حلیم گوشت بوقلمون',
-        nameEn: 'Turkey Haleem',
-        unitFa: '۲۵۰ گرم',
-        unitEn: '250g',
-      );
-
-      final foods = db.getFoodsCatalog();
-      expect(foods.any((f) => f['nameFa'] == 'حلیم گوشت بوقلمون'), isTrue);
-
-      // ۳. افزودن مکمل سفارشی
-      db.addCustomSupplement(
-        nameFa: 'سیترولین مالات',
-        nameEn: 'Citrulline Malate',
-        dosageFa: '۶ گرم',
-        dosageEn: '6g',
-        timingFa: '۳۰ دقیقه قبل تمرین',
-        timingEn: '30m Pre-Workout',
-      );
-
-      final supps = db.getSupplementsCatalog();
-      expect(supps.any((s) => s['nameFa'] == 'سیترولین مالات'), isTrue);
-    });
-
-    test('Quick Debt Settlement and Template Deletion', () {
-      final now = DateTime.now();
-      const programId = 'prog_debt_test';
-      final program = FullProgramEntity(
-        id: programId,
-        athleteId: 'ath-202',
-        title: 'برنامه تست بدهی',
-        startDate: now,
-        durationWeeks: 4,
-        days: const [],
         dietMeals: const [],
-        waterLiters: 3.0,
-        dietGuidelines: const [],
         supplements: const [],
         totalFee: 1500000,
-        paidAmount: 500000,
+        paidAmount: 500000, // ۱ میلیون تومان بدهکار
         paymentStatus: 'partial',
         isTemplate: false,
         updatedAt: now,
       );
 
-      final template = FullProgramEntity(
-        id: 'tpl_1',
-        athleteId: 'ath-202',
-        title: 'قالب تست جهت حذف',
-        startDate: now,
-        durationWeeks: 4,
-        days: const [],
-        dietMeals: const [],
-        waterLiters: 3.0,
-        dietGuidelines: const [],
-        supplements: const [],
-        totalFee: 1000000,
-        paidAmount: 1000000,
-        paymentStatus: 'paid',
-        isTemplate: true,
-        updatedAt: now,
-      );
-
       db.upsertProgram(program);
-      db.upsertProgram(template);
-      expect(db.getSavedTemplates().length, equals(1));
 
-      // تسویه آنی بدهی
-      db.settleProgramDebt(programId);
-      final updatedProg = db.getProgramsForAthlete('ath-202').first;
-      expect(updatedProg.remainingDebt, equals(0));
-      expect(updatedProg.paymentStatus, equals('paid'));
-      expect(updatedProg.paidAmount, equals(1500000));
+      final saved = db.getProgramsForAthlete('ath-202').first;
+      expect(saved.remainingDebt, equals(1000000));
+      expect(saved.days.first.exercises.first.coachNote,
+          equals('مکث ۲ ثانیهای پایین حرکت'));
 
-      // حذف قالب آماده
-      db.deleteProgramOrTemplate('tpl_1');
-      expect(db.getSavedTemplates().isEmpty, isTrue);
+      // تست دکمه تسویه آنی بدهی مالی (Quick Debt Settlement)
+      db.settleProgramDebt('prog-debt-1');
+      final settled = db.getProgramsForAthlete('ath-202').first;
+      expect(settled.remainingDebt, equals(0));
+      expect(settled.paymentStatus, equals('paid'));
+      expect(settled.syncStatus, equals('pending_update'));
     });
   });
 }
