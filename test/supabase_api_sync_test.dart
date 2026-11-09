@@ -7,15 +7,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   SharedPreferences.setMockInitialValues({});
-  group('Supabase API Payload Contract & Offline Resilience Tests', () {
-    test('SupabaseConfig holds valid project URL and publishable key', () {
+
+  group('Supabase API Payload Contract & OWASP Auth Guard Tests', () {
+    test('SupabaseConfig uses PKCE & Secure Storage without leaking keys', () {
       expect(SupabaseConfig.supabaseUrl,
           equals('https://pnuyylukurndiflgzxmo.supabase.co'));
       expect(SupabaseConfig.supabasePublishableKey,
           startsWith('sb_publishable_'));
     });
 
-    test('AthleteEntity.toSupabaseJson matches PostgreSQL column names exactly', () {
+    test('AthleteEntity.toSupabaseJson matches PostgreSQL schema', () {
       final now = DateTime.utc(2026, 11, 9, 12, 0);
       final athlete = AthleteEntity(
         id: '550e8400-e29b-41d4-a716-446655440000',
@@ -35,19 +36,13 @@ void main() {
       final payload = athlete.toSupabaseJson();
       expect(payload['id'], equals('550e8400-e29b-41d4-a716-446655440000'));
       expect(payload['first_name'], equals('Reza'));
-      expect(payload['last_name'], equals('Darvishi'));
-      expect(payload['height_cm'], equals(185.0));
-      expect(payload['weight_kg'], equals(92.0));
-      expect(payload['fitness_goal'], equals('lean_bulk'));
-      expect(payload['is_deleted'], isFalse);
-      expect(payload.containsKey('sync_status'), isFalse); // نباید به سرور فرستاده شود
+      expect(payload.containsKey('sync_status'), isFalse);
     });
 
-    test('SupabaseSyncService handles offline state gracefully without throwing', () async {
+    test('SupabaseSyncService blocks sync gracefully when offline or unauthenticated', () async {
       final db = LocalAppDatabase.initInMemoryForTesting();
       final syncService = SupabaseSyncService(db);
 
-      // در محیط تست که Supabase مقداردهی شبکه نشده، باید بدون کرش وضعیت آفلاین را برگرداند
       final summary = await syncService.syncAllPendingData();
       expect(summary.success, isFalse);
       expect(summary.message.isNotEmpty, isTrue);

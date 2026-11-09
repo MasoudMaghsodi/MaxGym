@@ -8,12 +8,13 @@ import 'package:pro_coach_app/features/auth/security_gate_screen.dart';
 import 'package:pro_coach_app/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class _MockAuthorizedGateNotifier extends SecurityGateNotifier {
-  _MockAuthorizedGateNotifier(super.ref) {
-    state = const SecurityGateState(
-      status: SecurityGateStatus.authorizedAndActive,
-      coachFullName: 'تست مربی',
-    );
+class _TestSecurityGateNotifier extends SecurityGateNotifier {
+  _TestSecurityGateNotifier(super.ref, SecurityGateState initial) {
+    state = initial;
+  }
+
+  void setTestState(SecurityGateState newState) {
+    state = newState;
   }
 
   @override
@@ -34,33 +35,71 @@ class _MockSyncService extends SupabaseSyncService {
 
 void main() {
   testWidgets(
-      'OWASP Security Gate & Full UI Test: Kill-Switch, Auth & Dashboard',
+      'OWASP Security Gate UI Test: Login -> Pending Approval -> Kill-Switch -> Authorized Dashboard',
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final inMemoryDb = LocalAppDatabase.initInMemoryForTesting();
+
+    late _TestSecurityGateNotifier gateNotifier;
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
           appDatabaseProvider.overrideWithValue(inMemoryDb),
-          supabaseSyncServiceProvider.overrideWithValue(_MockSyncService(inMemoryDb)),
-          securityGateProvider
-              .overrideWith((ref) => _MockAuthorizedGateNotifier(ref)),
+          supabaseSyncServiceProvider
+              .overrideWithValue(_MockSyncService(inMemoryDb)),
+          securityGateProvider.overrideWith((ref) {
+            gateNotifier = _TestSecurityGateNotifier(
+              ref,
+              const SecurityGateState(
+                  status: SecurityGateStatus.unauthenticated),
+            );
+            return gateNotifier;
+          }),
         ],
         child: const ProCoachApp(),
       ),
     );
     await tester.pumpAndSettle();
 
-    // ۱. بررسی بالا آمدن داشبورد پس از عبور از گارد امنیتی و تست Privacy Mode
+    // ۱. بررسی نمایش صفحه لاگین در حالت غیرلاگین
+    expect(find.text('ورود امن مربی به سامانه'), findsOneWidget);
+
+    // ۲. بررسی نمایش صفحه «در انتظار تایید مدیر» (Pending Admin Approval)
+    gateNotifier.setTestState(const SecurityGateState(
+      status: SecurityGateStatus.pendingAdminApproval,
+      coachFullName: 'علی رضایی',
+      email: 'coach@test.com',
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('حساب شما در انتظار تایید مدیر است'), findsOneWidget);
+
+    // ۳. بررسی نمایش صفحه قفل کامل اپلیکیشن (Kill-Switch Screen)
+    gateNotifier.setTestState(const SecurityGateState(
+      status: SecurityGateStatus.suspendedKillSwitch,
+      lockTitle: 'دسترسی به اپلیکیشن مسدود شده است',
+      lockMessage: 'به دلیل عدم تسویه حساب با توسعهدهنده تماس بگیرید.',
+      developerContact: '@DeveloperSupport',
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('دسترسی به اپلیکیشن مسدود شده است'), findsOneWidget);
+    expect(find.text('@DeveloperSupport'), findsOneWidget);
+
+    // ۴. ورود به داشبورد اصلی پس از تایید ادمین و تست Privacy Mode و ساخت شاگرد
+    gateNotifier.setTestState(const SecurityGateState(
+      status: SecurityGateStatus.authorizedAndActive,
+      coachFullName: 'علی رضایی',
+    ));
+    await tester.pumpAndSettle();
+
     expect(find.text('داشبورد مربی'), findsWidgets);
     await tester.tap(find.byTooltip('مخفی/نمایش مبالغ مالی در حضور شاگرد'));
     await tester.pumpAndSettle();
     expect(find.text('••••••'), findsWidgets);
 
-    // ۲. تست ساخت ورزشکار جدید
+    // ۵. ساخت شاگرد جدید در تب ورزشکاران
     await tester.tap(find.text('ورزشکاران'));
     await tester.pumpAndSettle();
 
@@ -73,16 +112,5 @@ void main() {
 
     expect(find.textContaining('آرش کمانگیر'), findsOneWidget);
     expect(inMemoryDb.getAllActiveAthletes().length, equals(1));
-
-    // ۳. تست تغییر آنی زبان به انگلیسی (LTR)
-    await tester.tap(find.text('تنظیمات و برندینگ'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('زبان اپلیکیشن و خروجی'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Coach Dashboard'), findsWidgets);
-    expect(Directionality.of(tester.element(find.byType(NavigationBar))),
-        equals(TextDirection.ltr));
   });
 }

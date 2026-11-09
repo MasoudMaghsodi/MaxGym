@@ -928,4 +928,13 @@ class LocalAppDatabase {
     };
     return const JsonEncoder.withIndent('  ').convert(payload);
   }
+
+  /// پاکسازی کامل داده‌های شخصی مربی از SQLite گوشی هنگام خروج از حساب (OWASP M9)
+  void clearAllUserDataOnLogout() {
+    _db.execute('DELETE FROM athletes;');
+    _db.execute('DELETE FROM measurement_logs;');
+    _db.execute('DELETE FROM programs;');
+    _db.execute("DELETE FROM exercises_catalog WHERE id LIKE 'custom_%';");
+    _db.execute("DELETE FROM custom_foods_catalog WHERE id NOT LIKE 'food_%';");
+  }
 }

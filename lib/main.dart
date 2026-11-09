@@ -53,17 +53,24 @@ class _ProCoachAppState extends ConsumerState<ProCoachApp> {
   @override
   void initState() {
     super.initState();
-    // فعالسازی شنود خودکار اتصال اینترنت برای سینک پسزمینه با Supabase
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final syncService = ref.read(supabaseSyncServiceProvider);
-      syncService.startAutoSyncListener();
-      syncService.syncAllPendingData();
+      ref.read(supabaseSyncServiceProvider).startAutoSyncListener();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final branding = ref.watch(brandingProvider);
+
+    // اجرای خودکار سینک ابری به محض عبور موفق مربی از گارد امنیتی و تایید ادمین
+    ref.listen<SecurityGateState>(securityGateProvider, (previous, next) {
+      if (next.status == SecurityGateStatus.authorizedAndActive &&
+          previous?.status != SecurityGateStatus.authorizedAndActive) {
+        ref.read(supabaseSyncServiceProvider).syncAllPendingData().then((_) {
+          ref.read(athletesProvider.notifier).refresh();
+        });
+      }
+    });
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,

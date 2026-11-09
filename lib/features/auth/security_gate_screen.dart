@@ -8,6 +8,7 @@ import '../../core/config/supabase_config.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/theme/branding_provider.dart';
+import '../../data/local/app_database.dart';
 
 enum SecurityGateStatus {
   loading,
@@ -49,7 +50,6 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
 
-  // کلیدهای رمزنگاریشده برای جلوگیری از دور زدن Kill-Switch با حالت پرواز (Airplane Mode)
   static const _kCachedApproved = 'sec_cached_is_approved';
   static const _kCachedSuspended = 'sec_cached_is_suspended';
   static const _kCachedLockMsg = 'sec_cached_lock_msg';
@@ -60,7 +60,6 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     verifySecurityAndSession();
   }
 
-  /// بررسی چندلایه وضعیت قفل سراسری، توکن احراز هویت و تایید ادمین
   Future<void> verifySecurityAndSession() async {
     state = const SecurityGateState(status: SecurityGateStatus.loading);
 
@@ -69,14 +68,13 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     }
     final client = SupabaseConfig.clientOrNull;
 
-    // ۱. اگر اینترنت قطع است، از وضعیت امنیتی رمزنگاریشده در Keystore استفاده کن
     if (client == null) {
       await _evaluateOfflineSecurityFallback();
       return;
     }
 
     try {
-      // ۲. بررسی سوئیچ مرگ سراسری اپلیکیشن (Global Kill-Switch در جدول app_control)
+      // ۱. بررسی Kill-Switch سراسری در جدول app_control
       final appControl = await client
           .from('app_control')
           .select()
@@ -104,7 +102,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         return;
       }
 
-      // ۳. بررسی وجود نشست معتبر (JWT Session)
+      // ۲. بررسی نشست (Session JWT)
       final session = client.auth.currentSession;
       final user = client.auth.currentUser;
       if (session == null || user == null) {
@@ -113,7 +111,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         return;
       }
 
-      // ۴. بررسی پروفایل مربی در جدول coach_profiles (تایید ادمین و مسدودیت تکی)
+      // ۳. بررسی وضعیت تایید ادمین و مسدودیت تکی مربی در جدول coach_profiles
       final profile = await client
           .from('coach_profiles')
           .select()
@@ -137,7 +135,6 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
       final lockReason = profile['lock_reason'] as String? ??
           'حساب شما توسط توسعهدهنده غیرفعال شده است.';
 
-      // ذخیره در حافظه رمزنگاریشده برای حالت آفلاین
       await _secureStore.write(
           key: _kCachedSuspended, value: isSuspended ? 'true' : 'false');
       await _secureStore.write(
@@ -165,7 +162,6 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         return;
       }
 
-      // ۵. اگر مربی تایید شده و فعال است، نامش را در تنظیمات برندینگ همگام کن و اجازه ورود بده
       if (fullName.isNotEmpty) {
         final currentBrand = _ref.read(brandingProvider);
         if (currentBrand.coachName == 'مربی حرفهای') {
@@ -181,7 +177,6 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         email: user.email,
       );
     } catch (_) {
-      // اگر در باشگاه اینترنت قطع یا ضعیف بود، از کش رمزنگاریشده بررسی کن
       await _evaluateOfflineSecurityFallback();
     }
   }
@@ -211,7 +206,6 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     state = const SecurityGateState(status: SecurityGateStatus.unauthenticated);
   }
 
-  /// ثبتنام مربی جدید با نام، نام خانوادگی، ایمیل و رمز عبور
   Future<void> signUpCoach({
     required String firstName,
     required String lastName,
@@ -239,18 +233,6 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
       );
 
       if (res.user != null) {
-        // اطمینان از درج رکورد در coach_profiles
-        try {
-          await client.from('coach_profiles').upsert({
-            'id': res.user!.id,
-            'email': email.trim(),
-            'first_name': firstName.trim(),
-            'last_name': lastName.trim(),
-            'is_approved': false,
-            'is_suspended': false,
-          });
-        } catch (_) {}
-
         await _secureStore.write(key: _kCachedApproved, value: 'false');
         state = SecurityGateState(
           status: SecurityGateStatus.pendingAdminApproval,
@@ -263,7 +245,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         status: SecurityGateStatus.unauthenticated,
         errorMessage: e.message,
       );
-    } catch (e) {
+    } catch (_) {
       state = const SecurityGateState(
         status: SecurityGateStatus.unauthenticated,
         errorMessage: 'خطا در ثبتنام: لطفاً اتصال اینترنت را بررسی کنید.',
@@ -271,7 +253,6 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     }
   }
 
-  /// ورود مربی با ایمیل و رمز عبور
   Future<void> signInCoach({
     required String email,
     required String password,
@@ -306,17 +287,19 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     }
   }
 
-  /// خروج امن و پاکسازی کامل کلیدهای رمزنگاریشده
+  /// خروج امن، پاکسازی کلیدهای رمزنگاریشده و پاکسازی دیتابیس محلی (OWASP M9)
   Future<void> signOut() async {
     try {
       await SupabaseConfig.clientOrNull?.auth.signOut();
     } catch (_) {}
     await _secureStore.deleteAll();
+    try {
+      _ref.read(appDatabaseProvider).clearAllUserDataOnLogout();
+    } catch (_) {}
     state = const SecurityGateState(status: SecurityGateStatus.unauthenticated);
   }
 }
 
-/// ویجت دروازه امنیتی که دور کل اپلیکیشن قرار میگیرد
 class SecurityGateWrapper extends ConsumerWidget {
   final Widget authorizedChild;
   const SecurityGateWrapper({super.key, required this.authorizedChild});
@@ -349,9 +332,6 @@ class SecurityGateWrapper extends ConsumerWidget {
   }
 }
 
-// =============================================================================
-// ۱. صفحه لاگین و ثبتنام امن مربی (Login / Sign-Up Screen)
-// =============================================================================
 class CoachAuthScreen extends ConsumerStatefulWidget {
   final String? errorMessage;
   const CoachAuthScreen({super.key, this.errorMessage});
@@ -579,9 +559,6 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
   }
 }
 
-// =============================================================================
-// ۲. صفحه انتظار برای تایید توسط شما در پنل سوپابیس (Pending Approval Screen)
-// =============================================================================
 class PendingApprovalScreen extends ConsumerWidget {
   final String coachName;
   final String email;
@@ -652,9 +629,6 @@ class PendingApprovalScreen extends ConsumerWidget {
   }
 }
 
-// =============================================================================
-// ۳. صفحه قفل کامل اپلیکیشن توسط شما از پنل سوپابیس (Kill-Switch Screen)
-// =============================================================================
 class AppSuspendedKillSwitchScreen extends ConsumerWidget {
   final String title;
   final String message;

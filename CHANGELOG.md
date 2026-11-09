@@ -29,4 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Security Gate Screen with Sign-In, Sign-Up, Pending Admin Approval, and Global/Per-coach Kill-Switch screens.
     - Offline-cached Kill-Switch state preventing Airplane Mode bypass.
     - Sign out action in Settings with complete secure storage purge.
+  - Resolved 5 hidden compiler & multi-tenant isolation issues (Needle-Audit):
+    - Replaced uppercase icon symbol with `LucideIcons.headphones`.
+    - Automated email confirmation trigger in Supabase and isolated custom catalog RLS.
+    - Added `clearAllUserDataOnLogout` in SQLite to prevent multi-coach data leakage on shared devices.
+    - Prevented sync collision on default seed items by attaching `coach_id` and filtering custom catalog entries.
+    - Deferred background sync execution until coach is authenticated and approved via `ref.listen`.
   - Complete UI, Unit, and Database test suite with 100% pass rate.

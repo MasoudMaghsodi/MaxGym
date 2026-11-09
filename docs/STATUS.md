@@ -27,7 +27,12 @@
   - Steps 1 through 6 fully integrated.
   - Commercial feature upgrades completed across 5 core files.
   - Closed 4 final technical gaps (sync, backup, quick filters, template assignment).
-  - OWASP Mobile Top 10 Hardening:
+  - OWASP Mobile Top 10 Hardening & Needle-Audit Resolution:
+    - Fixed Lucide icon naming (`headphones`).
+    - Multi-coach catalog isolation with `coach_id` filtering on sync.
+    - Added SQLite data wipe on coach logout (`clearAllUserDataOnLogout`) preventing on-device data leakage.
+    - Supabase email auto-confirmation trigger and RLS isolation.
+    - Gated sync execution post-authorization via `ref.listen(securityGateProvider, ...)`.
     - Hardware Keystore / Keychain AES-256-GCM encryption for JWT and session tokens (`flutter_secure_storage`).
     - PKCE authorization flow against code interception and replay attacks.
     - Security Gate wrapper (`SecurityGateWrapper`) covering Login, Sign-up, Pending Admin Approval, and App Suspended Kill-Switch.
