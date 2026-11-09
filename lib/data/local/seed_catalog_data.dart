@@ -18,6 +18,17 @@ class ExerciseSeedItem {
     required this.imageEndUrl,
     this.contraindicatedInjuries = const [],
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'nameFa': nameFa,
+        'nameEn': nameEn,
+        'targetMuscle': targetMuscle,
+        'equipment': equipment,
+        'imageStartUrl': imageStartUrl,
+        'imageEndUrl': imageEndUrl,
+        'contraindicatedInjuries': contraindicatedInjuries,
+      };
 }
 
 class SeedCatalogData {

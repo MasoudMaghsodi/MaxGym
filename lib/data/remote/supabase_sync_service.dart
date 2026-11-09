@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/supabase_config.dart';
 import '../local/app_database.dart';
 import '../local/database_models.dart';
+import '../local/seed_catalog_data.dart';
 
 final supabaseSyncServiceProvider = Provider<SupabaseSyncService>((ref) {
   final db = ref.watch(appDatabaseProvider);
@@ -72,34 +73,76 @@ class SupabaseSyncService {
         );
       }
 
-      // ۱. ارسال پینگ Heartbeat برای جلوگیری از Pause شدن پروژه در پلن رایگان Supabase
+      // ۱. پینگ Heartbeat برای جلوگیری از Pause شدن پروژه در پلن رایگان Supabase
       await client.from('app_heartbeat').upsert({
         'id': 1,
         'last_ping': DateTime.now().toUtc().toIso8601String(),
       });
 
-      // ۲. ارسال ورزشکاران آفلاین به Supabase (Push Athletes)
+      // ۲. ارسال ورزشکاران آفلاین به Supabase
       final pendingAthletes = _db.getPendingSyncAthletes();
       for (final athlete in pendingAthletes) {
         await client.from('athletes').upsert(athlete.toSupabaseJson());
         _db.markRecordSynced('athletes', athlete.id);
       }
 
-      // ۳. ارسال سایزگیریهای آفلاین به Supabase (Push Measurements)
+      // ۳. ارسال سایزگیریهای آفلاین به Supabase
       final pendingLogs = _db.getPendingSyncMeasurements();
       for (final log in pendingLogs) {
         await client.from('measurement_logs').upsert(log.toSupabaseJson());
         _db.markRecordSynced('measurement_logs', log.id);
       }
 
-      // ۴. ارسال برنامههای تمرینی/غذایی/مالی به Supabase (Push Programs)
+      // ۴. ارسال برنامههای تمرینی/غذایی/مالی و قالبها به Supabase
       final pendingPrograms = _db.getPendingSyncPrograms();
       for (final prog in pendingPrograms) {
         await client.from('programs').upsert(prog.toSupabaseJson());
         _db.markRecordSynced('programs', prog.id);
       }
 
-      // ۵. بازیابی ابری (Cloud Pull) در صورتی که دیتابیس گوشی خالی باشد
+      // ۵. سینک کاتالوگ حرکات، غذاها و مکملهای سفارشی مربی
+      final customMoves = _db.getCustomExercisesOnly();
+      for (final m in customMoves) {
+        await client.from('exercises_catalog').upsert({
+          'id': m.id,
+          'name_fa': m.nameFa,
+          'name_en': m.nameEn,
+          'target_muscle': m.targetMuscle,
+          'equipment': m.equipment,
+          'image_start_url': m.imageStartUrl,
+          'image_end_url': m.imageEndUrl,
+          'contraindicated_injuries': m.contraindicatedInjuries,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      }
+
+      final customFoods = _db.getFoodsCatalog();
+      for (final f in customFoods) {
+        await client.from('custom_foods_catalog').upsert({
+          'id': f['id'],
+          'name_fa': f['nameFa'],
+          'name_en': f['nameEn'],
+          'unit_fa': f['unitFa'],
+          'unit_en': f['unitEn'],
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      }
+
+      final customSupps = _db.getSupplementsCatalog();
+      for (final s in customSupps) {
+        await client.from('custom_supplements_catalog').upsert({
+          'id': s['id'],
+          'name_fa': s['nameFa'],
+          'name_en': s['nameEn'],
+          'dosage_fa': s['defaultDosageFa'],
+          'dosage_en': s['defaultDosageEn'],
+          'timing_fa': s['defaultTimingFa'],
+          'timing_en': s['defaultTimingEn'],
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      }
+
+      // ۶. بازیابی کامل از کلود در صورتی که دیتابیس گوشی خالی باشد
       if (_db.getAllActiveAthletes().isEmpty) {
         await _pullFromCloudIfLocalEmpty();
       }
@@ -111,7 +154,7 @@ class SupabaseSyncService {
         syncedPrograms: pendingPrograms.length,
         success: true,
         message:
-            'همگامسازی ابری با موفقیت انجام شد (${pendingAthletes.length} شاگرد، ${pendingPrograms.length} برنامه).',
+            'همگامسازی ابری کامل شد (${pendingAthletes.length} شاگرد، ${pendingPrograms.length} برنامه + بانک سفارشی).',
       );
     } catch (e) {
       debugPrint('Supabase Sync Error: $e');
@@ -127,6 +170,21 @@ class SupabaseSyncService {
     final client = SupabaseConfig.clientOrNull;
     if (client == null) return;
 
+    // بازیابی حرکات سفارشی مربی
+    final remoteMoves = await client.from('exercises_catalog').select();
+    for (final r in remoteMoves) {
+      _db.addCustomExercise(ExerciseSeedItem(
+        id: r['id'] as String,
+        nameFa: r['name_fa'] as String? ?? '',
+        nameEn: r['name_en'] as String? ?? '',
+        targetMuscle: r['target_muscle'] as String? ?? 'chest',
+        equipment: r['equipment'] as String? ?? 'custom',
+        imageStartUrl: r['image_start_url'] as String? ?? '',
+        imageEndUrl: r['image_end_url'] as String? ?? '',
+      ));
+    }
+
+    // بازیابی ورزشکاران
     final remoteAthletes = await client
         .from('athletes')
         .select()
@@ -158,6 +216,7 @@ class SupabaseSyncService {
       _db.upsertAthlete(athlete);
     }
 
+    // بازیابی برنامهها و قالبها
     final remotePrograms = await client.from('programs').select();
     for (final row in remotePrograms) {
       final rawDays = row['days_json'];

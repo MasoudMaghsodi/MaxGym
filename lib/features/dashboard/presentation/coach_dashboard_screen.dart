@@ -9,6 +9,7 @@ import '../../../data/local/app_database.dart';
 import '../../athletes/presentation/athlete_detail_screen.dart';
 import '../../athletes/presentation/athlete_onboarding_sheet.dart';
 import '../../athletes/presentation/athletes_provider.dart';
+import '../../workout_builder/presentation/master_program_builder_screen.dart';
 
 class CoachDashboardScreen extends ConsumerStatefulWidget {
   final VoidCallback onTriggerCloudSync;
@@ -332,6 +333,107 @@ class TemplatesScreen extends ConsumerStatefulWidget {
 }
 
 class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
+  void _showTemplateActionSheet(
+      BuildContext context, FullProgramEntity template, bool isFa) {
+    final athletes = ref.read(appDatabaseProvider).getAllActiveAthletes();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(LucideIcons.copyCheck),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      template.title,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isFa
+                    ? 'انتخاب ورزشکار جهت اعمال و سفارشی‌سازی این قالب آماده:'
+                    : 'Select an athlete to assign and customize this template:',
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              if (athletes.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: Text(
+                      isFa
+                          ? 'هیچ ورزشکاری در سیستم ثبت نشده است. ابتدا یک شاگرد ثبت کنید.'
+                          : 'No athletes found. Please add an athlete first.',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: athletes.length,
+                    itemBuilder: (c, idx) {
+                      final ath = athletes[idx];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: const CircleAvatar(
+                            child: Icon(LucideIcons.user, size: 18),
+                          ),
+                          title: Text(ath.fullName,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text(
+                            isFa
+                                ? 'وزن: ${ath.weightKg}kg | هدف: ${ath.fitnessGoal}'
+                                : 'Weight: ${ath.weightKg}kg | Goal: ${ath.fitnessGoal}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing:
+                              const Icon(LucideIcons.chevronRight, size: 18),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => MasterProgramBuilderScreen(
+                                  athlete: ath,
+                                  initialProgramOrTemplate: template,
+                                  isEditingExisting: false,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(appDatabaseProvider);
@@ -365,6 +467,7 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
+                    onTap: () => _showTemplateActionSheet(context, t, isFa),
                     leading: const Icon(LucideIcons.copyCheck),
                     title: Text(t.title,
                         style: const TextStyle(fontWeight: FontWeight.bold)),

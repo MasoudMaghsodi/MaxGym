@@ -26,6 +26,11 @@
 - **Done:**
   - Steps 1 through 6 fully integrated.
   - Commercial feature upgrades completed across 5 core files.
+  - Closed 4 final technical gaps:
+    1. Full Supabase two-way sync for custom exercises, foods, and supplements.
+    2. Full offline database JSON backup export (`exportFullDatabaseToJson`).
+    3. Athletes list quick filters (All / Unpaid / Expiring), swipe-to-delete dismissible, and backup export action.
+    4. Smart template direct assignment and customization sheet from `TemplatesScreen`.
   - Comprehensive test suite passing with 100% green tests.
   - Static analysis clean (0 errors, 0 warnings, 0 infos).
   - GitHub Actions CI/CD pipeline and Supabase free-tier keep-alive cron active.

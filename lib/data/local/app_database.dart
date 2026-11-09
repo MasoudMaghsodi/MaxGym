@@ -891,4 +891,41 @@ class LocalAppDatabase {
   void markRecordSynced(String table, String id) {
     _db.execute("UPDATE $table SET sync_status = 'synced' WHERE id = ?", [id]);
   }
+
+  // ===========================================================================
+  // ۶. سینک کاتالوگهای سفارشی و بکاپ/بازیابی کامل آفلاین (Full JSON Backup)
+  // ===========================================================================
+  List<ExerciseSeedItem> getCustomExercisesOnly() {
+    final rows = _db.select(
+        "SELECT * FROM exercises_catalog WHERE id LIKE 'custom_%' OR equipment = 'custom'");
+    return rows.map((r) {
+      return ExerciseSeedItem(
+        id: r['id'] as String,
+        nameFa: r['name_fa'] as String,
+        nameEn: r['name_en'] as String,
+        targetMuscle: r['target_muscle'] as String,
+        equipment: r['equipment'] as String,
+        imageStartUrl: r['image_start_url'] as String,
+        imageEndUrl: r['image_end_url'] as String,
+        contraindicatedInjuries: List<String>.from(
+            jsonDecode(r['contraindicated_injuries'] as String)),
+      );
+    }).toList();
+  }
+
+  /// تولید فایل JSON پشتیبان کامل از کل دیتابیس (شاگردان + سایزها + برنامهها + بانک سفارشی)
+  String exportFullDatabaseToJson() {
+    final payload = {
+      'exported_at': DateTime.now().toUtc().toIso8601String(),
+      'athletes': getAllActiveAthletes().map((a) => a.toSupabaseJson()).toList(),
+      'programs': getAllPrograms(includeTemplates: true)
+          .map((p) => p.toSupabaseJson())
+          .toList(),
+      'custom_exercises':
+          getCustomExercisesOnly().map((e) => e.toJson()).toList(),
+      'custom_foods': getFoodsCatalog(),
+      'custom_supplements': getSupplementsCatalog(),
+    };
+    return const JsonEncoder.withIndent('  ').convert(payload);
+  }
 }

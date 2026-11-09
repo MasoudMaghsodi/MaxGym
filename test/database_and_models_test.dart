@@ -50,6 +50,14 @@ void main() {
         timingEn: '30m Pre-Workout',
       );
       expect(db.getSupplementsCatalog().length, equals(initialSuppsCount + 1));
+
+      // ۴. تست استخراج حرکات سفارشی و تولید فایل بکاپ کامل JSON
+      final customOnly = db.getCustomExercisesOnly();
+      expect(customOnly.any((e) => e.id == 'custom_cable_row_single'), isTrue);
+
+      final fullJsonBackup = db.exportFullDatabaseToJson();
+      expect(fullJsonBackup.contains('custom_cable_row_single'), isTrue);
+      expect(fullJsonBackup.contains('Lean Turkey Oats Porridge'), isTrue);
     });
 
     test('Athlete CRUD & Soft Delete updates Outbox Sync Queue status', () {

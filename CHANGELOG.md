@@ -19,4 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - GitHub Actions automated CI/CD pipeline (`ci_cd_pipeline.yml`) for static analysis, automated testing, and obfuscated release APK build with `--dart-define`.
   - Supabase free-tier 3-day keep-alive cron job (`supabase_keep_alive.yml`) to prevent project pause.
   - Supabase SQL migration for custom catalogs, RLS policies, and templates persistence.
+  - Complete two-way sync for custom catalogs (exercises, foods, supplements) in `SupabaseSyncService`.
+  - Offline JSON database full backup generator (`exportFullDatabaseToJson`) and AppBar export action.
+  - Quick filter chips (`All`, `Unpaid Debt`, `Expiring Programs`) and swipe-to-delete in `AthletesListScreen`.
+  - Direct template assignment and customization modal in `TemplatesScreen`.
   - Complete UI, Unit, and Database test suite with 100% pass rate.
