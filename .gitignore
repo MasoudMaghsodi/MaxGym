@@ -1,0 +1,71 @@
+# Environment and Secrets (CRITICAL - per AGENTS.md hard rule)
+*.env
+*.env.*
+!.env.example
+*.key
+*.pem
+*.p8
+*.p12
+*.mobileprovision
+service_role
+*service_role*
+*service-account*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/key.properties
+android/local.properties
+android/.gradle/
+android/captures/
+android/gradlew
+android/gradlew.bat
+
+# iOS
+ios/.symlinks/
+ios/Pods/
+ios/Podfile.lock
+ios/.generated/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xcuserstate
+xcuserdata/
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Supabase
+supabase/.temp/
+supabase/.branches/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
