@@ -1,7 +1,7 @@
 # Project Status
 
 ## Current Phase: 100/100 Production-Ready Coach & Athlete Commercial Ecosystem
-- **Status:** Complete closed-loop dual-role ecosystem (Coach & Athlete Portal) with 2-way workout log and weight check-in RPCs, live PR logging, athlete check-ins in coach profile, copy day & undo builder actions, pure Dart PDF engine, compileSdk 36, immediate multi-device auto-sync, resilient Hero tags, 33/33 automated tests passing green, 0 analysis issues.
+- **Status:** Complete closed-loop dual-role ecosystem (Coach & Athlete Portal) with 2-way workout log and weight check-in RPCs, live PR logging, athlete check-ins in coach profile, copy day & undo builder actions, pure Dart PDF engine with uniform borders, compileSdk 36, Supabase Realtime Kill-Switch streaming, 42501 RLS resolution, immediate multi-device auto-sync, resilient Hero tags, 33/33 automated tests passing green, 0 analysis issues.
 - **Updated:** 2026-11-10
 
 ## Summary

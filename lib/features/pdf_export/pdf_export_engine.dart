@@ -17,8 +17,6 @@ import '../athletes/domain/scientific_bio_calculator.dart';
 enum PdfLanguageMode { bilingual, persianOnly, englishOnly }
 
 class PdfExportEngine {
-  /// متد کمکی ساخت نام دقیق فایل طبق دستورالعمل: [Athlete_Full_Name]_[Shamsi_Registration_Date].pdf
-  /// مثال: Ali_Rezaei_1405-08-18.pdf
   static String buildDynamicFileName(
       AthleteEntity athlete, DateTime registrationDate) {
     final j = Jalali.fromDateTime(registrationDate);
@@ -42,7 +40,6 @@ class PdfExportEngine {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
   }
 
-  /// بارگذاری فونت فارسی از پوشه assets یا فونت استاندارد در صورت عدم وجود فایل
   static Future<pw.Font> _loadRegularFont() async {
     try {
       final data = await rootBundle.load('assets/fonts/Vazirmatn-Regular.ttf');
@@ -61,7 +58,6 @@ class PdfExportEngine {
     }
   }
 
-  /// بازیابی تصاویر شروع و پایان حرکت از کش آفلاین گوشی (بدون مصرف اینترنت مجدد)
   static Future<pw.ImageProvider?> _getCachedImageOrNull(String url) async {
     if (url.isEmpty) return null;
     try {
@@ -71,7 +67,6 @@ class PdfExportEngine {
         final bytes = await fileInfo.file.readAsBytes();
         return pw.MemoryImage(bytes);
       }
-      // اگر در کش نبود و اینترنت وصل بود، دانلود و کش کن
       final file = await SmartExerciseCacheManager.instance
           .getSingleFile(url)
           .timeout(const Duration(seconds: 3));
@@ -82,7 +77,6 @@ class PdfExportEngine {
     return null;
   }
 
-  /// تولید، پیشنمایش و اشتراکگذاری PDF همراه با کپی کپشن واتساپ و حذف خودکار فایل موقت
   static Future<void> generateAndShareProgramPdf({
     required BuildContext context,
     required BrandingConfig branding,
@@ -93,7 +87,6 @@ class PdfExportEngine {
   }) async {
     final isRtl = langMode != PdfLanguageMode.englishOnly;
 
-    // نمایش لودینگ در حین رندرینگ برداری PDF
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -105,14 +98,12 @@ class PdfExportEngine {
       final fontReg = await _loadRegularFont();
       final fontBold = await _loadBoldFont();
 
-      // بارگذاری لوگوی باشگاه در صورت وجود
       pw.ImageProvider? logoImage;
       if (branding.logoPath != null && File(branding.logoPath!).existsSync()) {
         final logoBytes = await File(branding.logoPath!).readAsBytes();
         logoImage = pw.MemoryImage(logoBytes);
       }
 
-      // پیشبارگذاری تصاویر شروع و پایان حرکات از کش آفلاین
       final Map<String, pw.ImageProvider?> startImages = {};
       final Map<String, pw.ImageProvider?> endImages = {};
       for (final day in program.days) {
@@ -136,7 +127,8 @@ class PdfExportEngine {
         waistCm: latestLog?.waistCm,
       );
 
-      final brandPdfColor = PdfColor.fromInt(branding.activePreset.primary.value);
+      final brandPdfColor =
+          PdfColor.fromInt(branding.activePreset.primary.value);
       final darkHeaderColor = PdfColor.fromHex('#181B22');
 
       final pdf = pw.Document(
@@ -149,9 +141,6 @@ class PdfExportEngine {
       final shamsiDate = _formatShamsiDisplay(program.startDate);
       final miladiDate = _formatMiladiDisplay(program.startDate);
 
-      // =======================================================================
-      // صفحه ۱: کاور برندینگ + تحلیل علمی ماکروها + جدول پیشرفت سایزهای آنتروپومتریک
-      // =======================================================================
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
@@ -169,12 +158,9 @@ class PdfExportEngine {
           footer: (ctx) => _buildFooter(ctx, branding, isRtl),
           build: (ctx) => [
             pw.SizedBox(height: 14),
-            // ۱. کادر مشخصات ورزشکار و تاریخ شمسی/میلادی
             _buildAthleteCoverCard(
                 athlete, program, shamsiDate, miladiDate, brandPdfColor, isRtl),
             pw.SizedBox(height: 14),
-
-            // ۲. جدول تحلیل علمی بدن و درشتمغذیها (BMI, WHtR, BMR, TDEE, Macros, Fiber, Water)
             _buildSectionTitle(
               isRtl
                   ? 'تحلیل علمی فیزیولوژی و درشتمغذیهای روزانه (Scientific Bio & Macros)'
@@ -184,8 +170,6 @@ class PdfExportEngine {
             pw.SizedBox(height: 6),
             _buildScientificBioTable(bio, isRtl),
             pw.SizedBox(height: 14),
-
-            // ۳. جدول مقایسه سایزهای آنتروپومتریک (شروع دوره در برابر آخرین رکورد)
             if (baselineLog != null && latestLog != null) ...[
               _buildSectionTitle(
                 isRtl
@@ -198,8 +182,6 @@ class PdfExportEngine {
                   baselineLog, latestLog, isRtl),
               pw.SizedBox(height: 16),
             ],
-
-            // ۴. برنامه تمرینی تفکیکی روزهای هفته (Macro & Micro Workout Plan)
             _buildSectionTitle(
               isRtl
                   ? 'برنامه تخصصی تمرینات بدنسازی (Workout Routine Split)'
@@ -217,10 +199,7 @@ class PdfExportEngine {
                 isRtl: isRtl,
               );
             }),
-
             pw.SizedBox(height: 16),
-
-            // ۵. برنامه رژیم غذایی و جایگزینها (Nutrition & Alternatives)
             if (program.dietMeals.any((m) => m.items.isNotEmpty)) ...[
               _buildSectionTitle(
                 isRtl
@@ -232,8 +211,6 @@ class PdfExportEngine {
               _buildDietTable(program.dietMeals, langMode, isRtl),
               pw.SizedBox(height: 16),
             ],
-
-            // ۶. پروتکل مکملهای ورزشی (Supplement Stack)
             if (program.supplements.isNotEmpty) ...[
               _buildSectionTitle(
                 isRtl
@@ -251,27 +228,24 @@ class PdfExportEngine {
       final bytes = await pdf.save();
       final fileName = buildDynamicFileName(athlete, program.startDate);
 
-      // ذخیره در پوشه موقت (TemporaryDirectory) تا حافظه دائمی گوشی پر نشود
       final tempDir = await getTemporaryDirectory();
       tempPdfFile = File(p.join(tempDir.path, fileName));
       await tempPdfFile.writeAsBytes(bytes, flush: true);
 
-      // کپی خودکار کپشن انگیزشی واتساپ در کلیپبورد مربی
       final caption = isRtl
           ? 'سلام ${athlete.firstName} عزیز 🌟\n'
               'فایل برنامه تخصصی دوره جدیدت (${program.title}) تاریخ $shamsiDate آماده شد.\n'
+              '🔑 کد ورود آنلاین شما به اپلیکیشن: ${athlete.accessCode}\n'
               '🔥 کالری هدف روزانه: ${bio.targetCalories} kcal | پروتئین: ${bio.proteinGrams}g | آب: ${program.waterLiters} لیتر\n'
-              'نکات اجرایی، تمپوها و سوپرستها داخل PDF کامل درج شده. با قدرت ادامه بده! 💪🏆\n'
               '${branding.coachName} - ${branding.gymName}'
-          : 'Hi ${athlete.firstName}! 🌟 Here is your new customized training & nutrition plan ($shamsiDate / $miladiDate). Let\'s crush your goals! 💪🔥 - ${branding.coachName}';
+          : 'Hi ${athlete.firstName}! 🌟 Here is your new plan ($shamsiDate). Your App Login Code: ${athlete.accessCode}';
 
       await Clipboard.setData(ClipboardData(text: caption));
 
       if (context.mounted) {
-        Navigator.of(context).pop(); // بستن دیالوگ لودینگ
+        Navigator.of(context).pop();
       }
 
-      // اشتراکگذاری مستقیم فایل با نام دقیق Ali_Rezaei_1405-08-18.pdf
       await Share.shareXFiles(
         [XFile(tempPdfFile.path, name: fileName, mimeType: 'application/pdf')],
         text: caption,
@@ -285,9 +259,8 @@ class PdfExportEngine {
         );
       }
     } finally {
-      // پاکسازی خودکار فایل موقت پس از ۳۰ ثانیه برای حفظ استراتژی Zero-Bloat
-      if (tempPdfFile != null) {
-        final fileToDelete = tempPdfFile;
+      final fileToDelete = tempPdfFile;
+      if (fileToDelete != null) {
         Future.delayed(const Duration(seconds: 30), () async {
           try {
             if (await fileToDelete.exists()) {
@@ -299,6 +272,7 @@ class PdfExportEngine {
     }
   }
 
+  /// اصلاح کامل Border یکنواخت همراه با BorderRadius (رفع قطعی خطای box_border.dart line 266)
   static pw.Widget _buildBrandHeader({
     required BrandingConfig branding,
     required pw.ImageProvider? logoImage,
@@ -313,9 +287,7 @@ class PdfExportEngine {
       decoration: pw.BoxDecoration(
         color: darkColor,
         borderRadius: pw.BorderRadius.circular(10),
-        border: pw.Border(
-          bottom: pw.BorderSide(color: brandColor, width: 3),
-        ),
+        border: pw.Border.all(color: brandColor, width: 1.5),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -347,8 +319,8 @@ class PdfExportEngine {
                   ),
                   pw.Text(
                     '${branding.coachName} | ${branding.coachCredentials}',
-                    style: const pw.TextStyle(
-                        color: PdfColors.white, fontSize: 9),
+                    style:
+                        const pw.TextStyle(color: PdfColors.white, fontSize: 9),
                   ),
                 ],
               ),
@@ -367,7 +339,8 @@ class PdfExportEngine {
               ),
               pw.Text(
                 'Miladi: $miladiDate',
-                style: const pw.TextStyle(color: PdfColors.grey300, fontSize: 8),
+                style:
+                    const pw.TextStyle(color: PdfColors.grey300, fontSize: 8),
               ),
               pw.Text(
                 branding.socialHandle,
@@ -406,7 +379,7 @@ class PdfExportEngine {
                     ? 'نام ورزشکار: ${athlete.fullName}  |  کد ورود اپ: ${athlete.accessCode}'
                     : 'Athlete: ${athlete.fullName}  |  Portal Code: ${athlete.accessCode}',
                 style:
-                    const pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+                    const pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
               ),
               pw.SizedBox(height: 4),
               pw.Text(
@@ -601,8 +574,6 @@ class PdfExportEngine {
                 const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: pw.BoxDecoration(
               color: PdfColor.fromHex('#181B22'),
-              borderRadius:
-                  const pw.BorderRadius.vertical(top: pw.Radius.circular(7)),
             ),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -647,19 +618,19 @@ class PdfExportEngine {
                 ? 'Tempo: ${ex.sets.first.tempo} | Rest: ${ex.sets.first.restSeconds}s'
                 : '';
 
+            final tutorialVideoUrl =
+                'https://www.youtube.com/results?search_query=${Uri.encodeComponent("${ex.exerciseNameEn} proper form bodybuilding")}';
+
             return pw.Container(
               padding: const pw.EdgeInsets.all(8),
               decoration: pw.BoxDecoration(
                 color: isSuperset
                     ? PdfColor.fromHex('#FFFBEB')
                     : PdfColors.white,
-                border: const pw.Border(
-                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
-                ),
+                border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
               ),
               child: pw.Row(
                 children: [
-                  // نمایش ۲ تصویر موقعیت شروع و پایان حرکت از کش آفلاین + QR Code آنلاین
                   pw.Row(
                     children: [
                       if (startImg != null)
@@ -677,12 +648,10 @@ class PdfExportEngine {
                           child: pw.Image(endImg, fit: pw.BoxFit.cover),
                         ),
                       pw.UrlLink(
-                        destination:
-                            'https://www.youtube.com/results?search_query=${Uri.encodeComponent("${ex.exerciseNameEn.isNotEmpty ? ex.exerciseNameEn : ex.exerciseNameFa} form tutorial")}',
+                        destination: tutorialVideoUrl,
                         child: pw.BarcodeWidget(
                           barcode: pw.Barcode.qrCode(),
-                          data:
-                              'https://www.youtube.com/results?search_query=${Uri.encodeComponent("${ex.exerciseNameEn.isNotEmpty ? ex.exerciseNameEn : ex.exerciseNameFa} form tutorial")}',
+                          data: tutorialVideoUrl,
                           width: 26,
                           height: 26,
                         ),
@@ -732,17 +701,20 @@ class PdfExportEngine {
                           style: const pw.TextStyle(
                               fontSize: 8, color: PdfColors.grey700),
                         ),
-                        if (ex.coachNote.isNotEmpty) ...[
-                          pw.SizedBox(height: 2),
-                          pw.Text(
-                            'Note: ${ex.coachNote}',
-                            style: const pw.TextStyle(
-                              fontSize: 8,
-                              color: PdfColors.blueGrey800,
-                              fontStyle: pw.FontStyle.italic,
+                        if (ex.coachNote.isNotEmpty)
+                          pw.Padding(
+                            padding: const pw.EdgeInsets.only(top: 2),
+                            child: pw.Text(
+                              isRtl
+                                  ? 'نکته مربی: ${ex.coachNote}'
+                                  : 'Coach Note: ${ex.coachNote}',
+                              style: const pw.TextStyle(
+                                fontSize: 8,
+                                color: PdfColors.deepOrange800,
+                                fontWeight: pw.FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ],
                       ],
                     ),
                   ),

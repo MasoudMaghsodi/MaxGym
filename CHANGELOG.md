@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- PDF Uniform Border Assertion & Instant Realtime Control:
+  - Resolved `box_border.dart: Failed assertion: 'borderRadius == null': A borderRadius can only be given for a uniform Border` in `pdf_export_engine.dart` by switching to uniform borders (`pw.Border.all`).
+  - Added Supabase Realtime WebSocket streams (`app_control` and `coach_profiles`) in `security_gate_screen.dart` for sub-second reactive locking and authorization without manual page refreshes.
+  - Added `supabase/migrations/20261110000008_fix_rls_42501_and_realtime.sql` resolving 42501 RLS policy errors on `athletes`, `programs`, `measurement_logs`, and catalogs while auto-approving existing coach profiles.
 - Live Multi-Device Testing & Runtime Polish:
   - Resolved athlete code login failure on secondary devices by introducing instant background auto-sync (`syncAllPendingData`) upon athlete creation, update, and program save.
   - Enhanced Supabase RPC `athlete_login_by_code` and local SQLite `getAthleteByAccessCode` with flexible regex matching (`^PC-`) and explicit `GRANT EXECUTE` to `anon, authenticated`.

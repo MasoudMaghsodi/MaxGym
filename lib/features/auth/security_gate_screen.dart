@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -62,9 +63,52 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
   static const _kCachedDevContact = 'sec_cached_dev_contact';
   static const _kCachedAthleteCode = 'sec_cached_athlete_code';
 
+  StreamSubscription<List<Map<String, dynamic>>>? _appControlRealtimeSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _coachProfileRealtimeSub;
+
   SecurityGateNotifier(this._ref)
       : super(const SecurityGateState(status: SecurityGateStatus.loading)) {
-    verifySecurityAndSession();
+    verifySecurityAndSession().then((_) => _startRealtimeSecurityListeners());
+  }
+
+  /// شنود بلادرنگ (Realtime WebSocket) تغییرات پنل Supabase بدون نیاز به رفرش دستی
+  void _startRealtimeSecurityListeners() {
+    final client = SupabaseConfig.clientOrNull;
+    if (client == null) return;
+
+    // ۱. شنود زنده جدول app_control برای قفل سراسری آنی
+    _appControlRealtimeSub?.cancel();
+    _appControlRealtimeSub = client
+        .from('app_control')
+        .stream(primaryKey: ['id'])
+        .eq('id', 1)
+        .listen((rows) {
+      if (rows.isNotEmpty) {
+        verifySecurityAndSession();
+      }
+    }, onError: (_) {});
+
+    // ۲. شنود زنده جدول coach_profiles برای تایید یا مسدودسازی آنی مربی در لحظه
+    final uid = client.auth.currentUser?.id;
+    if (uid != null) {
+      _coachProfileRealtimeSub?.cancel();
+      _coachProfileRealtimeSub = client
+          .from('coach_profiles')
+          .stream(primaryKey: ['id'])
+          .eq('id', uid)
+          .listen((rows) {
+        if (rows.isNotEmpty) {
+          verifySecurityAndSession();
+        }
+      }, onError: (_) {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _appControlRealtimeSub?.cancel();
+    _coachProfileRealtimeSub?.cancel();
+    super.dispose();
   }
 
   Future<void> verifySecurityAndSession() async {
@@ -245,6 +289,9 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     final db = _ref.read(appDatabaseProvider);
 
     try {
+      if (!SupabaseConfig.isInitialized) {
+        await SupabaseConfig.initializeSafely();
+      }
       final client = SupabaseConfig.clientOrNull;
       if (client != null) {
         final res = await client.rpc(
@@ -370,6 +417,9 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
   }) async {
     state = const SecurityGateState(status: SecurityGateStatus.loading);
     try {
+      if (!SupabaseConfig.isInitialized) {
+        await SupabaseConfig.initializeSafely();
+      }
       final client = SupabaseConfig.clientOrNull;
       if (client == null) {
         state = const SecurityGateState(
@@ -415,6 +465,9 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
   }) async {
     state = const SecurityGateState(status: SecurityGateStatus.loading);
     try {
+      if (!SupabaseConfig.isInitialized) {
+        await SupabaseConfig.initializeSafely();
+      }
       final client = SupabaseConfig.clientOrNull;
       if (client == null) {
         state = const SecurityGateState(
@@ -444,6 +497,8 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
   }
 
   Future<void> signOut() async {
+    _appControlRealtimeSub?.cancel();
+    _coachProfileRealtimeSub?.cancel();
     try {
       await SupabaseConfig.clientOrNull?.auth.signOut();
     } catch (_) {}
