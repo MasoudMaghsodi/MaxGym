@@ -314,6 +314,11 @@ class LocalAppDatabase {
   }
 
   static LocalAppDatabase inMemory() {
+    return initInMemoryForTesting();
+  }
+
+  /// سازنده مخصوص اجرای سریع Unit Test و Widget Test در حافظه RAM
+  static LocalAppDatabase initInMemoryForTesting() {
     final db = sqlite3.openInMemory();
     final instance = LocalAppDatabase._(db);
     instance._createTablesAndSeed();

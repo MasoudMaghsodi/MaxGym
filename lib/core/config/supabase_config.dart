@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -18,6 +19,10 @@ class SupabaseConfig {
 
   /// راهاندازی ایمن بدون مسدود کردن اپ در محیط بدون اینترنت باشگاه
   static Future<void> initializeSafely() async {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      _isInitialized = false;
+      return;
+    }
     try {
       await Supabase.initialize(
         url: supabaseUrl,

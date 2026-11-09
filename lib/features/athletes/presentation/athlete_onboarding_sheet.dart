@@ -173,17 +173,21 @@ class _AthleteOnboardingSheetState
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      _currentStep == 0
-                          ? (isFa
-                              ? 'گام ۱: مشخصات پایه و هدف ورزشکار'
-                              : 'Step 1: Quick Athlete Profile')
-                          : (isFa
-                              ? 'گام ۲: سایزگیری آنتروپومتریک (اختیاری)'
-                              : 'Step 2: Body Measurements (Optional)'),
-                      style: const TextStyle(
-                          fontSize: 17, fontWeight: FontWeight.bold),
+                    Expanded(
+                      child: Text(
+                        _currentStep == 0
+                            ? (isFa
+                                ? 'گام ۱: مشخصات پایه و هدف ورزشکار'
+                                : 'Step 1: Quick Athlete Profile')
+                            : (isFa
+                                ? 'گام ۲: سایزگیری آنتروپومتریک (اختیاری)'
+                                : 'Step 2: Body Measurements (Optional)'),
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     TextButton.icon(
                       onPressed: _submit,
                       icon: const Icon(LucideIcons.checkCircle2, size: 18),
