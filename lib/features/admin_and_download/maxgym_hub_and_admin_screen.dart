@@ -393,15 +393,17 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
 
   Future<void> _saveGlobalKillSwitchAndVersion() async {
     try {
-      await SupabaseConfig.clientOrNull?.from('app_control').upsert({
-        'id': 1,
-        'is_app_disabled': _isAppDisabled,
-        'lock_message_fa': _lockReasonCtrl.text.trim(),
-        'developer_contact': _devContactCtrl.text.trim(),
-        'latest_version': _versionCtrl.text.trim(),
-        'apk_download_url': _apkUrlCtrl.text.trim(),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
+      await SupabaseConfig.clientOrNull?.rpc(
+        'super_admin_update_control',
+        params: {
+          'p_master_pin': MaxGymBrandConfig.superAdminMasterPin,
+          'p_is_disabled': _isAppDisabled,
+          'p_lock_message': _lockReasonCtrl.text.trim(),
+          'p_dev_contact': _devContactCtrl.text.trim(),
+          'p_latest_version': _versionCtrl.text.trim(),
+          'p_apk_url': _apkUrlCtrl.text.trim(),
+        },
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -422,10 +424,15 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
 
   Future<void> _updateCoachStatus(
       String coachId, bool approve, bool suspend) async {
-    await SupabaseConfig.clientOrNull?.from('coach_profiles').update({
-      'is_approved': approve,
-      'is_suspended': suspend,
-    }).eq('id', coachId);
+    await SupabaseConfig.clientOrNull?.rpc(
+      'super_admin_set_coach_status',
+      params: {
+        'p_master_pin': MaxGymBrandConfig.superAdminMasterPin,
+        'p_coach_id': coachId,
+        'p_approve': approve,
+        'p_suspend': suspend,
+      },
+    );
     await _loadAdminData();
   }
 
