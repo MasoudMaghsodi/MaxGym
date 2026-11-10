@@ -6,24 +6,25 @@ class BrandingConfig {
   final String coachCredentials;
   final String gymName;
   final String socialHandle;
-  final String? logoPath; // مسیر فایل لوگوی انتخابی از گالری گوشی
+  final String? logoPath;
   final String colorPresetId;
+  final int? customPrimaryColorHex; // امکان انتخاب رنگ کاملاً دلخواه توسط مربی
   final ThemeMode themeMode;
   final Locale locale;
 
-  // تعرفههای پایه مالی برای سرعت بخشیدن به صدور فاکتور شاگرد
   final double defaultTuitionFee;
   final double defaultWorkoutFee;
   final double defaultDietFee;
   final double defaultSupplementFee;
 
   const BrandingConfig({
-    this.coachName = 'مربی حرفهای',
-    this.coachCredentials = 'مربی رسمی فدراسیون بدنسازی و متخصص تغذیه ورزشی',
-    this.gymName = 'آکادمی تخصصی فیتنس پرو',
-    this.socialHandle = '@pro_coach_fitness',
+    this.coachName = 'مربی ارشد مکسجیم',
+    this.coachCredentials = 'مربی رسمی بدنسازی و متخصص تغذیه ورزشی | MAX GYM',
+    this.gymName = 'باشگاه تخصصی MAX GYM',
+    this.socialHandle = '@maxgym_official',
     this.logoPath,
-    this.colorPresetId = 'neon_volt',
+    this.colorPresetId = 'maxgym_venom', // پیشفرض: سبز رسمی باشگاه مکس
+    this.customPrimaryColorHex,
     this.themeMode = ThemeMode.dark,
     this.locale = const Locale('fa'),
     this.defaultTuitionFee = 800000,
@@ -42,6 +43,8 @@ class BrandingConfig {
     String? logoPath,
     bool clearLogo = false,
     String? colorPresetId,
+    int? customPrimaryColorHex,
+    bool clearCustomColor = false,
     ThemeMode? themeMode,
     Locale? locale,
     double? defaultTuitionFee,
@@ -56,6 +59,9 @@ class BrandingConfig {
       socialHandle: socialHandle ?? this.socialHandle,
       logoPath: clearLogo ? null : (logoPath ?? this.logoPath),
       colorPresetId: colorPresetId ?? this.colorPresetId,
+      customPrimaryColorHex: clearCustomColor
+          ? null
+          : (customPrimaryColorHex ?? this.customPrimaryColorHex),
       themeMode: themeMode ?? this.themeMode,
       locale: locale ?? this.locale,
       defaultTuitionFee: defaultTuitionFee ?? this.defaultTuitionFee,
