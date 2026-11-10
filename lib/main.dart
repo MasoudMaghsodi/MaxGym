@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/config/maxgym_brand_config.dart';
 import 'core/config/supabase_config.dart';
 import 'core/constants/app_colors.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/branding_provider.dart';
+import 'core/widgets/responsive_shell.dart';
 import 'data/local/app_database.dart';
 import 'data/remote/supabase_sync_service.dart';
 import 'features/athletes/presentation/athletes_list_screen.dart';
@@ -17,6 +19,7 @@ import 'features/auth/security_gate_screen.dart';
 import 'features/dashboard/presentation/coach_dashboard_screen.dart';
 import 'features/pdf_export/pdf_export_engine.dart';
 import 'features/settings/presentation/branding_settings_screen.dart';
+import 'features/splash/maxgym_3d_splash_screen.dart';
 import 'features/workout_builder/presentation/master_program_builder_screen.dart';
 
 Future<void> main() async {
@@ -74,7 +77,7 @@ class _ProCoachAppState extends ConsumerState<ProCoachApp> {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'ProCoach',
+      title: MaxGymBrandConfig.appName,
       locale: branding.locale,
       supportedLocales: const [
         Locale('fa'),
@@ -89,8 +92,10 @@ class _ProCoachAppState extends ConsumerState<ProCoachApp> {
       themeMode: branding.themeMode,
       theme: AppTheme.buildTheme(branding, Brightness.light),
       darkTheme: AppTheme.buildTheme(branding, Brightness.dark),
-      home: const SecurityGateWrapper(
-        authorizedChild: MainNavigationShell(),
+      home: const MaxGym3DSplashScreen(
+        nextScreen: SecurityGateWrapper(
+          authorizedChild: MainNavigationShell(),
+        ),
       ),
     );
   }
@@ -252,33 +257,28 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
       const BrandingSettingsScreen(),
     ];
 
-    return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: pages,
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (idx) => setState(() => _selectedIndex = idx),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(LucideIcons.layoutDashboard),
-            label: s.tr('dashboard'),
-          ),
-          NavigationDestination(
-            icon: const Icon(LucideIcons.users),
-            label: s.tr('athletes'),
-          ),
-          NavigationDestination(
-            icon: const Icon(LucideIcons.copy),
-            label: s.tr('templates'),
-          ),
-          NavigationDestination(
-            icon: const Icon(LucideIcons.settings),
-            label: s.tr('settings'),
-          ),
-        ],
-      ),
+    return MaxGymResponsiveScaffold(
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (idx) => setState(() => _selectedIndex = idx),
+      pages: pages,
+      destinations: [
+        NavigationDestination(
+          icon: const Icon(LucideIcons.layoutDashboard),
+          label: s.tr('dashboard'),
+        ),
+        NavigationDestination(
+          icon: const Icon(LucideIcons.users),
+          label: s.tr('athletes'),
+        ),
+        NavigationDestination(
+          icon: const Icon(LucideIcons.copy),
+          label: s.tr('templates'),
+        ),
+        NavigationDestination(
+          icon: const Icon(LucideIcons.settings),
+          label: s.tr('settings'),
+        ),
+      ],
     );
   }
 }
