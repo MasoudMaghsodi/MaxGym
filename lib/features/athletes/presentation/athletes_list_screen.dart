@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -8,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/widgets/maxgym_3d_widgets.dart';
 import '../../../data/local/app_database.dart';
 import '../domain/scientific_bio_calculator.dart';
 import 'athlete_detail_screen.dart';
@@ -94,19 +97,25 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    '100% (1RM): $result kg',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      '100% (1RM): $result kg',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    '85% (6 Reps): ${(result * 0.85).toStringAsFixed(1)} kg  |  '
-                    '75% (10 Reps): ${(result * 0.75).toStringAsFixed(1)} kg',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      '85% (6 Reps): ${(result * 0.85).toStringAsFixed(1)} kg  |  '
+                      '75% (10 Reps): ${(result * 0.75).toStringAsFixed(1)} kg',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
                   ),
                 ],
               ),
@@ -126,15 +135,33 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
   Future<void> _exportJsonBackup(BuildContext context, bool isFa) async {
     final db = ref.read(appDatabaseProvider);
     final jsonStr = db.exportFullDatabaseToJson();
+
+    if (kIsWeb) {
+      final bytes = Uint8List.fromList(utf8.encode(jsonStr));
+      await Share.shareXFiles(
+        [
+          XFile.fromData(
+            bytes,
+            name: 'maxgym_full_backup.json',
+            mimeType: 'application/json',
+          ),
+        ],
+        text: isFa
+            ? 'فایل پشتیبان کامل دیتابیس ورزشکاران و برنامهها (JSON)'
+            : 'MAX GYM Full Database Backup (JSON)',
+      );
+      return;
+    }
+
     final tempDir = await getTemporaryDirectory();
-    final file = File(p.join(tempDir.path, 'pro_coach_full_backup.json'));
+    final file = File(p.join(tempDir.path, 'maxgym_full_backup.json'));
     await file.writeAsString(jsonStr, flush: true);
 
     await Share.shareXFiles(
-      [XFile(file.path, name: 'pro_coach_full_backup.json')],
+      [XFile(file.path, name: 'maxgym_full_backup.json')],
       text: isFa
           ? 'فایل پشتیبان کامل دیتابیس ورزشکاران و برنامهها (JSON)'
-          : 'ProCoach Full Database Backup (JSON)',
+          : 'MAX GYM Full Database Backup (JSON)',
     );
   }
 
@@ -145,8 +172,8 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
     final s = AppStrings.of(context);
     final isFa = s.isFa;
     final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
 
-    // اعمال فیلتر سریع (همه / بدهکاران / منقضیها)
     final athletes = baseAthletes.where((a) {
       if (_activeFilter == AthleteQuickFilter.all) return true;
       final progs = db.getProgramsForAthlete(a.id);
@@ -182,22 +209,21 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
           if (baseAthletes.isNotEmpty ||
               ref.watch(athleteSearchQueryProvider).isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
               child: TextField(
                 onChanged: (v) =>
                     ref.read(athleteSearchQueryProvider.notifier).state = v,
                 decoration: InputDecoration(
                   hintText: isFa
-                      ? 'جستجوی نام یا شماره موبایل شاگرد...'
-                      : 'Search athlete name or phone...',
+                      ? 'جستجوی نام، شماره موبایل یا کد شاگرد (PC-XXXXXX)...'
+                      : 'Search athlete name, phone, or access code...',
                   prefixIcon: const Icon(LucideIcons.search),
                 ),
               ),
             ),
-          // نوار فیلتر سریع برای مدیریت ۵۰۰ شاگرد
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
             child: Row(
               children: [
                 ChoiceChip(
@@ -215,8 +241,8 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
-                  label: Text(
-                      isFa ? '⏳ دوره رو به اتمام' : '⏳ Expiring Programs'),
+                  label:
+                      Text(isFa ? '⏳ دوره رو به اتمام' : '⏳ Expiring Programs'),
                   selected:
                       _activeFilter == AthleteQuickFilter.expiringProgram,
                   onSelected: (_) => setState(() =>
@@ -233,7 +259,7 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
                         : 'No athletes match this filter.'),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     itemCount: athletes.length,
                     itemBuilder: (context, index) {
                       final a = athletes[index];
@@ -250,10 +276,11 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
                         direction: DismissDirection.endToStart,
                         background: Container(
                           alignment: AlignmentDirectional.centerEnd,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
                             color: AppColors.danger,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(22),
                           ),
                           child: const Icon(LucideIcons.trash2,
                               color: Colors.white),
@@ -262,21 +289,18 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
                           return await showDialog<bool>(
                             context: context,
                             builder: (dCtx) => AlertDialog(
-                              title: Text(isFa
-                                  ? 'حذف ورزشکار؟'
-                                  : 'Delete Athlete?'),
+                              title: Text(
+                                  isFa ? 'حذف ورزشکار؟' : 'Delete Athlete?'),
                               content: Text(isFa
                                   ? 'آیا از حذف ${a.fullName} اطمینان دارید؟'
                                   : 'Are you sure you want to delete ${a.fullName}?'),
                               actions: [
                                 TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(dCtx, false),
+                                  onPressed: () => Navigator.pop(dCtx, false),
                                   child: Text(isFa ? 'انصراف' : 'Cancel'),
                                 ),
                                 ElevatedButton(
-                                  onPressed: () =>
-                                      Navigator.pop(dCtx, true),
+                                  onPressed: () => Navigator.pop(dCtx, true),
                                   child: Text(isFa ? 'حذف' : 'Delete'),
                                 ),
                               ],
@@ -288,9 +312,12 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
                               .read(athletesProvider.notifier)
                               .deleteAthlete(a.id);
                         },
-                        child: Card(
-                          margin: const EdgeInsets.only(bottom: 10),
+                        child: MaxGymGlassCard(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
                           child: ListTile(
+                            contentPadding: EdgeInsets.zero,
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -304,14 +331,28 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
                                 ),
                               );
                             },
-                            leading: CircleAvatar(
-                              backgroundColor:
-                                  theme.colorScheme.primary.withOpacity(0.2),
+                            leading: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    primary.withOpacity(0.35),
+                                    primary.withOpacity(0.10),
+                                  ],
+                                ),
+                                border: Border.all(
+                                    color: primary.withOpacity(0.6),
+                                    width: 1.5),
+                              ),
+                              alignment: Alignment.center,
                               child: Text(
                                 a.firstName.characters.first.toUpperCase(),
                                 style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 18,
+                                  color: primary,
                                 ),
                               ),
                             ),
@@ -321,19 +362,45 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
                                   child: Text(
                                     a.fullName,
                                     style: const TextStyle(
-                                        fontWeight: FontWeight.bold),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 15),
                                   ),
                                 ),
-                                if (a.injuryTags.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.06),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Directionality(
+                                    textDirection: TextDirection.ltr,
+                                    child: Text(
+                                      a.accessCode,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: primary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (a.injuryTags.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
                                   const Icon(LucideIcons.alertTriangle,
                                       size: 16, color: AppColors.warning),
+                                ],
                               ],
                             ),
-                            subtitle: Text(
-                              isFa
-                                  ? 'وزن: ${a.weightKg}kg | هدف: ${bio.targetCalories} کالری (${bio.proteinGrams}g پروتئین)'
-                                  : '${a.weightKg}kg | Target: ${bio.targetCalories} kcal (${bio.proteinGrams}g Protein)',
-                              style: const TextStyle(fontSize: 12),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                isFa
+                                    ? 'وزن: ${a.weightKg}kg | هدف: ${bio.targetCalories} کالری (${bio.proteinGrams}g پروتئین)'
+                                    : '${a.weightKg}kg | Target: ${bio.targetCalories} kcal (${bio.proteinGrams}g Protein)',
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.white70),
+                              ),
                             ),
                             trailing: const Icon(LucideIcons.chevronRight,
                                 size: 18),
