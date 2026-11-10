@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/branding_provider.dart';
 import '../../../data/local/app_database.dart';
+import '../../admin_and_download/maxgym_hub_and_admin_screen.dart';
 import '../../athletes/presentation/athlete_detail_screen.dart';
 import '../../athletes/presentation/athlete_onboarding_sheet.dart';
 import '../../athletes/presentation/athletes_provider.dart';
@@ -79,6 +80,20 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
               color: _isPrivacyMode ? AppColors.warning : null,
             ),
             onPressed: () => setState(() => _isPrivacyMode = !_isPrivacyMode),
+          ),
+          IconButton(
+            tooltip: isFa
+                ? 'مرکز دانلود و PWA / سوپر-ادمین'
+                : 'Download Hub & Admin',
+            icon: const Icon(LucideIcons.downloadCloud),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MaxGymDownloadAndPwaHubScreen(),
+                ),
+              );
+            },
           ),
           IconButton(
             tooltip: isFa ? 'همگام‌سازی ابری با Supabase' : 'Sync with Cloud',

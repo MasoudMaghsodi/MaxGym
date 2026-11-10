@@ -12,6 +12,7 @@ import '../../core/localization/app_localizations.dart';
 import '../../core/theme/branding_provider.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/database_models.dart';
+import '../admin_and_download/maxgym_hub_and_admin_screen.dart';
 import '../athlete_portal/athlete_portal_screen.dart';
 
 enum SecurityGateStatus {
@@ -865,6 +866,22 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                                   ? 'قبلاً ثبت‌نام کرده‌اید؟ ورود به حساب'
                                   : 'Already registered? Sign In'),
                         ),
+                      ),
+                      const Divider(height: 24),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const MaxGymDownloadAndPwaHubScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(LucideIcons.downloadCloud, size: 16),
+                        label: Text(isFa
+                            ? 'مرکز دانلود آخرین نسخه اندروید / راهنمای آیفون (PWA)'
+                            : 'Download Latest App / iOS PWA Guide'),
                       ),
                     ],
                   ],
