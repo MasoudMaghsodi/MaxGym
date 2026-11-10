@@ -8,6 +8,7 @@ import 'core/config/maxgym_brand_config.dart';
 import 'core/config/supabase_config.dart';
 import 'core/constants/app_colors.dart';
 import 'core/localization/app_localizations.dart';
+import 'core/telemetry/supabase_crash_logger.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/branding_provider.dart';
 import 'core/widgets/responsive_shell.dart';
@@ -25,7 +26,10 @@ import 'features/workout_builder/presentation/master_program_builder_screen.dart
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ۱. راهاندازی SharedPreferences برای برندینگ و تم
+  // ۰. راه‌اندازی مانیتورینگ سراسری تلمتری کرش و خطاهای سیستم در Supabase
+  SupabaseCrashTelemetry.initializeGlobalErrorHandling();
+
+  // ۱. راه‌اندازی SharedPreferences برای برندینگ و تم
   final prefs = await SharedPreferences.getInstance();
 
   // ۲. راهاندازی دیتابیس آفلاین SQLite به عنوان Single Source of Truth
