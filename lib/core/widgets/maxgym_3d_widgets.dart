@@ -160,7 +160,6 @@ class MaxGymGlassCard extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Stack(
             children: [
-              // خط نوری استودیویی در لبه بالای کارت (Top Specular Highlight)
               Positioned(
                 top: 0,
                 left: 24,
@@ -512,7 +511,7 @@ class MaxGymSpectrumGauge extends StatelessWidget {
   }
 }
 
-/// ۵. مدل آناتومی و هیتمپ سهبعدی عضلات بدن با فیزیک واقعی V-Taper (Pro-Bezier Vector Anatomy)
+/// ۵. مدل آناتومی و هیتمپ سهبعدی عضلات بدن با قابلیت Auto-Flip هوشمند به نمای پشت
 class Interactive3DMuscleAnatomy extends StatefulWidget {
   final List<String> activeMuscles; // ['chest', 'biceps', 'legs', ...]
   final void Function(String muscleId)? onMuscleTapped;
@@ -533,16 +532,39 @@ class Interactive3DMuscleAnatomy extends StatefulWidget {
 class _Interactive3DMuscleAnatomyState
     extends State<Interactive3DMuscleAnatomy>
     with SingleTickerProviderStateMixin {
-  bool _showBackView = false;
+  late bool _showBackView;
   late AnimationController _spinCtrl;
+
+  /// بررسی اینکه آیا عضلات فعال فعلی مربوط به پشت بدن (پشتبازو / زیربغل) هستند یا خیر
+  bool _shouldAutoShowBackView(List<String> muscles) {
+    if (muscles.isEmpty) return false;
+    final hasFrontOnly = muscles.any(
+        (m) => m == 'chest' || m == 'biceps' || m == 'abs');
+    final hasBackOnly =
+        muscles.any((m) => m == 'back' || m == 'triceps');
+    return hasBackOnly && !hasFrontOnly;
+  }
 
   @override
   void initState() {
     super.initState();
+    _showBackView = _shouldAutoShowBackView(widget.activeMuscles);
     _spinCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 550),
+      value: _showBackView ? 1.0 : 0.0,
     );
+  }
+
+  @override
+  void didUpdateWidget(covariant Interactive3DMuscleAnatomy oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.activeMuscles.join(',') != widget.activeMuscles.join(',')) {
+      final targetBack = _shouldAutoShowBackView(widget.activeMuscles);
+      if (targetBack != _showBackView) {
+        _flip3DBody();
+      }
+    }
   }
 
   @override
@@ -627,7 +649,7 @@ class _Interactive3DMuscleAnatomyState
           ];
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: RadialGradient(
           colors: [
@@ -652,36 +674,45 @@ class _Interactive3DMuscleAnatomyState
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Flexible(
+              Expanded(
                 child: Row(
                   children: [
-                    Icon(Icons.view_in_ar_rounded, color: primary, size: 22),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        widget.isFa
-                            ? 'هیت‌مپ سه‌بعدی آناتومی عضلات (${_showBackView ? "نمای پشت" : "نمای جلو"})'
-                            : '3D Muscle Heatmap (${_showBackView ? "Posterior" : "Anterior"})',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                          color: Colors.white,
+                    Icon(Icons.view_in_ar_rounded, color: primary, size: 20),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          widget.isFa
+                              ? 'هیت‌مپ سه‌بعدی آناتومی عضلات (${_showBackView ? "نمای پشت" : "نمای جلو"})'
+                              : '3D Muscle Heatmap (${_showBackView ? "Posterior" : "Anterior"})',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            color: Colors.white,
+                          ),
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: _flip3DBody,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: primary,
                   side: BorderSide(color: primary),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   visualDensity: VisualDensity.compact,
                 ),
-                icon: const Icon(Icons.threed_rotation, size: 16),
-                label: Text(widget.isFa ? 'چرخش 3D بدن' : 'Rotate 3D'),
+                icon: const Icon(Icons.threed_rotation, size: 15),
+                label: Text(
+                  widget.isFa ? 'چرخش 3D بدن' : 'Rotate 3D',
+                  style: const TextStyle(fontSize: 11),
+                ),
               ),
             ],
           ),
@@ -699,7 +730,6 @@ class _Interactive3DMuscleAnatomyState
                   height: 270,
                   child: Row(
                     children: [
-                      // رندر وکتور آناتومیک بدنساز V-Taper با خطوط اسکنر سایبرنتیک
                       Expanded(
                         flex: 5,
                         child: CustomPaint(
@@ -711,8 +741,7 @@ class _Interactive3DMuscleAnatomyState
                           child: const SizedBox.expand(),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      // دکمههای کپسولی انتخاب سریع عضلات
+                      const SizedBox(width: 10),
                       Expanded(
                         flex: 5,
                         child: Column(
@@ -726,7 +755,7 @@ class _Interactive3DMuscleAnatomyState
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 220),
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 8),
+                                    horizontal: 12, vertical: 8),
                                 decoration: BoxDecoration(
                                   gradient: isActive
                                       ? LinearGradient(
@@ -771,14 +800,14 @@ class _Interactive3DMuscleAnatomyState
                                             : null,
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
                                         widget.isFa
                                             ? (m['fa'] as String)
                                             : (m['en'] as String),
                                         style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 11.5,
                                           fontWeight: isActive
                                               ? FontWeight.w800
                                               : FontWeight.w500,
@@ -822,13 +851,11 @@ class _Body3DSilhouettePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
 
-    // ۱. رسم شبکه هولوگرافیک سایبرنتیک پشت کاراکتر
     final gridPaint = Paint()
       ..color = glowColor.withOpacity(0.08)
       ..strokeWidth = 1;
     for (double y = 20; y < size.height; y += 28) {
-      canvas.drawLine(
-          Offset(cx - 75, y), Offset(cx + 75, y), gridPaint);
+      canvas.drawLine(Offset(cx - 75, y), Offset(cx + 75, y), gridPaint);
     }
     canvas.drawCircle(
       Offset(cx, size.height / 2),
@@ -868,14 +895,11 @@ class _Body3DSilhouettePainter extends CustomPainter {
       canvas.drawPath(path, outlinePaint);
     }
 
-    // ۲. سر و گردن آناتومیک
     final headPath = Path()
       ..addOval(Rect.fromCenter(center: Offset(cx, 22), width: 24, height: 28));
-    canvas.drawPath(
-        headPath, Paint()..color = const Color(0xFF2C3832));
+    canvas.drawPath(headPath, Paint()..color = const Color(0xFF2C3832));
     canvas.drawPath(headPath, outlinePaint);
 
-    // عضله کول (Traps) و گردن
     final trapsPath = Path()
       ..moveTo(cx - 8, 34)
       ..lineTo(cx + 8, 34)
@@ -884,7 +908,6 @@ class _Body3DSilhouettePainter extends CustomPainter {
       ..close();
     drawMusclePath(trapsPath, 'shoulders');
 
-    // ۳. سرشانههای گرد سهبعدی (Deltoids - Left & Right)
     final leftDelt = Path()
       ..moveTo(cx - 26, 44)
       ..quadraticBezierTo(cx - 50, 46, cx - 48, 66)
@@ -898,7 +921,6 @@ class _Body3DSilhouettePainter extends CustomPainter {
     drawMusclePath(leftDelt, 'shoulders');
     drawMusclePath(rightDelt, 'shoulders');
 
-    // ۴. سینه تفکیکشده (Pectorals) یا زیربغل V-Taper (Back Lats)
     if (!isBackView) {
       final leftPec = Path()
         ..moveTo(cx - 2, 45)
@@ -925,7 +947,6 @@ class _Body3DSilhouettePainter extends CustomPainter {
       drawMusclePath(backLats, 'back');
     }
 
-    // ۵. سیکسپک شکم و میانتنه (Abs & Obliques)
     if (!isBackView) {
       final corePath = Path()
         ..moveTo(cx - 22, 78)
@@ -934,7 +955,6 @@ class _Body3DSilhouettePainter extends CustomPainter {
         ..lineTo(cx - 17, 130)
         ..close();
       drawMusclePath(corePath, 'abs');
-      // خطوط تفکیک سیکسپک
       canvas.drawLine(Offset(cx, 78), Offset(cx, 128), outlinePaint);
       canvas.drawLine(Offset(cx - 19, 94), Offset(cx + 19, 94), outlinePaint);
       canvas.drawLine(Offset(cx - 18, 110), Offset(cx + 18, 110), outlinePaint);
@@ -948,7 +968,6 @@ class _Body3DSilhouettePainter extends CustomPainter {
       drawMusclePath(lowerBack, 'back');
     }
 
-    // ۶. بازوها و ساعدهای عضلانی (Biceps / Triceps & Forearms)
     final armMuscle = isBackView ? 'triceps' : 'biceps';
     final leftArm = Path()
       ..moveTo(cx - 46, 66)
@@ -965,7 +984,6 @@ class _Body3DSilhouettePainter extends CustomPainter {
     drawMusclePath(leftArm, armMuscle);
     drawMusclePath(rightArm, armMuscle);
 
-    // ۷. چهارسر ران و همسترینگ (Quads / Hamstrings)
     final leftQuad = Path()
       ..moveTo(cx - 20, 134)
       ..lineTo(cx - 3, 134)
@@ -983,7 +1001,6 @@ class _Body3DSilhouettePainter extends CustomPainter {
     drawMusclePath(leftQuad, 'legs');
     drawMusclePath(rightQuad, 'legs');
 
-    // ۸. ساق پاهای الماسی (Diamond Calves)
     final leftCalf = Path()
       ..moveTo(cx - 21, 202)
       ..lineTo(cx - 8, 202)

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/number_parser.dart';
 import 'branding_model.dart';
 
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('SharedPreferences must be initialized in main.dart');
+  throw UnimplementedError(
+      'SharedPreferences must be initialized in main.dart');
 });
 
 final brandingProvider =
@@ -24,14 +26,30 @@ class BrandingNotifier extends StateNotifier<BrandingConfig> {
     final isDark = _prefs.getBool('is_dark') ?? true;
     final langCode = _prefs.getString('lang_code') ?? 'fa';
 
+    String savedGym = _prefs.getString('gym_name') ?? 'باشگاه تخصصی MAX GYM';
+    if (savedGym == 'آکادمی تخصصی فیتنس پرو') {
+      savedGym = 'باشگاه تخصصی MAX GYM';
+    }
+
+    String savedCoach = _prefs.getString('coach_name') ?? 'مربی ارشد مکسجیم';
+    if (savedCoach == 'مربی حرفهای' || savedCoach == 'مربی حرفهای') {
+      savedCoach = 'مربی ارشد مکسجیم';
+    }
+
+    String savedSocial = _prefs.getString('social_handle') ?? '@maxgym_official';
+    if (savedSocial == '@pro_coach_fitness') {
+      savedSocial = '@maxgym_official';
+    }
+
     state = BrandingConfig(
-      coachName: _prefs.getString('coach_name') ?? 'مربی حرفهای',
-      coachCredentials: _prefs.getString('coach_credentials') ??
-          'مربی رسمی فدراسیون بدنسازی و متخصص تغذیه ورزشی',
-      gymName: _prefs.getString('gym_name') ?? 'آکادمی تخصصی فیتنس پرو',
-      socialHandle: _prefs.getString('social_handle') ?? '@pro_coach_fitness',
+      coachName: savedCoach.toCleanPersian(),
+      coachCredentials: (_prefs.getString('coach_credentials') ??
+              'مربی رسمی بدنسازی و متخصص تغذیه ورزشی | MAX GYM')
+          .toCleanPersian(),
+      gymName: savedGym.toCleanPersian(),
+      socialHandle: savedSocial,
       logoPath: _prefs.getString('logo_path'),
-      colorPresetId: _prefs.getString('color_preset_id') ?? 'neon_volt',
+      colorPresetId: _prefs.getString('color_preset_id') ?? 'maxgym_venom',
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       locale: Locale(langCode),
       defaultTuitionFee: _prefs.getDouble('tuition_fee') ?? 800000,
@@ -43,9 +61,10 @@ class BrandingNotifier extends StateNotifier<BrandingConfig> {
 
   Future<void> updateBranding(BrandingConfig newConfig) async {
     state = newConfig;
-    await _prefs.setString('coach_name', newConfig.coachName);
-    await _prefs.setString('coach_credentials', newConfig.coachCredentials);
-    await _prefs.setString('gym_name', newConfig.gymName);
+    await _prefs.setString('coach_name', newConfig.coachName.toCleanPersian());
+    await _prefs.setString(
+        'coach_credentials', newConfig.coachCredentials.toCleanPersian());
+    await _prefs.setString('gym_name', newConfig.gymName.toCleanPersian());
     await _prefs.setString('social_handle', newConfig.socialHandle);
     if (newConfig.logoPath != null) {
       await _prefs.setString('logo_path', newConfig.logoPath!);

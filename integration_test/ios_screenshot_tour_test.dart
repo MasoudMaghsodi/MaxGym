@@ -71,7 +71,6 @@ void main() {
       await saveSnap('05_ios_athletes_list_glass');
 
       // 1RM Calculator
-      final calcIcon = find.byIcon(Icons.calculate);
       final calcFallback = find.byTooltip('ماشینحساب 1RM');
       if (calcFallback.evaluate().isNotEmpty) {
         await tester.tap(calcFallback);

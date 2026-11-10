@@ -28,6 +28,35 @@ extension PersianNumberSanitizer on String {
     return val.clamp(min, max);
   }
 
+  /// اصلاح خودکار نیم‌فاصله‌ها و کلمات چسبیده فارسی (حتی برای داده‌های ذخیره‌شده قدیمی در دیتابیس)
+  String toCleanPersian() {
+    if (isEmpty) return this;
+    return replaceAll('سهشنبه', 'سه‌شنبه')
+        .replaceAll('پشتبازو', 'پشت‌بازو')
+        .replaceAll('جلوبازو', 'جلو‌بازو')
+        .replaceAll('میانوعده', 'میان‌وعده')
+        .replaceAll('میانتنه', 'میان‌تنه')
+        .replaceAll('حرفهای', 'حرفه‌ای')
+        .replaceAll('برنامهها', 'برنامه‌ها')
+        .replaceAll('قالبهای', 'قالب‌های')
+        .replaceAll('مکملها', 'مکمل‌ها')
+        .replaceAll('جایگزینها', 'جایگزین‌ها')
+        .replaceAll('سایزگیریها', 'سایزگیری‌ها')
+        .replaceAll('درشتمغذیها', 'درشت‌مغذی‌ها')
+        .replaceAll('ریزمغذیها', 'ریز‌مغذی‌ها')
+        .replaceAll('ثبتشده', 'ثبت‌شده')
+        .replaceAll('نکردهاند', 'نکرده‌اند')
+        .replaceAll('سهبعدی', 'سه‌بعدی')
+        .replaceAll('هیتمپ', 'هیت‌مپ')
+        .replaceAll('تکدست', 'تک‌دست')
+        .replaceAll('تکپا', 'تک‌پا')
+        .replaceAll('پروتئین وی', 'پروتئین وی')
+        .replaceAll('گوجهفرنگی', 'گوجه‌فرنگی')
+        .replaceAll('سیبزمینی', 'سیب‌زمینی')
+        .replaceAll('کمچرب', 'کم‌چرب')
+        .replaceAll('آبپز', 'آب‌پز');
+  }
+
   /// سپر امنیتی ضد تزریق (Anti-XSS, Anti-SQLi, Anti-Prompt-Injection & Unicode Bidi Sanitizer)
   String toSanitizedText({int maxLength = 250}) {
     var s = trim();
@@ -38,13 +67,13 @@ extension PersianNumberSanitizer on String {
         RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u202A-\u202E\u2066-\u2069]'),
         '');
 
-    // ۲. خنثیسازی تگهای HTML/Script و دستورات خطرناک
+    // ۲. خنثی‌سازی تگ‌های HTML/Script و دستورات خطرناک
     s = s
         .replaceAll(RegExp(r'<\s*script[^>]*>', caseSensitive: false), '')
         .replaceAll(RegExp(r'<\s*/\s*script\s*>', caseSensitive: false), '')
         .replaceAll(RegExp(r'javascript\s*:', caseSensitive: false), '');
 
-    // ۳. خنثیسازی الگوهای رایج Prompt Injection
+    // ۳. خنثی‌سازی الگوهای رایج Prompt Injection
     s = s.replaceAll(
       RegExp(
         r'(ignore\s+all\s+previous\s+instructions|system\s+prompt\s*:|you\s+are\s+now\s+in\s+developer\s+mode)',
@@ -61,7 +90,7 @@ extension PersianNumberSanitizer on String {
 }
 
 extension NumberCurrencyFormatter on num {
-  /// فرمت سهرقمی اعداد مالی (مثلاً 1700000 -> 1,700,000)
+  /// فرمت سه‌رقمی اعداد مالی (مثلاً 1700000 -> 1,700,000)
   String toPriceFormat() {
     final intVal = round();
     final str = intVal.abs().toString();
