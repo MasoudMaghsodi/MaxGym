@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -242,10 +243,6 @@ class PdfExportEngine {
       final bytes = await pdf.save();
       final fileName = buildDynamicFileName(athlete, program.startDate);
 
-      final tempDir = await getTemporaryDirectory();
-      tempPdfFile = File(p.join(tempDir.path, fileName));
-      await tempPdfFile.writeAsBytes(bytes, flush: true);
-
       final caption = isRtl
           ? 'سلام ${athlete.firstName} عزیز 🌟\n'
               'فایل برنامه تخصصی دوره جدیدت (${program.title}) تاریخ $shamsiDate آماده شد.\n'
@@ -260,11 +257,24 @@ class PdfExportEngine {
         Navigator.of(context).pop();
       }
 
-      await Share.shareXFiles(
-        [XFile(tempPdfFile.path, name: fileName, mimeType: 'application/pdf')],
-        text: caption,
-        subject: fileName,
-      );
+      if (kIsWeb) {
+        // در نسخه وب و آیفون (PWA) مستقیماً از بایت‌های حافظه دانلود/Share می‌شود
+        await Share.shareXFiles(
+          [XFile.fromData(bytes, name: fileName, mimeType: 'application/pdf')],
+          text: caption,
+          subject: fileName,
+        );
+      } else {
+        final tempDir = await getTemporaryDirectory();
+        tempPdfFile = File(p.join(tempDir.path, fileName));
+        await tempPdfFile.writeAsBytes(bytes, flush: true);
+
+        await Share.shareXFiles(
+          [XFile(tempPdfFile.path, name: fileName, mimeType: 'application/pdf')],
+          text: caption,
+          subject: fileName,
+        );
+      }
     } catch (e) {
       if (context.mounted) {
         Navigator.of(context).pop();

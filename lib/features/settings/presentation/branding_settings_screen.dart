@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -266,7 +267,8 @@ class _BrandingSettingsScreenState
                           radius: 40,
                           backgroundColor:
                               theme.colorScheme.primary.withOpacity(0.15),
-                          backgroundImage: config.logoPath != null &&
+                          backgroundImage: !kIsWeb &&
+                                  config.logoPath != null &&
                                   File(config.logoPath!).existsSync()
                               ? FileImage(File(config.logoPath!))
                               : null,

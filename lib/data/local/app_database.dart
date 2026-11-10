@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:sqlite3/sqlite3.dart';
+import 'sqlite_native.dart'
+    if (dart.library.js_interop) 'sqlite_web_stub.dart'
+    if (dart.library.html) 'sqlite_web_stub.dart';
 import 'package:uuid/uuid.dart';
 
 import 'database_models.dart';
@@ -461,6 +464,9 @@ class LocalAppDatabase {
   LocalAppDatabase._(this._db);
 
   static Future<LocalAppDatabase> init() async {
+    if (kIsWeb) {
+      return initInMemoryForTesting();
+    }
     final dir = await getApplicationDocumentsDirectory();
     final dbPath = p.join(dir.path, 'pro_coach_offline_v1.sqlite');
     final db = sqlite3.open(dbPath);
