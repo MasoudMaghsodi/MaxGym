@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/config/maxgym_brand_config.dart';
 import '../../core/config/supabase_config.dart';
@@ -206,6 +207,14 @@ class _MaxGymDownloadAndPwaHubScreenState
                     child: ElevatedButton.icon(
                       onPressed: () async {
                         await Clipboard.setData(ClipboardData(text: _apkUrl));
+                        try {
+                          final uri = Uri.parse(_apkUrl);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri,
+                                mode: LaunchMode.externalApplication);
+                            return;
+                          }
+                        } catch (_) {}
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -219,8 +228,8 @@ class _MaxGymDownloadAndPwaHubScreenState
                       },
                       icon: const Icon(LucideIcons.download),
                       label: Text(isFa
-                          ? 'کپی و دریافت لینک مستقیم APK اندروید'
-                          : 'Copy Direct Android APK Link'),
+                          ? 'دانلود مستقیم آخرین نسخه اندروید (APK)'
+                          : 'Download Direct Android APK'),
                     ),
                   ),
                 ],

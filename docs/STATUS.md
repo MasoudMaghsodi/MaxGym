@@ -58,6 +58,9 @@
     - Mandatory profile completion gate (`_MandatoryAthleteProfileCompletionGate`) enforcing required biometrics before unlocking training.
     - Zero-battery pure text chat (`PureTextChatView`) with lifecycle pausing via `WidgetsBindingObserver`.
     - Dual Login Screen (`CoachAuthScreen`) toggling seamlessly between Coach Mode and Athlete Mode (via 6-character access code `PC-XXXXXX`), with luxury widescreen (≥900px) split-screen brand showcase, responsive AppBar, and direct Master PIN Super-Admin shortcut.
+    - Persistent Web/iOS PWA SQLite stub syncing with LocalStorage across browser refreshes (`MAXGYM_WEB_PERSISTENT_SQLITE_V1`).
+    - 3D Visuals & Gamification: `MaxGym3DSplashScreen`, `MaxGymResponsiveScaffold` NavigationRail, `MaxGym3DTiltCard` stats, `Interactive3DMuscleAnatomy` in both Coach Builder and Athlete Portal, `MaxGym Champions Leaderboard`, and `Trainer Smart Insights`.
+    - Direct 1-Click Handlers: Direct APK downloads and WhatsApp deep-linking via `url_launcher`.
     - Recent Apps background screenshot privacy shield (`_SecurityGateWrapperState`) covering financial/athlete data when backgrounded.
     - Cloud pagination (`.range(offset, offset + pageSize - 1)`) in `SupabaseSyncService` overcoming PostgREST 1000 row limit.
     - Automatic download and bilingual caching of all 873 exercises from GitHub CDN (`ensureGlobal800ExerciseLibraryLoaded`).

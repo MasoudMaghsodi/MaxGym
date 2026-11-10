@@ -1,4 +1,6 @@
 import 'dart:collection';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Row extends MapBase<String, dynamic> {
   final Map<String, dynamic> _data;
@@ -50,7 +52,8 @@ class PreparedStatement {
 }
 
 class Database {
-  final Map<String, Map<String, Map<String, dynamic>>> _tables = {
+  static const _webStorageKey = 'MAXGYM_WEB_PERSISTENT_SQLITE_V1';
+  static final Map<String, Map<String, Map<String, dynamic>>> _tables = {
     'athletes': {},
     'measurement_logs': {},
     'programs': {},
@@ -61,20 +64,56 @@ class Database {
     'custom_foods_catalog': {},
     'custom_supplements_catalog': {},
   };
+  static bool _loadedFromDisk = false;
+
+  Database() {
+    _restoreFromBrowserStorage();
+  }
+
+  Future<void> _restoreFromBrowserStorage() async {
+    if (_loadedFromDisk) return;
+    _loadedFromDisk = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_webStorageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        decoded.forEach((table, rowsMap) {
+          if (rowsMap is Map<String, dynamic>) {
+            _tables[table] = rowsMap.map(
+              (k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)),
+            );
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persistToBrowserStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_webStorageKey, jsonEncode(_tables));
+    } catch (_) {}
+  }
 
   void execute(String sql, [List<Object?> parameters = const []]) {
     final s = sql.trim();
     final upper = s.toUpperCase();
 
     if (upper.startsWith('DELETE FROM ')) {
-      final match = RegExp(r'DELETE\s+FROM\s+(\w+)', caseSensitive: false).firstMatch(s);
+      final match =
+          RegExp(r'DELETE\s+FROM\s+(\w+)', caseSensitive: false).firstMatch(s);
       if (match != null) {
         final table = match.group(1)!;
         if (parameters.isNotEmpty && upper.contains('WHERE ID = ?')) {
           _tables[table]?.remove(parameters.first.toString());
+        } else if (parameters.isNotEmpty &&
+            upper.contains('WHERE ATHLETE_ID = ?')) {
+          _tables[table]?.remove(parameters.first.toString());
         } else if (!upper.contains('WHERE')) {
           _tables[table]?.clear();
         }
+        _persistToBrowserStorage();
       }
       return;
     }
@@ -86,11 +125,8 @@ class Database {
       ).firstMatch(s);
       if (match != null) {
         final table = match.group(1)!;
-        final cols = match
-            .group(2)!
-            .split(',')
-            .map((e) => e.trim())
-            .toList();
+        final cols =
+            match.group(2)!.split(',').map((e) => e.trim()).toList();
         final rowMap = <String, dynamic>{};
         for (int i = 0; i < cols.length && i < parameters.length; i++) {
           rowMap[cols[i]] = parameters[i];
@@ -102,13 +138,15 @@ class Database {
             return;
           }
           _tables[table]![pk] = rowMap;
+          _persistToBrowserStorage();
         }
       }
       return;
     }
 
     if (upper.startsWith('UPDATE ')) {
-      final match = RegExp(r'UPDATE\s+(\w+)', caseSensitive: false).firstMatch(s);
+      final match =
+          RegExp(r'UPDATE\s+(\w+)', caseSensitive: false).firstMatch(s);
       if (match != null && parameters.isNotEmpty) {
         final table = match.group(1)!;
         final pk = parameters.last.toString();
@@ -131,6 +169,7 @@ class Database {
           if (upper.contains('SET ACCESS_CODE = ?')) {
             existing['access_code'] = parameters[0];
           }
+          _persistToBrowserStorage();
         }
       }
     }
@@ -141,7 +180,8 @@ class Database {
     final upper = s.toUpperCase();
 
     if (upper.contains('COUNT(*)')) {
-      final match = RegExp(r'FROM\s+(\w+)', caseSensitive: false).firstMatch(s);
+      final match =
+          RegExp(r'FROM\s+(\w+)', caseSensitive: false).firstMatch(s);
       final table = match?.group(1) ?? '';
       final cnt = _tables[table]?.length ?? 0;
       return ResultSet([Row({'cnt': cnt})]);
@@ -150,7 +190,9 @@ class Database {
     final match = RegExp(r'FROM\s+(\w+)', caseSensitive: false).firstMatch(s);
     if (match == null) return ResultSet([]);
     final table = match.group(1)!;
-    var rows = (_tables[table]?.values ?? const []).map((m) => Map<String, dynamic>.from(m)).toList();
+    var rows = (_tables[table]?.values ?? const [])
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
 
     if (upper.contains('IS_DELETED = 0')) {
       rows = rows.where((r) => (r['is_deleted'] ?? 0) == 0).toList();
@@ -173,9 +215,13 @@ class Database {
     if (upper.contains('WHERE TARGET_MUSCLE = ?') && parameters.isNotEmpty) {
       rows = rows.where((r) => r['target_muscle'] == parameters.first).toList();
     }
-    if (upper.contains('UPPER(ACCESS_CODE) = UPPER(?)') && parameters.isNotEmpty) {
+    if (upper.contains('UPPER(ACCESS_CODE) = UPPER(?)') &&
+        parameters.isNotEmpty) {
       final code = parameters.first.toString().toUpperCase().trim();
-      rows = rows.where((r) => (r['access_code'] ?? '').toString().toUpperCase().trim() == code).toList();
+      rows = rows
+          .where((r) =>
+              (r['access_code'] ?? '').toString().toUpperCase().trim() == code)
+          .toList();
     }
 
     return ResultSet(rows.map((e) => Row(e)).toList());

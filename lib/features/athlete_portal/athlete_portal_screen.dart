@@ -12,6 +12,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/theme/branding_provider.dart';
 import '../../core/utils/number_parser.dart';
+import '../../core/widgets/maxgym_3d_widgets.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/database_models.dart';
 import '../athletes/domain/scientific_bio_calculator.dart';
@@ -535,6 +536,11 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
             ),
           )
         else ...[
+          Interactive3DMuscleAnatomy(
+            activeMuscles: activeDay.targetMuscles,
+            isFa: isFa,
+          ),
+          const SizedBox(height: 16),
           ...List.generate(activeDay.exercises.length, (idx) {
             final ex = activeDay.exercises[idx];
             final isDone = _completedExerciseIds.contains(ex.id);

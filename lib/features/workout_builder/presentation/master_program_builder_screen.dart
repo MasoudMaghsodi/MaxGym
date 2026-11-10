@@ -11,6 +11,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/branding_provider.dart';
 import '../../../core/utils/number_parser.dart';
+import '../../../core/widgets/maxgym_3d_widgets.dart';
 import '../../../data/local/app_database.dart';
 import '../../../data/local/database_models.dart';
 import '../../../data/local/seed_catalog_data.dart';
@@ -512,6 +513,31 @@ class _MasterProgramBuilderScreenState
                   ),
                 )
               else ...[
+                Interactive3DMuscleAnatomy(
+                  activeMuscles: activeDay.targetMuscles,
+                  isFa: isFa,
+                  onMuscleTapped: (muscleId) {
+                    final updatedMuscles =
+                        List<String>.from(activeDay.targetMuscles);
+                    if (updatedMuscles.contains(muscleId)) {
+                      updatedMuscles.remove(muscleId);
+                    } else {
+                      updatedMuscles.add(muscleId);
+                    }
+                    setState(() {
+                      _days[_selectedDayIndex] = WorkoutDayPlan(
+                        dayNumber: activeDay.dayNumber,
+                        dayNameFa: activeDay.dayNameFa,
+                        dayNameEn: activeDay.dayNameEn,
+                        isRestDay: false,
+                        targetMuscles: updatedMuscles,
+                        exercises:
+                            List<WorkoutItemEntity>.from(activeDay.exercises),
+                      );
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,

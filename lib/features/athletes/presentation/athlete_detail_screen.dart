@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
@@ -457,19 +458,27 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
             onPressed: () => _showBeforeAfterStorySheet(athlete, isFa),
           ),
           IconButton(
-            tooltip: isFa ? 'کپی لینک مستقیم چت واتساپ' : 'WhatsApp Direct Link',
+            tooltip: isFa ? 'باز کردن چت واتساپ' : 'Open WhatsApp Chat',
             icon: const Icon(LucideIcons.messageCircle),
             onPressed: () async {
-              final cleanPhone =
-                  athlete.phone.replaceAll(RegExp(r'^0'), '98');
-              final waLink = 'https://wa.me/$cleanPhone';
-              await Clipboard.setData(ClipboardData(text: waLink));
+              final cleanPhone = athlete.phone
+                  .replaceAll(RegExp(r'^0'), '98')
+                  .replaceAll(RegExp(r'\D'), '');
+              final waUri = Uri.parse('https://wa.me/$cleanPhone');
+              try {
+                if (await canLaunchUrl(waUri)) {
+                  await launchUrl(waUri, mode: LaunchMode.externalApplication);
+                  return;
+                }
+              } catch (_) {}
+              await Clipboard.setData(
+                  ClipboardData(text: 'https://wa.me/$cleanPhone'));
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(isFa
-                        ? 'لینک مستقیم واتساپ شاگرد کپی شد: $waLink'
-                        : 'WhatsApp direct link copied: $waLink'),
+                        ? 'لینک مستقیم واتساپ شاگرد کپی شد.'
+                        : 'WhatsApp direct link copied.'),
                   ),
                 );
               }

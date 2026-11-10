@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../../core/config/maxgym_brand_config.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/branding_provider.dart';
+import '../../../core/widgets/maxgym_3d_widgets.dart';
 import '../../../data/local/app_database.dart';
 import '../../admin_and_download/maxgym_hub_and_admin_screen.dart';
 import '../../athletes/presentation/athlete_detail_screen.dart';
 import '../../athletes/presentation/athlete_onboarding_sheet.dart';
 import '../../athletes/presentation/athletes_provider.dart';
-import '../../workout_builder/presentation/master_program_builder_screen.dart';
 
 class CoachDashboardScreen extends ConsumerStatefulWidget {
   final VoidCallback onTriggerCloudSync;
@@ -31,7 +32,7 @@ class CoachDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
-  bool _isPrivacyMode = false;
+  bool _hideFinancialFigures = false;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +44,6 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
     final isFa = s.isFa;
     final theme = Theme.of(context);
 
-    // محاسبه شاخص‌های کلیدی مالی و انقضای برنامه‌ها
     double totalRevenue = 0;
     double totalPendingDebt = 0;
     final List<FullProgramEntity> expiringPrograms = [];
@@ -60,32 +60,64 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
       }
     }
 
+    // محاسبه لیدربرد قهرمانان باشگاه مکس (بر اساس تعداد جلسات تمرین ثبت‌شده و نظم)
+    final List<Map<String, dynamic>> leaderboard = [];
+    final List<AthleteEntity> inactiveAthletesAlert = [];
+
+    for (final a in athletes) {
+      final logs = db.getWorkoutLogsForAthlete(a.id);
+      final totalWater =
+          logs.fold<int>(0, (sum, item) => sum + item.waterGlasses);
+      leaderboard.add({
+        'athlete': a,
+        'sessions': logs.length,
+        'water': totalWater,
+        'score': (logs.length * 10) + totalWater,
+      });
+
+      if (logs.isEmpty ||
+          DateTime.now().difference(logs.first.loggedAt).inDays >= 4) {
+        inactiveAthletesAlert.add(a);
+      }
+    }
+    leaderboard.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(branding.gymName, style: const TextStyle(fontSize: 16)),
-            Text(
-              branding.coachName,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                MaxGymBrandConfig.bundledLogoAsset,
+                width: 38,
+                height: 38,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(
+                  LucideIcons.dumbbell,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(branding.gymName, style: const TextStyle(fontSize: 16)),
+                  Text(
+                    branding.coachName,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: 'مخفی/نمایش مبالغ مالی در حضور شاگرد',
-            icon: Icon(
-              _isPrivacyMode ? LucideIcons.eyeOff : LucideIcons.eye,
-              color: _isPrivacyMode ? AppColors.warning : null,
-            ),
-            onPressed: () => setState(() => _isPrivacyMode = !_isPrivacyMode),
-          ),
-          IconButton(
-            tooltip: isFa
-                ? 'مرکز دانلود و PWA / سوپر-ادمین'
-                : 'Download Hub & Admin',
-            icon: const Icon(LucideIcons.downloadCloud),
+            tooltip: isFa ? 'مرکز دانلود و کنسول سوپر-ادمین' : 'Download & Admin Hub',
+            icon: const Icon(LucideIcons.crown, color: AppColors.warning),
             onPressed: () {
               Navigator.push(
                 context,
@@ -94,6 +126,16 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                 ),
               );
             },
+          ),
+          IconButton(
+            tooltip: isFa
+                ? 'مخفی/نمایش مبالغ مالی در حضور شاگرد'
+                : 'Toggle Privacy Mode',
+            icon: Icon(
+              _hideFinancialFigures ? LucideIcons.eyeOff : LucideIcons.eye,
+            ),
+            onPressed: () =>
+                setState(() => _hideFinancialFigures = !_hideFinancialFigures),
           ),
           IconButton(
             tooltip: isFa ? 'همگام‌سازی ابری با Supabase' : 'Sync with Cloud',
@@ -106,19 +148,19 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ۱. کارت‌های آماری بالای داشبورد
+          // ۱. کارت‌های سه‌بعدی (3D Tilt Cards) آمار کلیدی باشگاه مکس
           Row(
             children: [
-              _statCard(
+              _stat3DCard(
                 title: isFa ? 'ورزشکاران فعال' : 'Active Athletes',
                 value: '${athletes.length}',
                 icon: LucideIcons.users,
                 color: theme.colorScheme.primary,
               ),
               const SizedBox(width: 12),
-              _statCard(
+              _stat3DCard(
                 title: isFa ? 'درآمد دریافت‌شده' : 'Collected Revenue',
-                value: _isPrivacyMode
+                value: _hideFinancialFigures
                     ? '••••••'
                     : totalRevenue.toStringAsFixed(0),
                 icon: LucideIcons.wallet,
@@ -129,16 +171,16 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _statCard(
+              _stat3DCard(
                 title: isFa ? 'برنامه‌های رو به اتمام' : 'Expiring Soon',
                 value: '${expiringPrograms.length}',
                 icon: LucideIcons.clock,
                 color: AppColors.warning,
               ),
               const SizedBox(width: 12),
-              _statCard(
+              _stat3DCard(
                 title: isFa ? 'مطالبات / بدهکاران' : 'Pending Debt',
-                value: _isPrivacyMode
+                value: _hideFinancialFigures
                     ? '••••••'
                     : totalPendingDebt.toStringAsFixed(0),
                 icon: LucideIcons.alertCircle,
@@ -146,9 +188,98 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          // ۲. هشدار برنامه‌های رو به اتمام یا منقضی‌شده
+          // ۲. لیدربرد قهرمانان و منظم‌ترین ورزشکاران باشگاه مکس (Gamification & Leaderboard)
+          if (leaderboard.isNotEmpty) ...[
+            Row(
+              children: [
+                const Icon(LucideIcons.trophy,
+                    color: Color(0xFFFFD700), size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  isFa
+                      ? 'لیدربرد منظم‌ترین قهرمانان باشگاه MAX GYM'
+                      : 'MAX GYM Champions Leaderboard',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: List.generate(
+                    leaderboard.take(3).length,
+                    (idx) {
+                      final entry = leaderboard[idx];
+                      final ath = entry['athlete'] as AthleteEntity;
+                      final medals = ['🥇', '🥈', '🥉'];
+                      return ListTile(
+                        dense: true,
+                        leading: Text(medals[idx],
+                            style: const TextStyle(fontSize: 22)),
+                        title: Text(ath.fullName,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(isFa
+                            ? '${entry['sessions']} جلسه ثبت‌شده • ${entry['water']} لیوان آبرسانی'
+                            : '${entry['sessions']} Sessions • ${entry['water']} Glasses Water'),
+                        trailing: Chip(
+                          label: Text('${entry['score']} PTS'),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+          ],
+
+          // ۳. دستیار هوشمند پیگیری شاگردان غیرفعال (Trainer Smart Insights)
+          if (inactiveAthletesAlert.isNotEmpty) ...[
+            Row(
+              children: [
+                Icon(LucideIcons.sparkles,
+                    color: theme.colorScheme.primary, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  isFa
+                      ? 'هوش تجاری مربی (نیازمند پیگیری تمرین):'
+                      : 'Smart Trainer Insights (Follow-up Needed):',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: ListTile(
+                leading: const Icon(LucideIcons.activity,
+                    color: Colors.orangeAccent),
+                title: Text(
+                  isFa
+                      ? '${inactiveAthletesAlert.length} ورزشکار بیش از ۴ روز است گزارش تمرین ثبت نکرده‌اند'
+                      : '${inactiveAthletesAlert.length} athletes haven\'t logged workouts in 4+ days',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                subtitle: Text(
+                  inactiveAthletesAlert
+                      .take(4)
+                      .map((a) => a.fullName)
+                      .join(' ، '),
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+          ],
+
+          // ۴. برنامه‌های رو به اتمام
           Text(
             s.tr('expiring_programs'),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -204,7 +335,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
 
           const SizedBox(height: 20),
 
-          // ۳. لیست بدهکاران مالی
+          // ۵. بدهکاران مالی
           Text(
             s.tr('unpaid_invoices'),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -245,44 +376,23 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                       color: AppColors.danger),
                   title: Text(athlete.fullName,
                       style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(p.title),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _isPrivacyMode
-                            ? '••••••'
-                            : '${p.remainingDebt.toStringAsFixed(0)} T',
-                        style: const TextStyle(
-                          color: AppColors.danger,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.success,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        onPressed: () {
-                          db.settleProgramDebt(p.id);
-                          setState(() {});
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(isFa
-                                  ? 'بدهی ${athlete.fullName} با موفقیت تسویه شد.'
-                                  : 'Debt settled for ${athlete.fullName}'),
-                            ),
-                          );
-                        },
-                        child: Text(isFa ? 'تسویه شد' : 'Settle',
-                            style: const TextStyle(fontSize: 12)),
-                      ),
-                    ],
+                  subtitle: Text(
+                    _hideFinancialFigures
+                        ? '••••••'
+                        : '${p.remainingDebt.toStringAsFixed(0)} T',
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  trailing: OutlinedButton.icon(
+                    onPressed: () {
+                      db.settleProgramDebt(p.id);
+                      setState(() {});
+                    },
+                    icon: const Icon(LucideIcons.checkCircle2,
+                        size: 16, color: AppColors.success),
+                    label: Text(isFa ? 'تسویه شد' : 'Settle'),
                   ),
                 ),
               );
@@ -306,41 +416,43 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
     );
   }
 
-  Widget _statCard({
+  Widget _stat3DCard({
     required String title,
     required String value,
     required IconData icon,
     required Color color,
   }) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.bold, color: color),
-            ),
-            const SizedBox(height: 4),
-            Text(title,
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
+      child: MaxGym3DTiltCard(
+        glowColor: color,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(0.4), width: 1.4),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: color, size: 24),
+              const SizedBox(height: 10),
+              Text(
+                value,
+                style: TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.w900, color: color),
+              ),
+              const SizedBox(height: 4),
+              Text(title,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// صفحه نمایش قالب‌های آماده مربی (Smart Templates Tab)
 class TemplatesScreen extends ConsumerStatefulWidget {
   const TemplatesScreen({super.key});
 
@@ -349,107 +461,6 @@ class TemplatesScreen extends ConsumerStatefulWidget {
 }
 
 class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
-  void _showTemplateActionSheet(
-      BuildContext context, FullProgramEntity template, bool isFa) {
-    final athletes = ref.read(appDatabaseProvider).getAllActiveAthletes();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(LucideIcons.copyCheck),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      template.title,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isFa
-                    ? 'انتخاب ورزشکار جهت اعمال و سفارشی‌سازی این قالب آماده:'
-                    : 'Select an athlete to assign and customize this template:',
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              if (athletes.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  child: Center(
-                    child: Text(
-                      isFa
-                          ? 'هیچ ورزشکاری در سیستم ثبت نشده است. ابتدا یک شاگرد ثبت کنید.'
-                          : 'No athletes found. Please add an athlete first.',
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                )
-              else
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 320),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: athletes.length,
-                    itemBuilder: (c, idx) {
-                      final ath = athletes[idx];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: const CircleAvatar(
-                            child: Icon(LucideIcons.user, size: 18),
-                          ),
-                          title: Text(ath.fullName,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text(
-                            isFa
-                                ? 'وزن: ${ath.weightKg}kg | هدف: ${ath.fitnessGoal}'
-                                : 'Weight: ${ath.weightKg}kg | Goal: ${ath.fitnessGoal}',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          trailing:
-                              const Icon(LucideIcons.chevronRight, size: 18),
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => MasterProgramBuilderScreen(
-                                  athlete: ath,
-                                  initialProgramOrTemplate: template,
-                                  isEditingExisting: false,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final db = ref.watch(appDatabaseProvider);
@@ -483,7 +494,6 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
-                    onTap: () => _showTemplateActionSheet(context, t, isFa),
                     leading: const Icon(LucideIcons.copyCheck),
                     title: Text(t.title,
                         style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -498,13 +508,6 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                       onPressed: () {
                         db.deleteProgramOrTemplate(t.id);
                         setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(isFa
-                                ? 'قالب «${t.title}» حذف شد.'
-                                : 'Template ${t.title} deleted.'),
-                          ),
-                        );
                       },
                     ),
                   ),

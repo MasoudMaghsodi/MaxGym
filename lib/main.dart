@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'core/config/maxgym_brand_config.dart';
 import 'core/config/supabase_config.dart';
 import 'core/constants/app_colors.dart';
 import 'core/localization/app_localizations.dart';
@@ -25,17 +24,10 @@ import 'features/workout_builder/presentation/master_program_builder_screen.dart
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ۰. راه‌اندازی مانیتورینگ سراسری تلمتری کرش و خطاهای سیستم در Supabase
   SupabaseCrashTelemetry.initializeGlobalErrorHandling();
 
-  // ۱. راه‌اندازی SharedPreferences برای برندینگ و تم
   final prefs = await SharedPreferences.getInstance();
-
-  // ۲. راهاندازی دیتابیس آفلاین SQLite به عنوان Single Source of Truth
   final localDb = await LocalAppDatabase.init();
-
-  // ۳. راهاندازی ایمن Supabase با URL و Publishable Key شما (بدون بلاک کردن حالت آفلاین)
   await SupabaseConfig.initializeSafely();
 
   runApp(
@@ -69,7 +61,6 @@ class _ProCoachAppState extends ConsumerState<ProCoachApp> {
   Widget build(BuildContext context) {
     final branding = ref.watch(brandingProvider);
 
-    // اجرای خودکار سینک ابری به محض عبور موفق مربی از گارد امنیتی و تایید ادمین
     ref.listen<SecurityGateState>(securityGateProvider, (previous, next) {
       if (next.status == SecurityGateStatus.authorizedAndActive &&
           previous?.status != SecurityGateStatus.authorizedAndActive) {
@@ -81,7 +72,7 @@ class _ProCoachAppState extends ConsumerState<ProCoachApp> {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: MaxGymBrandConfig.appName,
+      title: 'MAX GYM',
       locale: branding.locale,
       supportedLocales: const [
         Locale('fa'),
@@ -116,7 +107,6 @@ class MainNavigationShell extends ConsumerStatefulWidget {
 class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
   int _selectedIndex = 0;
 
-  /// باز کردن طراح جامع برنامه (تمرین + تغذیه + مکمل + پکیج مالی) برای ورزشکار
   Future<void> _openProgramBuilderForAthlete(AthleteEntity athlete) async {
     await Navigator.push(
       context,
@@ -133,7 +123,6 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
     setState(() {});
   }
 
-  /// انتخاب زبان خروجی PDF (فارسی، انگلیسی یا دوزبانه) و تولید فایل با نام داینامیک شمسی
   void _showPdfLanguageSelectorAndExport(
       AthleteEntity athlete, FullProgramEntity program) {
     final hostContext = context;
@@ -155,8 +144,8 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
             children: [
               Text(
                 isFa
-                    ? 'تولید و اشتراکگذاری PDF اختصاصی'
-                    : 'Export Custom White-Label PDF',
+                    ? 'تولید و اشتراک‌گذاری PDF اختصاصی MAX GYM'
+                    : 'Export Custom MAX GYM PDF',
                 style:
                     const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
               ),
@@ -176,16 +165,14 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
                     : 'Bilingual (Persian + English Terms)'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  if (hostContext.mounted) {
-                    PdfExportEngine.generateAndShareProgramPdf(
-                      context: hostContext,
-                      branding: branding,
-                      athlete: athlete,
-                      program: program,
-                      measurements: measurements,
-                      langMode: PdfLanguageMode.bilingual,
-                    );
-                  }
+                  PdfExportEngine.generateAndShareProgramPdf(
+                    context: hostContext,
+                    branding: branding,
+                    athlete: athlete,
+                    program: program,
+                    measurements: measurements,
+                    langMode: PdfLanguageMode.bilingual,
+                  );
                 },
               ),
               ListTile(
@@ -193,34 +180,31 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
                 title: Text(isFa ? 'فقط فارسی (RTL)' : 'Persian Only (RTL)'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  if (hostContext.mounted) {
-                    PdfExportEngine.generateAndShareProgramPdf(
-                      context: hostContext,
-                      branding: branding,
-                      athlete: athlete,
-                      program: program,
-                      measurements: measurements,
-                      langMode: PdfLanguageMode.persianOnly,
-                    );
-                  }
+                  PdfExportEngine.generateAndShareProgramPdf(
+                    context: hostContext,
+                    branding: branding,
+                    athlete: athlete,
+                    program: program,
+                    measurements: measurements,
+                    langMode: PdfLanguageMode.persianOnly,
+                  );
                 },
               ),
               ListTile(
                 leading: const Icon(LucideIcons.globe),
-                title: Text(
-                    isFa ? 'فقط انگلیسی (بینالمللی - LTR)' : 'English Only (LTR)'),
+                title: Text(isFa
+                    ? 'فقط انگلیسی (بین‌المللی - LTR)'
+                    : 'English Only (LTR)'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  if (hostContext.mounted) {
-                    PdfExportEngine.generateAndShareProgramPdf(
-                      context: hostContext,
-                      branding: branding,
-                      athlete: athlete,
-                      program: program,
-                      measurements: measurements,
-                      langMode: PdfLanguageMode.englishOnly,
-                    );
-                  }
+                  PdfExportEngine.generateAndShareProgramPdf(
+                    context: hostContext,
+                    branding: branding,
+                    athlete: athlete,
+                    program: program,
+                    measurements: measurements,
+                    langMode: PdfLanguageMode.englishOnly,
+                  );
                 },
               ),
             ],
