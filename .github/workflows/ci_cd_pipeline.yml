@@ -73,6 +73,13 @@ jobs:
           channel: 'stable'
           cache: true
       - run: flutter pub get
+      - name: Replace Default Flutter Web Icons with Official MAX GYM Logo
+        run: |
+          cp assets/images/maxgym_logo.jpeg web/favicon.png
+          cp assets/images/maxgym_logo.jpeg web/icons/Icon-192.png
+          cp assets/images/maxgym_logo.jpeg web/icons/Icon-512.png
+          cp assets/images/maxgym_logo.jpeg web/icons/Icon-maskable-192.png
+          cp assets/images/maxgym_logo.jpeg web/icons/Icon-maskable-512.png
       - name: Build Flutter Web PWA
         run: |
           flutter build web --release \

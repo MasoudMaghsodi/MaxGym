@@ -57,7 +57,7 @@
     - Athlete Portal (`AthletePortalScreen`) with interactive workout session tracker, PR weight logger, rest countdown timer, water intake gamified counter, and athlete PDF downloads.
     - Mandatory profile completion gate (`_MandatoryAthleteProfileCompletionGate`) enforcing required biometrics before unlocking training.
     - Zero-battery pure text chat (`PureTextChatView`) with lifecycle pausing via `WidgetsBindingObserver`.
-    - Dual Login Screen (`CoachAuthScreen`) toggling seamlessly between Coach Mode and Athlete Mode (via 6-character access code `PC-XXXXXX`).
+    - Dual Login Screen (`CoachAuthScreen`) toggling seamlessly between Coach Mode and Athlete Mode (via 6-character access code `PC-XXXXXX`), with luxury widescreen (≥900px) split-screen brand showcase, responsive AppBar, and direct Master PIN Super-Admin shortcut.
     - Recent Apps background screenshot privacy shield (`_SecurityGateWrapperState`) covering financial/athlete data when backgrounded.
     - Cloud pagination (`.range(offset, offset + pageSize - 1)`) in `SupabaseSyncService` overcoming PostgREST 1000 row limit.
     - Automatic download and bilingual caching of all 873 exercises from GitHub CDN (`ensureGlobal800ExerciseLibraryLoaded`).
