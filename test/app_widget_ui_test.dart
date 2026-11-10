@@ -118,7 +118,7 @@ void main() {
       loggedInAthlete: incompleteAthlete,
     ));
     await tester.pumpAndSettle();
-    expect(find.text('تکمیل اجباری پرونده ورزشی شما'), findsOneWidget);
+    expect(find.text('تکمیل یکباره پرونده ورزشی شما'), findsOneWidget);
 
     // ۵. تست ورود ورزشکار با پروفایل کامل -> تست کنتور آب و چت متنی با مربی
     final completeAthlete = AthleteEntity(
@@ -145,17 +145,17 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('پنل ورزشکار: سهراب سپهری'), findsOneWidget);
+    expect(find.textContaining('سهراب سپهری'), findsOneWidget);
 
     // رفتن به تب تغذیه و آب در پنل ورزشکار و زدن دکمه +۱ لیوان آب
-    await tester.tap(find.text('تغذیه، مکمل و آب'));
+    await tester.tap(find.text('تغذیه و مکمل'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('+۱ لیوان'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('آب مصرفی امروز: 1 از'), findsOneWidget);
+    expect(find.textContaining('آبرسانی بدن: 1 از'), findsOneWidget);
 
     // رفتن به تب گفتگو با مربی و ارسال پیام متنی خالص
-    await tester.tap(find.text('گفتگو با مربی'));
+    await tester.tap(find.text('چت زنده مربی'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'سلام استاد تمرین امروز عالی بود');
     await tester.testTextInput.receiveAction(TextInputAction.done);

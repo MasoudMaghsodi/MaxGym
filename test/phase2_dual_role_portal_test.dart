@@ -47,7 +47,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('تکمیل اجباری پرونده ورزشی شما'), findsOneWidget);
+      expect(find.text('تکمیل یکباره پرونده ورزشی شما'), findsOneWidget);
       expect(find.byType(ElevatedButton), findsOneWidget);
     });
 
@@ -84,9 +84,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('آرش کمانگیر'), findsOneWidget);
-      expect(find.text('تمرین امروز و رکورد'), findsOneWidget);
-      expect(find.text('تغذیه، مکمل و آب'), findsOneWidget);
-      expect(find.text('گفتگو با مربی'), findsOneWidget);
+      expect(find.text('باشگاه و تمرین'), findsOneWidget);
+      expect(find.text('تغذیه و مکمل'), findsOneWidget);
+      expect(find.text('چت زنده مربی'), findsOneWidget);
     });
 
     testWidgets('CoachAuthScreen toggles smoothly between Coach Mode and Athlete Mode',
@@ -112,7 +112,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('ورود ورزشکار به برنامه آنلاین'), findsOneWidget);
-      expect(find.text('کد اختصاصی ورزشکار (مثلاً PC-849201)'), findsOneWidget);
+      expect(find.text('کد اختصاصی (PC-XXXXXX)، شماره موبایل یا ایمیل ورزشکار'), findsOneWidget);
     });
 
     test('Auto-Draft round-trip serializes and parses FullProgramEntity properly', () {

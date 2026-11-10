@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- Realtime Athlete Portal, Multi-Method Login & PDF Polish:
+  - Enabled 100% Realtime WebSocket streams (`Supabase Realtime .stream()`) across athlete programs, chat messages, and athlete profile sync in `AthletePortalScreen` and `PureTextChatView`, removing manual refresh buttons.
+  - Multi-method athlete login: athletes can now log in via 6-digit access code (`PC-XXXXXX`), phone number, or email across online Supabase RPC and local SQLite.
+  - One-time mandatory profile completion: profile saves directly to Supabase `athletes` table and local SQLite, preventing redundant re-prompts.
+  - Large dual exercise image gallery (135px height start & end positions) with interactive full-screen zoom (`InteractiveViewer`).
+  - Removed unused QR barcode from PDF export in `pdf_export_engine.dart` and expanded exercise image thumbnails to 48x48.
+  - Integrated automatic online Vazirmatn font downloader & cache fallback from GitHub CDN in `pdf_export_engine.dart`.
+  - Resolved `This widget has been unmounted` error during PDF generation in `main.dart` by capturing `hostContext` before bottom sheet dismissal.
+  - Fixed 87px `RenderFlex overflowed` in rest duration chips in `master_program_builder_screen.dart` using a horizontally scrollable chip row.
 - PDF Uniform Border Assertion & Instant Realtime Control:
   - Resolved `box_border.dart: Failed assertion: 'borderRadius == null': A borderRadius can only be given for a uniform Border` in `pdf_export_engine.dart` by switching to uniform borders (`pw.Border.all`).
   - Added Supabase Realtime WebSocket streams (`app_control` and `coach_profiles`) in `security_gate_screen.dart` for sub-second reactive locking and authorization without manual page refreshes.

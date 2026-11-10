@@ -127,7 +127,8 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
   /// انتخاب زبان خروجی PDF (فارسی، انگلیسی یا دوزبانه) و تولید فایل با نام داینامیک شمسی
   void _showPdfLanguageSelectorAndExport(
       AthleteEntity athlete, FullProgramEntity program) {
-    final isFa = AppStrings.of(context).isFa;
+    final hostContext = context;
+    final isFa = AppStrings.of(hostContext).isFa;
     final db = ref.read(appDatabaseProvider);
     final branding = ref.read(brandingProvider);
     final measurements = db.getMeasurementsForAthlete(athlete.id);
@@ -135,7 +136,7 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
         PdfExportEngine.buildDynamicFileName(athlete, program.startDate);
 
     showModalBottomSheet(
-      context: context,
+      context: hostContext,
       builder: (ctx) {
         return Padding(
           padding: const EdgeInsets.all(20),
@@ -155,7 +156,7 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
                 '📄 $previewFileName',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: Theme.of(hostContext).colorScheme.primary,
                 ),
               ),
               const Divider(height: 24),
@@ -166,14 +167,16 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
                     : 'Bilingual (Persian + English Terms)'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  PdfExportEngine.generateAndShareProgramPdf(
-                    context: context,
-                    branding: branding,
-                    athlete: athlete,
-                    program: program,
-                    measurements: measurements,
-                    langMode: PdfLanguageMode.bilingual,
-                  );
+                  if (hostContext.mounted) {
+                    PdfExportEngine.generateAndShareProgramPdf(
+                      context: hostContext,
+                      branding: branding,
+                      athlete: athlete,
+                      program: program,
+                      measurements: measurements,
+                      langMode: PdfLanguageMode.bilingual,
+                    );
+                  }
                 },
               ),
               ListTile(
@@ -181,14 +184,16 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
                 title: Text(isFa ? 'فقط فارسی (RTL)' : 'Persian Only (RTL)'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  PdfExportEngine.generateAndShareProgramPdf(
-                    context: context,
-                    branding: branding,
-                    athlete: athlete,
-                    program: program,
-                    measurements: measurements,
-                    langMode: PdfLanguageMode.persianOnly,
-                  );
+                  if (hostContext.mounted) {
+                    PdfExportEngine.generateAndShareProgramPdf(
+                      context: hostContext,
+                      branding: branding,
+                      athlete: athlete,
+                      program: program,
+                      measurements: measurements,
+                      langMode: PdfLanguageMode.persianOnly,
+                    );
+                  }
                 },
               ),
               ListTile(
@@ -197,14 +202,16 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
                     isFa ? 'فقط انگلیسی (بینالمللی - LTR)' : 'English Only (LTR)'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  PdfExportEngine.generateAndShareProgramPdf(
-                    context: context,
-                    branding: branding,
-                    athlete: athlete,
-                    program: program,
-                    measurements: measurements,
-                    langMode: PdfLanguageMode.englishOnly,
-                  );
+                  if (hostContext.mounted) {
+                    PdfExportEngine.generateAndShareProgramPdf(
+                      context: hostContext,
+                      branding: branding,
+                      athlete: athlete,
+                      program: program,
+                      measurements: measurements,
+                      langMode: PdfLanguageMode.englishOnly,
+                    );
+                  }
                 },
               ),
             ],

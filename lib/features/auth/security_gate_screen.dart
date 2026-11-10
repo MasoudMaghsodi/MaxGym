@@ -280,9 +280,9 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     state = const SecurityGateState(status: SecurityGateStatus.unauthenticated);
   }
 
-  /// ورود ورزشکار با کد دعوت ۶ رقمی اختصاصی (آنلاین با RPC + پشتیبانی آفلاین)
+  /// ورود ورزشکار با کد دعوت ۶ رقمی اختصاصی، شماره تماس یا ایمیل (آنلاین با RPC + پشتیبانی آفلاین)
   Future<void> signInAthleteByCode(String rawCode) async {
-    final code = rawCode.trim().toUpperCase();
+    final code = rawCode.trim();
     if (code.isEmpty) return;
 
     state = const SecurityGateState(status: SecurityGateStatus.loading);
@@ -381,7 +381,8 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
             ));
           }
 
-          await _secureStore.write(key: _kCachedAthleteCode, value: code);
+          await _secureStore.write(
+              key: _kCachedAthleteCode, value: athlete.accessCode);
           state = SecurityGateState(
             status: SecurityGateStatus.athletePortalActive,
             loggedInAthlete: athlete,
@@ -394,7 +395,8 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     // بررسی دیتابیس محلی در صورت آفلاین بودن
     final localAthlete = db.getAthleteByAccessCode(code);
     if (localAthlete != null) {
-      await _secureStore.write(key: _kCachedAthleteCode, value: code);
+      await _secureStore.write(
+          key: _kCachedAthleteCode, value: localAthlete.accessCode);
       state = SecurityGateState(
         status: SecurityGateStatus.athletePortalActive,
         loggedInAthlete: localAthlete,
@@ -641,8 +643,8 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isFa
-                ? 'لطفاً کد اختصاصی ورزشکار (مثلاً PC-849201) را وارد کنید.'
-                : 'Please enter your Athlete Access Code.'),
+                ? 'لطفاً کد اختصاصی، شماره موبایل یا ایمیل ورزشکار را وارد کنید.'
+                : 'Please enter your athlete access code, phone or email.'),
             backgroundColor: AppColors.danger,
           ),
         );
@@ -763,11 +765,11 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                     if (_isAthleteMode) ...[
                       TextField(
                         controller: _athleteCodeCtrl,
-                        textCapitalization: TextCapitalization.characters,
+                        textCapitalization: TextCapitalization.none,
                         decoration: InputDecoration(
                           labelText: isFa
-                              ? 'کد اختصاصی ورزشکار (مثلاً PC-849201)'
-                              : 'Athlete Access Code (e.g. PC-849201)',
+                              ? 'کد اختصاصی (PC-XXXXXX)، شماره موبایل یا ایمیل ورزشکار'
+                              : 'Access Code (PC-XXXXXX), Phone or Email',
                           prefixIcon: const Icon(LucideIcons.keyRound),
                         ),
                       ),

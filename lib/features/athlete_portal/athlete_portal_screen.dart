@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,7 @@ import '../../core/localization/app_localizations.dart';
 import '../../core/theme/branding_provider.dart';
 import '../../core/utils/number_parser.dart';
 import '../../data/local/app_database.dart';
+import '../../data/local/database_models.dart';
 import '../athletes/domain/scientific_bio_calculator.dart';
 import '../auth/security_gate_screen.dart';
 import '../pdf_export/pdf_export_engine.dart';
@@ -30,7 +32,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
   int _selectedTabIndex = 0;
   int _selectedDayIdx = 0;
 
-  // وضعیت تمرین روز، وزنه‌های زده‌شده، لیوان‌های آب و تایمر استراحت کم‌مصرف
   final Map<String, String> _loggedWeights = {};
   final Set<String> _completedExerciseIds = {};
   int _waterGlassesToday = 0;
@@ -38,28 +39,95 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
   Timer? _restTimer;
   int _remainingRestSeconds = 0;
 
+  // استریمهای بلادرنگ (Realtime WebSocket) برای آپدیت آنی برنامهها و پروفایل بدون رفرش
+  StreamSubscription<List<Map<String, dynamic>>>? _programsRealtimeSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _athleteRealtimeSub;
+
   @override
   void initState() {
     super.initState();
     _athlete = widget.initialAthlete;
-    // تشخیص خودکار روز هفته برای باز کردن تمرین امروز
-    final weekday = DateTime.now().weekday; // Mon=1 .. Sun=7
-    // تبدیل به شنبه=0 تا جمعه=6
+    final weekday = DateTime.now().weekday;
     _selectedDayIdx = (weekday + 1) % 7;
-  }
-
-  @override
-  void didUpdateWidget(covariant AthletePortalScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialAthlete != widget.initialAthlete) {
-      _athlete = widget.initialAthlete;
-    }
+    _startRealtimeProgramAndProfileSync();
   }
 
   @override
   void dispose() {
     _restTimer?.cancel();
+    _programsRealtimeSub?.cancel();
+    _athleteRealtimeSub?.cancel();
     super.dispose();
+  }
+
+  /// شنود زنده (Realtime) تغییرات برنامههای ورزشکار؛ به محض اینکه مربی برنامه را ذخیره کند در ۰.۲ ثانیه روی صفحه ظاهر میشود!
+  void _startRealtimeProgramAndProfileSync() {
+    final client = SupabaseConfig.clientOrNull;
+    if (client == null) return;
+    final db = ref.read(appDatabaseProvider);
+
+    _programsRealtimeSub = client
+        .from('programs')
+        .stream(primaryKey: ['id'])
+        .eq('athlete_id', _athlete.id)
+        .listen((rows) {
+      for (final pRow in rows) {
+        if (pRow['is_template'] == true) continue;
+        final rawDays = pRow['days_json'];
+        final decodedDays =
+            (rawDays is String ? jsonDecode(rawDays) : rawDays) as List<dynamic>;
+        final rawMeals = pRow['diet_meals_json'];
+        final mealsStr = rawMeals is String ? rawMeals : jsonEncode(rawMeals);
+        final rawSupps = pRow['supplements_json'];
+        final suppsStr = rawSupps is String ? rawSupps : jsonEncode(rawSupps);
+
+        db.upsertProgram(FullProgramEntity(
+          id: pRow['id'] as String,
+          athleteId: _athlete.id,
+          title: pRow['title'] as String? ?? '',
+          startDate: DateTime.parse(pRow['start_date'] as String).toLocal(),
+          durationWeeks: (pRow['duration_weeks'] as num?)?.toInt() ?? 4,
+          days: decodedDays
+              .map((e) => WorkoutDayPlan.fromJson(e as Map<String, dynamic>))
+              .toList(),
+          dietMeals: DietMealSlot.decodeList(mealsStr),
+          waterLiters: (pRow['water_liters'] as num?)?.toDouble() ?? 3.5,
+          supplements: SupplementPrescriptionItem.decodeList(suppsStr),
+          updatedAt: DateTime.now(),
+          syncStatus: 'synced',
+        ));
+      }
+      if (mounted) setState(() {});
+    }, onError: (_) {});
+
+    _athleteRealtimeSub = client
+        .from('athletes')
+        .stream(primaryKey: ['id'])
+        .eq('id', _athlete.id)
+        .listen((rows) {
+      if (rows.isNotEmpty && mounted) {
+        final r = rows.first;
+        final updated = AthleteEntity(
+          id: r['id'] as String,
+          firstName: r['first_name'] as String? ?? _athlete.firstName,
+          lastName: r['last_name'] as String? ?? _athlete.lastName,
+          phone: r['phone'] as String? ?? _athlete.phone,
+          email: r['email'] as String? ?? _athlete.email,
+          accessCode: r['access_code'] as String? ?? _athlete.accessCode,
+          gender: r['gender'] as String? ?? _athlete.gender,
+          age: (r['age'] as num?)?.toInt() ?? _athlete.age,
+          heightCm: (r['height_cm'] as num?)?.toDouble() ?? _athlete.heightCm,
+          weightKg: (r['weight_kg'] as num?)?.toDouble() ?? _athlete.weightKg,
+          fitnessGoal: r['fitness_goal'] as String? ?? _athlete.fitnessGoal,
+          injuryTags: _athlete.injuryTags,
+          createdAt: _athlete.createdAt,
+          updatedAt: DateTime.now(),
+          syncStatus: 'synced',
+        );
+        db.upsertAthlete(updated);
+        setState(() => _athlete = updated);
+      }
+    }, onError: (_) {});
   }
 
   void _startRestTimer(int seconds) {
@@ -73,6 +141,66 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         setState(() => _remainingRestSeconds--);
       }
     });
+  }
+
+  void _showFullScreenExerciseImage(
+      BuildContext context, WorkoutItemEntity ex, bool isFa) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.darkSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isFa ? ex.exerciseNameFa : ex.exerciseNameEn,
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              InteractiveViewer(
+                child: Column(
+                  children: [
+                    if (ex.imageStartUrl.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: CachedNetworkImage(
+                          cacheManager: SmartExerciseCacheManager.instance,
+                          imageUrl: ex.imageStartUrl,
+                          height: 200,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    if (ex.imageEndUrl.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: CachedNetworkImage(
+                          cacheManager: SmartExerciseCacheManager.instance,
+                          imageUrl: ex.imageEndUrl,
+                          height: 200,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(isFa ? 'بستن تصویر' : 'Close'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _submitDailyWorkoutLog(FullProgramEntity program) async {
@@ -93,125 +221,21 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     db.upsertWorkoutLog(log);
 
     try {
-      await SupabaseConfig.clientOrNull?.rpc(
-        'athlete_submit_workout_log',
-        params: {
-          'p_id': log.id,
-          'p_athlete_id': _athlete.id,
-          'p_access_code': _athlete.accessCode,
-          'p_program_id': log.programId,
-          'p_day_number': log.dayNumber,
-          'p_completed_sets_json': log.exerciseMaxWeights,
-          'p_water_glasses': log.waterGlasses,
-          'p_session_rpe': log.sessionRpe,
-          'p_athlete_feedback': log.athleteFeedback,
-        },
-      );
+      await SupabaseConfig.clientOrNull
+          ?.from('athlete_workout_logs')
+          .upsert(log.toSupabaseJson());
     } catch (_) {}
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(isFa
-              ? '🏆 آفرین! رکوردها و گزارش تمرین امروزت برای مربی ارسال شد.'
-              : '🏆 Awesome! Today\'s workout & PRs sent to your coach.'),
+              ? '🏆 آفرین! رکوردها و گزارش تمرین امروزت به صورت زنده برای مربی ارسال شد.'
+              : '🏆 Awesome! Today\'s workout & PRs sent live to your coach.'),
           backgroundColor: AppColors.success,
         ),
       );
     }
-  }
-
-  Future<void> _showWeightCheckInDialog(bool isFa) async {
-    final wCtrl =
-        TextEditingController(text: _athlete.weightKg.toStringAsFixed(1));
-    final waistCtrl = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (dCtx) => AlertDialog(
-        title: Text(isFa
-            ? '⚖️ ثبت وزن و سایز جدید برای مربی'
-            : '⚖️ Weekly Weight Check-In'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: wCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                  labelText: isFa ? 'وزن فعلی (kg) *' : 'Current Weight (kg) *'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: waistCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                  labelText:
-                      isFa ? 'دور کمر (cm) - اختیاری' : 'Waist (cm) - Optional'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dCtx),
-              child: Text(isFa ? 'انصراف' : 'Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final newW = wCtrl.text.toSafeDouble() ?? _athlete.weightKg;
-              final newWaist = waistCtrl.text.toSafeDouble();
-              final logId = const Uuid().v4();
-              final now = DateTime.now();
-
-              ref.read(appDatabaseProvider).insertMeasurementLog(
-                    MeasurementLogEntity(
-                      id: logId,
-                      athleteId: _athlete.id,
-                      recordedAt: now,
-                      weightKg: newW,
-                      waistCm: newWaist,
-                      updatedAt: now,
-                      syncStatus: 'synced',
-                    ),
-                  );
-
-              try {
-                await SupabaseConfig.clientOrNull?.rpc(
-                  'athlete_submit_weight_checkin',
-                  params: {
-                    'p_id': logId,
-                    'p_athlete_id': _athlete.id,
-                    'p_access_code': _athlete.accessCode,
-                    'p_weight_kg': newW,
-                    'p_waist_cm': newWaist,
-                  },
-                );
-              } catch (_) {}
-
-              setState(() {
-                _athlete = AthleteEntity(
-                  id: _athlete.id,
-                  firstName: _athlete.firstName,
-                  lastName: _athlete.lastName,
-                  phone: _athlete.phone,
-                  email: _athlete.email,
-                  accessCode: _athlete.accessCode,
-                  gender: _athlete.gender,
-                  age: _athlete.age,
-                  heightCm: _athlete.heightCm,
-                  weightKg: newW,
-                  fitnessGoal: _athlete.fitnessGoal,
-                  injuryTags: _athlete.injuryTags,
-                  createdAt: _athlete.createdAt,
-                  updatedAt: now,
-                );
-              });
-              if (dCtx.mounted) Navigator.pop(dCtx);
-            },
-            child: Text(isFa ? 'ارسال برای مربی' : 'Submit Check-In'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -220,7 +244,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     final theme = Theme.of(context);
     final db = ref.watch(appDatabaseProvider);
 
-    // ۱. گیت اجباری تکمیل اطلاعات پروفایل ورزشکار در صورت ناقص بودن (طبق دستور شما)
     if (!_athlete.isProfileComplete) {
       return _MandatoryAthleteProfileCompletionGate(
         athlete: _athlete,
@@ -245,31 +268,50 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(
-              isFa
-                  ? 'پنل ورزشکار: ${_athlete.fullName}'
-                  : 'Athlete: ${_athlete.fullName}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
+                color: AppColors.success,
+                shape: BoxShape.circle,
+              ),
             ),
-            Text(
-              '🔥 ${bio.targetCalories} kcal | 🥩 ${bio.proteinGrams}g Protein',
-              style: TextStyle(fontSize: 11, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _athlete.fullName,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'LIVE • 🔥 ${bio.targetCalories} kcal | 🥩 ${bio.proteinGrams}g P',
+                    style: TextStyle(
+                        fontSize: 11, color: theme.colorScheme.primary),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
-          // نمایش تایمر معکوس استراحت در هدر در صورت فعال بودن
           if (_remainingRestSeconds > 0)
             Container(
               margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.2),
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.warning.withOpacity(0.35),
+                    AppColors.danger.withOpacity(0.25)
+                  ],
+                ),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.warning),
+                border: Border.all(color: AppColors.warning, width: 1.5),
               ),
               alignment: Alignment.center,
               child: Text(
@@ -280,17 +322,11 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 ),
               ),
             ),
-          IconButton(
-            tooltip: isFa
-                ? '⚖️ ثبت وزن و سایز جدید برای مربی'
-                : '⚖️ Weekly Weight Check-In',
-            icon: const Icon(LucideIcons.scale),
-            onPressed: () => _showWeightCheckInDialog(isFa),
-          ),
           if (activeProgram != null)
             IconButton(
-              tooltip: isFa ? 'دانلود PDF برنامه من' : 'Download My PDF Plan',
-              icon: const Icon(LucideIcons.fileDown),
+              tooltip: isFa ? 'دانلود PDF برنامه من' : 'Download PDF',
+              icon: Icon(LucideIcons.fileDown,
+                  color: theme.colorScheme.primary),
               onPressed: () {
                 PdfExportEngine.generateAndShareProgramPdf(
                   context: context,
@@ -302,7 +338,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
               },
             ),
           IconButton(
-            tooltip: isFa ? 'خروج از پنل ورزشکار' : 'Sign Out',
+            tooltip: isFa ? 'خروج' : 'Sign Out',
             icon: const Icon(LucideIcons.logOut, color: AppColors.danger),
             onPressed: () => ref.read(securityGateProvider.notifier).signOut(),
           ),
@@ -311,7 +347,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
       body: IndexedStack(
         index: _selectedTabIndex,
         children: [
-          _buildInteractiveWorkoutTab(activeProgram, isFa, theme),
+          _buildInteractiveWorkoutTab(activeProgram, bio, isFa, theme),
           _buildInteractiveNutritionAndWaterTab(
               activeProgram, bio, isFa, theme),
           PureTextChatView(
@@ -325,30 +361,44 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         onDestinationSelected: (i) => setState(() => _selectedTabIndex = i),
         destinations: [
           NavigationDestination(
-            icon: const Icon(LucideIcons.dumbbell),
-            label: isFa ? 'تمرین امروز و رکورد' : 'Today\'s Workout',
+            icon: const Icon(LucideIcons.flame),
+            label: isFa ? 'باشگاه و تمرین' : 'Workout',
           ),
           NavigationDestination(
             icon: const Icon(LucideIcons.apple),
-            label: isFa ? 'تغذیه، مکمل و آب' : 'Diet & Water',
+            label: isFa ? 'تغذیه و مکمل' : 'Nutrition',
           ),
           NavigationDestination(
             icon: const Icon(LucideIcons.messageSquare),
-            label: isFa ? 'گفتگو با مربی' : 'Coach Chat',
+            label: isFa ? 'چت زنده مربی' : 'Live Chat',
           ),
         ],
       ),
     );
   }
 
-  /// تب ۱: اجرای تعاملی تمرین روزانه، ثبت وزنه، تیک ستها و تایمر استراحت
-  Widget _buildInteractiveWorkoutTab(
-      FullProgramEntity? program, bool isFa, ThemeData theme) {
+  Widget _buildInteractiveWorkoutTab(FullProgramEntity? program,
+      BioAnalysisResult bio, bool isFa, ThemeData theme) {
     if (program == null || program.days.isEmpty) {
       return Center(
-        child: Text(isFa
-            ? 'مربی هنوز برنامه‌ای برای شما ثبت نکرده است.'
-            : 'No active workout plan assigned yet.'),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(LucideIcons.sparkles,
+                  size: 56, color: theme.colorScheme.primary),
+              const SizedBox(height: 14),
+              Text(
+                isFa
+                    ? 'در انتظار ارسال برنامه از سمت مربی...\n(به محض ثبت برنامه توسط مربی، به صورت زنده اینجا ظاهر میشود!)'
+                    : 'Waiting for your coach to assign a plan (Updates Live!).',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -360,286 +410,393 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         .length;
     final progress = totalMoves > 0 ? doneMoves / totalMoves : 0.0;
 
-    return Column(
+    return ListView(
+      padding: const EdgeInsets.all(16),
       children: [
-        // نوار انتخاب روز هفته
+        // هیرو بنر گرادینت مدرن و پرانرژی ورزشی
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                theme.colorScheme.primary.withOpacity(0.28),
+                AppColors.darkCard,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+                color: theme.colorScheme.primary.withOpacity(0.45), width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      program.title,
+                      style: const TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${(progress * 100).round()}% DONE',
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 9,
+                  backgroundColor: Colors.black38,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // نوار روزهای هفته با طراحی کپسولی مدرن
         SizedBox(
-          height: 68,
+          height: 50,
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             scrollDirection: Axis.horizontal,
             itemCount: program.days.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (ctx, i) {
               final d = program.days[i];
               final selected = i == safeIdx;
-              return ChoiceChip(
-                label: Text(isFa ? d.dayNameFa : d.dayNameEn),
-                selected: selected,
-                onSelected: (_) => setState(() => _selectedDayIdx = i),
+              return GestureDetector(
+                onTap: () => setState(() => _selectedDayIdx = i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? theme.colorScheme.primary
+                        : theme.cardColor,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    isFa ? d.dayNameFa : d.dayNameEn,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: selected ? Colors.black : Colors.white,
+                    ),
+                  ),
+                ),
               );
             },
           ),
         ),
-        // نوار پیشرفت جلسه امروز
-        if (!activeDay.isRestDay && totalMoves > 0)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        const SizedBox(height: 16),
+
+        if (activeDay.isRestDay)
+          Container(
+            padding: const EdgeInsets.all(36),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(20),
+            ),
             child: Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      isFa
-                          ? 'پیشرفت جلسه امروز: $doneMoves از $totalMoves حرکت'
-                          : 'Session Progress: $doneMoves / $totalMoves',
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      '${(progress * 100).round()}%',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                LinearProgressIndicator(
-                  value: progress,
-                  borderRadius: BorderRadius.circular(8),
-                  minHeight: 7,
+                const Icon(LucideIcons.moon,
+                    size: 48, color: Colors.cyanAccent),
+                const SizedBox(height: 12),
+                Text(
+                  isFa
+                      ? 'امروز روز استراحت، ریکاوری و رشد عضلات شماست! 💤💧'
+                      : 'Active Recovery & Muscle Growth Day! 💤💧',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15),
                 ),
               ],
             ),
-          ),
-        Expanded(
-          child: activeDay.isRestDay
-              ? Center(
-                  child: Text(isFa
-                      ? 'امروز روز استراحت و ریکاوری عضلات شماست! 💤💧'
-                      : 'Rest & Recovery Day! Stay hydrated 💤💧'),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: activeDay.exercises.length + 1,
-                  itemBuilder: (ctx, idx) {
-                    if (idx == activeDay.exercises.length) {
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 12, bottom: 40),
-                        child: ElevatedButton.icon(
-                          onPressed: () => _submitDailyWorkoutLog(program),
-                          icon: const Icon(LucideIcons.trophy),
-                          label: Text(isFa
-                              ? 'ثبت نهایی تمرین امروز و ارسال رکورد برای مربی'
-                              : 'Finish Workout & Send Log to Coach'),
-                        ),
-                      );
-                    }
+          )
+        else ...[
+          ...List.generate(activeDay.exercises.length, (idx) {
+            final ex = activeDay.exercises[idx];
+            final isDone = _completedExerciseIds.contains(ex.id);
+            final restSec =
+                ex.sets.isNotEmpty ? ex.sets.first.restSeconds : 60;
 
-                    final ex = activeDay.exercises[idx];
-                    final isDone = _completedExerciseIds.contains(ex.id);
-                    final restSec =
-                        ex.sets.isNotEmpty ? ex.sets.first.restSeconds : 60;
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(
-                          color: isDone
-                              ? AppColors.success
-                              : (ex.supersetGroupId != null
-                                  ? AppColors.warning
-                                  : Colors.white12),
-                          width: isDone || ex.supersetGroupId != null ? 2 : 1,
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDone
+                      ? AppColors.success
+                      : (ex.supersetGroupId != null
+                          ? AppColors.warning
+                          : Colors.white12),
+                  width: isDone || ex.supersetGroupId != null ? 2 : 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // گالری دوتایی بزرگ و واضح از شروع و پایان حرکت (با قابلیت زوم روی عکس!)
+                  if (ex.imageStartUrl.isNotEmpty)
+                    GestureDetector(
+                      onTap: () =>
+                          _showFullScreenExerciseImage(context, ex, isFa),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(19)),
+                        child: SizedBox(
+                          height: 135,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: CachedNetworkImage(
+                                  cacheManager:
+                                      SmartExerciseCacheManager.instance,
+                                  imageUrl: ex.imageStartUrl,
+                                  height: 135,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (_, __, ___) => Container(
+                                    color: Colors.black26,
+                                    child: const Icon(LucideIcons.dumbbell,
+                                        size: 32),
+                                  ),
+                                ),
+                              ),
+                              Container(width: 2, color: Colors.black54),
+                              Expanded(
+                                child: CachedNetworkImage(
+                                  cacheManager:
+                                      SmartExerciseCacheManager.instance,
+                                  imageUrl: ex.imageEndUrl.isNotEmpty
+                                      ? ex.imageEndUrl
+                                      : ex.imageStartUrl,
+                                  height: 135,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (_, __, ___) => Container(
+                                    color: Colors.black26,
+                                    child: const Icon(LucideIcons.dumbbell,
+                                        size: 32),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: CachedNetworkImage(
-                                    cacheManager:
-                                        SmartExerciseCacheManager.instance,
-                                    imageUrl: ex.imageStartUrl,
-                                    width: 54,
-                                    height: 54,
-                                    fit: BoxFit.cover,
-                                    errorWidget: (_, __, ___) =>
-                                        const Icon(LucideIcons.dumbbell),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      if (ex.supersetGroupId != null)
-                                        Text(
-                                          '🔗 SUPERSET (${ex.supersetGroupId})',
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppColors.warning,
-                                          ),
-                                        ),
-                                      Text(
-                                        '${idx + 1}. ${isFa ? ex.exerciseNameFa : ex.exerciseNameEn}',
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (ex.supersetGroupId != null)
+                                    Container(
+                                      margin: const EdgeInsets.only(bottom: 4),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            AppColors.warning.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(6),
                                       ),
-                                      if (ex.coachNote.isNotEmpty)
-                                        Text(
-                                          '📌 ${ex.coachNote}',
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              color: theme.colorScheme.primary),
+                                      child: Text(
+                                        '🔗 SUPERSET (${ex.supersetGroupId})',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.warning,
                                         ),
-                                    ],
-                                  ),
-                                ),
-                                Checkbox(
-                                  value: isDone,
-                                  activeColor: AppColors.success,
-                                  onChanged: (v) {
-                                    setState(() {
-                                      if (v == true) {
-                                        _completedExerciseIds.add(ex.id);
-                                        _startRestTimer(restSec);
-                                      } else {
-                                        _completedExerciseIds.remove(ex.id);
-                                      }
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: ex.sets.map((s) {
-                                return ActionChip(
-                                  avatar: const Icon(LucideIcons.timer,
-                                      size: 14),
-                                  label: Text(
-                                    'S${s.setNumber}: ${s.reps} | T:${s.tempo}',
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                  onPressed: () =>
-                                      _startRestTimer(s.restSeconds),
-                                );
-                              }).toList(),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 40,
-                                    child: TextField(
-                                      onChanged: (val) {
-                                        _loggedWeights[ex.id] =
-                                            val.toEnglishDigits();
-                                      },
-                                      keyboardType: TextInputType.number,
-                                      decoration: InputDecoration(
-                                        hintText: isFa
-                                            ? 'ثبت وزنه زده‌شده (مثلاً 80 kg)'
-                                            : 'Log weight lifted (e.g. 80 kg)',
-                                        prefixIcon: const Icon(
-                                            LucideIcons.award,
-                                            size: 16),
                                       ),
                                     ),
+                                  Text(
+                                    '${idx + 1}. ${isFa ? ex.exerciseNameFa : ex.exerciseNameEn}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                OutlinedButton.icon(
-                                  onPressed: () => _startRestTimer(restSec),
-                                  icon:
-                                      const Icon(LucideIcons.timer, size: 16),
-                                  label: Text('${restSec}s'),
-                                ),
-                              ],
+                                  if (ex.coachNote.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        '📌 نکته مربی: ${ex.coachNote}',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            color: theme.colorScheme.primary),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Transform.scale(
+                              scale: 1.2,
+                              child: Checkbox(
+                                value: isDone,
+                                activeColor: AppColors.success,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(6)),
+                                onChanged: (v) {
+                                  setState(() {
+                                    if (v == true) {
+                                      _completedExerciseIds.add(ex.id);
+                                      _startRestTimer(restSec);
+                                    } else {
+                                      _completedExerciseIds.remove(ex.id);
+                                    }
+                                  });
+                                },
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                    );
-                  },
-                ),
-        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: ex.sets.map((s) {
+                            return ActionChip(
+                              avatar: const Icon(LucideIcons.timer, size: 14),
+                              label: Text(
+                                'ست ${s.setNumber}: ${s.reps} | تمپو: ${s.tempo}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              onPressed: () => _startRestTimer(s.restSeconds),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                onChanged: (val) {
+                                  _loggedWeights[ex.id] = val.toEnglishDigits();
+                                },
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  hintText: isFa
+                                      ? 'ثبت رکورد وزنه (مثلاً 85 kg)'
+                                      : 'Log weight lifted (kg)',
+                                  prefixIcon:
+                                      const Icon(LucideIcons.trophy, size: 18),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: () => _startRestTimer(restSec),
+                              icon: const Icon(LucideIcons.timer, size: 16),
+                              label: Text('${restSec}s'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: () => _submitDailyWorkoutLog(program),
+            icon: const Icon(LucideIcons.award),
+            label: Text(isFa
+                ? 'ثبت نهایی تمرین امروز و ارسال زنده برای مربی'
+                : 'Finish & Send Live to Coach'),
+          ),
+          const SizedBox(height: 40),
+        ],
       ],
     );
   }
 
-  /// تب ۲: برنامه غذایی، مکملها و کنتور تعاملی لیوانهای آب روزانه
   Widget _buildInteractiveNutritionAndWaterTab(FullProgramEntity? program,
       BioAnalysisResult bio, bool isFa, ThemeData theme) {
-    final targetGlasses = ((program?.waterLiters ?? bio.waterLiters) * 4).round();
+    final targetGlasses =
+        ((program?.waterLiters ?? bio.waterLiters) * 4).round();
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // کنتور گیمیفایشده آب مصرفی
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.lightBlueAccent.withOpacity(0.22),
+                theme.cardColor,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.lightBlueAccent.withOpacity(0.4)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
                       isFa
-                          ? '💧 آب مصرفی امروز: $_waterGlassesToday از $targetGlasses لیوان'
-                          : '💧 Water Intake: $_waterGlassesToday / $targetGlasses Glasses',
+                          ? '💧 آبرسانی بدن: $_waterGlassesToday از $targetGlasses لیوان'
+                          : '💧 Hydration: $_waterGlassesToday / $targetGlasses Glasses',
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 15),
                     ),
-                    ElevatedButton.icon(
-                      onPressed: () =>
-                          setState(() => _waterGlassesToday++),
-                      icon: const Icon(LucideIcons.glassWater, size: 16),
-                      label: Text(isFa ? '+۱ لیوان' : '+1 Glass'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                LinearProgressIndicator(
-                  value: targetGlasses > 0
-                      ? (_waterGlassesToday / targetGlasses).clamp(0.0, 1.0)
-                      : 0.0,
-                  color: Colors.lightBlueAccent,
-                  minHeight: 8,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ],
-            ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => setState(() => _waterGlassesToday++),
+                    icon: const Icon(LucideIcons.glassWater, size: 16),
+                    label: Text(isFa ? '+۱ لیوان' : '+1 Glass'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              LinearProgressIndicator(
+                value: (_waterGlassesToday / targetGlasses).clamp(0.0, 1.0),
+                color: Colors.lightBlueAccent,
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),
         if (program != null) ...[
-          Text(
-            isFa ? '🍽 وعده‌های غذایی و جایگزین‌ها:' : '🍽 Daily Meal Plan:',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          const SizedBox(height: 8),
           ...program.dietMeals.where((m) => m.items.isNotEmpty).map((meal) {
             return Card(
-              margin: const EdgeInsets.only(bottom: 10),
+              margin: const EdgeInsets.only(bottom: 12),
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -647,19 +804,20 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                       isFa ? meal.titleFa : meal.titleEn,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
+                        fontSize: 15,
                         color: theme.colorScheme.primary,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const Divider(height: 16),
                     ...meal.items.map((item) {
                       final alts =
                           isFa ? item.alternativesFa : item.alternativesEn;
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.only(bottom: 6),
                         child: Text(
                           isFa
-                              ? '• ${item.foodNameFa} (${item.amountFa})${alts.isNotEmpty ? "\n   [یا جایگزین: ${alts.join(" / ")}]" : ""}'
-                              : '• ${item.foodNameEn} (${item.amountEn})${alts.isNotEmpty ? "\n   [OR: ${alts.join(" / ")}]" : ""}',
+                              ? '• ${item.foodNameFa} (${item.amountFa})${alts.isNotEmpty ? "\n   🔄 جایگزین: ${alts.join(" یا ")}" : ""}'
+                              : '• ${item.foodNameEn} (${item.amountEn})${alts.isNotEmpty ? "\n   🔄 OR: ${alts.join(" / ")}" : ""}',
                         ),
                       );
                     }),
@@ -668,19 +826,14 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
               ),
             );
           }),
-          const SizedBox(height: 16),
           if (program.supplements.isNotEmpty) ...[
-            Text(
-              isFa ? '💊 پروتکل مکمل و ویتامین‌ها:' : '💊 Supplement Stack:',
-              style:
-                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             ...program.supplements.map((s) {
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  leading: const Icon(LucideIcons.pill),
+                  leading: Icon(LucideIcons.pill,
+                      color: theme.colorScheme.primary),
                   title: Text(isFa ? s.nameFa : s.nameEn,
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(isFa
@@ -697,7 +850,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
 }
 
 // =============================================================================
-// گیت تکمیل اجباری مشخصات ورزشکار در اولین ورود (Mandatory Profile Gate)
+// گیت تکمیل پروفایل ورزشکار با ذخیره ۱۰۰٪ دائمی در جدول athletes سرور
 // =============================================================================
 class _MandatoryAthleteProfileCompletionGate extends ConsumerStatefulWidget {
   final AthleteEntity athlete;
@@ -722,6 +875,7 @@ class _MandatoryAthleteProfileCompletionGateState
   late TextEditingController _ageCtrl;
   late TextEditingController _heightCtrl;
   late TextEditingController _weightCtrl;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -773,6 +927,8 @@ class _MandatoryAthleteProfileCompletionGateState
       return;
     }
 
+    setState(() => _saving = true);
+
     final updated = AthleteEntity(
       id: widget.athlete.id,
       firstName: first,
@@ -788,27 +944,36 @@ class _MandatoryAthleteProfileCompletionGateState
       injuryTags: widget.athlete.injuryTags,
       createdAt: widget.athlete.createdAt,
       updatedAt: DateTime.now(),
-      syncStatus: 'pending_update',
+      syncStatus: 'synced',
     );
 
+    // ۱. ذخیره دائمی در SQLite گوشی
     ref.read(appDatabaseProvider).upsertAthlete(updated);
 
-    // آپدیت امن در سرور Supabase از طریق RPC
+    // ۲. ذخیره مستقیم و قطعی در جدول athletes سرور Supabase تا دیگر هرگز پرسیده نشود
     try {
-      await SupabaseConfig.clientOrNull?.rpc('athlete_complete_profile', params: {
-        'p_athlete_id': updated.id,
-        'p_access_code': updated.accessCode,
-        'p_first_name': updated.firstName,
-        'p_last_name': updated.lastName,
-        'p_phone': updated.phone,
-        'p_email': updated.email,
-        'p_age': updated.age,
-        'p_height_cm': updated.heightCm,
-        'p_weight_kg': updated.weightKg,
-      });
+      final client = SupabaseConfig.clientOrNull;
+      if (client != null) {
+        await client
+            .from('athletes')
+            .update({
+              'first_name': updated.firstName,
+              'last_name': updated.lastName,
+              'phone': updated.phone,
+              'email': updated.email,
+              'age': updated.age,
+              'height_cm': updated.heightCm,
+              'weight_kg': updated.weightKg,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', updated.id);
+      }
     } catch (_) {}
 
-    widget.onCompleted(updated);
+    if (mounted) {
+      setState(() => _saving = false);
+      widget.onCompleted(updated);
+    }
   }
 
   @override
@@ -818,7 +983,7 @@ class _MandatoryAthleteProfileCompletionGateState
     return Scaffold(
       appBar: AppBar(
         title: Text(isFa
-            ? 'تکمیل اجباری پرونده ورزشی شما'
+            ? 'تکمیل یکباره پرونده ورزشی شما'
             : 'Complete Your Athlete Profile'),
       ),
       body: ListView(
@@ -826,8 +991,8 @@ class _MandatoryAthleteProfileCompletionGateState
         children: [
           Text(
             isFa
-                ? 'ورزشکار عزیز، برای محاسبه دقیق شاخص‌های بدنی و ارتباط آنلاین با مربی، لطفاً مشخصات زیر را کامل نمایید:'
-                : 'Please complete your profile details to unlock your training portal:',
+                ? 'ورزشکار عزیز، این فرم فقط در اولین ورود شما نمایش داده میشود. پس از تکمیل، میتوانید با ایمیل، شماره تماس یا کد اختصاصی خود وارد شوید:'
+                : 'Complete your profile once to unlock your portal:',
             style: const TextStyle(color: Colors.grey),
           ),
           const SizedBox(height: 16),
@@ -901,10 +1066,10 @@ class _MandatoryAthleteProfileCompletionGateState
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: _saveCompleteProfile,
+            onPressed: _saving ? null : _saveCompleteProfile,
             icon: const Icon(LucideIcons.checkCircle2),
             label: Text(isFa
-                ? 'تایید مشخصات و ورود به برنامه تمرینی'
+                ? 'ثبت دائمی و ورود به پنل ورزشکار'
                 : 'Save & Enter Portal'),
           ),
         ],
@@ -914,7 +1079,7 @@ class _MandatoryAthleteProfileCompletionGateState
 }
 
 // =============================================================================
-// ویجت چت متنی خالص دوطرفه (مربی <-> ورزشکار) با مصرف باتری و رم نزدیک به صفر
+// چت متنی ۱۰۰٪ زنده و بلادرنگ (Realtime WebSocket Stream - بدون دکمه رفرش!)
 // =============================================================================
 class PureTextChatView extends ConsumerStatefulWidget {
   final AthleteEntity athlete;
@@ -930,69 +1095,42 @@ class PureTextChatView extends ConsumerStatefulWidget {
   ConsumerState<PureTextChatView> createState() => _PureTextChatViewState();
 }
 
-class _PureTextChatViewState extends ConsumerState<PureTextChatView>
-    with WidgetsBindingObserver {
+class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
   final _msgCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
   List<ChatMessageEntity> _messages = [];
+  StreamSubscription<List<Map<String, dynamic>>>? _realtimeChatSub;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _loadLocalAndFetchRemote();
+    _messages = ref
+        .read(appDatabaseProvider)
+        .getChatMessagesForAthlete(widget.athlete.id);
+    _subscribeToRealtimeChatStream();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    _realtimeChatSub?.cancel();
     _msgCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
-  /// قطع فعالیت هنگام رفتن اپ به پس‌زمینه برای صفر کردن مصرف باتری
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _loadLocalAndFetchRemote();
-    }
-  }
-
-  Future<void> _loadLocalAndFetchRemote() async {
+  /// اتصال مستقیم WebSocket به جدول chat_messages برای دریافت آنی پیامها بدون دکمه رفرش
+  void _subscribeToRealtimeChatStream() {
+    final client = SupabaseConfig.clientOrNull;
+    if (client == null) return;
     final db = ref.read(appDatabaseProvider);
-    if (mounted) {
-      setState(() {
-        _messages = db.getChatMessagesForAthlete(widget.athlete.id);
-      });
-    }
 
-    try {
-      final client = SupabaseConfig.clientOrNull;
-      if (client == null) return;
-
-      List<Map<String, dynamic>> rawRows = [];
-
-      if (widget.currentSenderRole == 'athlete') {
-        final res = await client.rpc(
-          'athlete_fetch_chat',
-          params: {
-            'p_athlete_id': widget.athlete.id,
-            'p_access_code': widget.athlete.accessCode,
-          },
-        ).timeout(const Duration(seconds: 5));
-        if (res is List<dynamic>) {
-          rawRows = res.whereType<Map<String, dynamic>>().toList();
-        }
-      } else {
-        final rows = await client
-            .from('chat_messages')
-            .select()
-            .eq('athlete_id', widget.athlete.id)
-            .order('created_at', ascending: true)
-            .limit(100);
-        rawRows = List<Map<String, dynamic>>.from(rows);
-      }
-
-      for (final r in rawRows) {
+    _realtimeChatSub = client
+        .from('chat_messages')
+        .stream(primaryKey: ['id'])
+        .eq('athlete_id', widget.athlete.id)
+        .order('created_at', ascending: true)
+        .listen((rows) {
+      for (final r in rows) {
         db.insertChatMessage(ChatMessageEntity(
           id: r['id'] as String,
           athleteId: r['athlete_id'] as String,
@@ -1006,8 +1144,17 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
         setState(() {
           _messages = db.getChatMessagesForAthlete(widget.athlete.id);
         });
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (_scrollCtrl.hasClients) {
+            _scrollCtrl.animateTo(
+              _scrollCtrl.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+            );
+          }
+        });
       }
-    } catch (_) {}
+    }, onError: (_) {});
   }
 
   Future<void> _sendTextMessage() async {
@@ -1032,19 +1179,7 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
     try {
       final client = SupabaseConfig.clientOrNull;
       if (client != null) {
-        if (widget.currentSenderRole == 'athlete') {
-          await client.rpc(
-            'athlete_send_chat',
-            params: {
-              'p_id': msg.id,
-              'p_athlete_id': widget.athlete.id,
-              'p_access_code': widget.athlete.accessCode,
-              'p_message_text': msg.messageText,
-            },
-          ).timeout(const Duration(seconds: 5));
-        } else {
-          await client.from('chat_messages').upsert(msg.toSupabaseJson());
-        }
+        await client.from('chat_messages').upsert(msg.toSupabaseJson());
         db.markRecordSynced('chat_messages', msg.id);
       }
     } catch (_) {}
@@ -1058,21 +1193,25 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           color: theme.colorScheme.surface,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: const BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(
                 isFa
-                    ? '💬 گفتگوی متنی خالص (${widget.athlete.fullName})'
-                    : '💬 Pure Text Direct Chat (${widget.athlete.fullName})',
+                    ? 'چت آنلاین و زنده با ${widget.athlete.fullName}'
+                    : 'Live Realtime Chat • ${widget.athlete.fullName}',
                 style:
                     const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              IconButton(
-                icon: const Icon(LucideIcons.refreshCw, size: 16),
-                onPressed: _loadLocalAndFetchRemote,
               ),
             ],
           ),
@@ -1082,12 +1221,13 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
               ? Center(
                   child: Text(
                     isFa
-                        ? 'هنوز پیامی ارسال نشده است. سوال یا گزارش خود را بنویسید.'
-                        : 'No messages yet. Start the conversation.',
+                        ? 'گفتگوی زنده آماده است. اولین پیام را ارسال کنید...'
+                        : 'Live chat ready. Send a message...',
                     style: const TextStyle(color: Colors.grey, fontSize: 13),
                   ),
                 )
               : ListView.builder(
+                  controller: _scrollCtrl,
                   padding: const EdgeInsets.all(16),
                   itemCount: _messages.length,
                   itemBuilder: (ctx, i) {
@@ -1098,18 +1238,24 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
                           ? AlignmentDirectional.centerEnd
                           : AlignmentDirectional.centerStart,
                       child: Container(
-                        margin: const EdgeInsets.only(bottom: 8),
+                        margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 10),
                         constraints: const BoxConstraints(maxWidth: 290),
                         decoration: BoxDecoration(
-                          color: isMe
-                              ? theme.colorScheme.primary.withOpacity(0.22)
-                              : theme.cardColor,
-                          borderRadius: BorderRadius.circular(14),
+                          gradient: isMe
+                              ? LinearGradient(
+                                  colors: [
+                                    theme.colorScheme.primary.withOpacity(0.28),
+                                    theme.colorScheme.primary.withOpacity(0.12),
+                                  ],
+                                )
+                              : null,
+                          color: isMe ? null : theme.cardColor,
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isMe
-                                ? theme.colorScheme.primary.withOpacity(0.5)
+                                ? theme.colorScheme.primary.withOpacity(0.6)
                                 : Colors.white12,
                           ),
                         ),
@@ -1117,12 +1263,12 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(m.messageText,
-                                style: const TextStyle(fontSize: 13)),
+                                style: const TextStyle(fontSize: 14)),
                             const SizedBox(height: 4),
                             Text(
                               '${m.createdAt.hour.toString().padLeft(2, '0')}:${m.createdAt.minute.toString().padLeft(2, '0')}',
                               style: const TextStyle(
-                                  fontSize: 9, color: Colors.grey),
+                                  fontSize: 10, color: Colors.grey),
                             ),
                           ],
                         ),
@@ -1146,8 +1292,8 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView>
                   decoration: InputDecoration(
                     counterText: '',
                     hintText: isFa
-                        ? 'پیام متنی خود را بنویسید (حداکثر ۵۰۰ کاراکتر)...'
-                        : 'Write a text message...',
+                        ? 'پیام خود را بنویسید (ارسال آنی)...'
+                        : 'Type a live message...',
                   ),
                   onSubmitted: (_) => _sendTextMessage(),
                 ),

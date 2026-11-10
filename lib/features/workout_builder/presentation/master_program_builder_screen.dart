@@ -1311,22 +1311,28 @@ class _MasterProgramBuilderScreenState
                       }).toList(),
                     ),
                     const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(isFa ? 'استراحت (ثانیه):' : 'Rest (sec):',
                             style:
                                 const TextStyle(fontWeight: FontWeight.bold)),
-                        Wrap(
-                          spacing: 6,
-                          children: restPresets.map((sec) {
-                            return ChoiceChip(
-                              label: Text('${sec}s'),
-                              selected: selectedRest == sec,
-                              onSelected: (_) =>
-                                  setModalState(() => selectedRest = sec),
-                            );
-                          }).toList(),
+                        const SizedBox(height: 6),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: restPresets.map((sec) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ChoiceChip(
+                                  label: Text('${sec}s'),
+                                  selected: selectedRest == sec,
+                                  onSelected: (_) =>
+                                      setModalState(() => selectedRest = sec),
+                                ),
+                              );
+                            }).toList(),
+                          ),
                         ),
                       ],
                     ),

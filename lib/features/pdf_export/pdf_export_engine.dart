@@ -45,7 +45,14 @@ class PdfExportEngine {
       final data = await rootBundle.load('assets/fonts/Vazirmatn-Regular.ttf');
       return pw.Font.ttf(data);
     } catch (_) {
-      return pw.Font.helvetica();
+      try {
+        final file = await SmartExerciseCacheManager.instance.getSingleFile(
+          'https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/ttf/Vazirmatn-Regular.ttf',
+        );
+        return pw.Font.ttf((await file.readAsBytes()).buffer.asByteData());
+      } catch (_) {
+        return pw.Font.helvetica();
+      }
     }
   }
 
@@ -54,7 +61,14 @@ class PdfExportEngine {
       final data = await rootBundle.load('assets/fonts/Vazirmatn-Bold.ttf');
       return pw.Font.ttf(data);
     } catch (_) {
-      return pw.Font.helveticaBold();
+      try {
+        final file = await SmartExerciseCacheManager.instance.getSingleFile(
+          'https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/ttf/Vazirmatn-Bold.ttf',
+        );
+        return pw.Font.ttf((await file.readAsBytes()).buffer.asByteData());
+      } catch (_) {
+        return pw.Font.helveticaBold();
+      }
     }
   }
 
@@ -618,9 +632,6 @@ class PdfExportEngine {
                 ? 'Tempo: ${ex.sets.first.tempo} | Rest: ${ex.sets.first.restSeconds}s'
                 : '';
 
-            final tutorialVideoUrl =
-                'https://www.youtube.com/results?search_query=${Uri.encodeComponent("${ex.exerciseNameEn} proper form bodybuilding")}';
-
             return pw.Container(
               padding: const pw.EdgeInsets.all(8),
               decoration: pw.BoxDecoration(
@@ -635,27 +646,18 @@ class PdfExportEngine {
                     children: [
                       if (startImg != null)
                         pw.Container(
-                          width: 34,
-                          height: 34,
+                          width: 48,
+                          height: 48,
                           margin: const pw.EdgeInsets.only(right: 4),
                           child: pw.Image(startImg, fit: pw.BoxFit.cover),
                         ),
                       if (endImg != null)
                         pw.Container(
-                          width: 34,
-                          height: 34,
+                          width: 48,
+                          height: 48,
                           margin: const pw.EdgeInsets.only(right: 6),
                           child: pw.Image(endImg, fit: pw.BoxFit.cover),
                         ),
-                      pw.UrlLink(
-                        destination: tutorialVideoUrl,
-                        child: pw.BarcodeWidget(
-                          barcode: pw.Barcode.qrCode(),
-                          data: tutorialVideoUrl,
-                          width: 26,
-                          height: 26,
-                        ),
-                      ),
                     ],
                   ),
                   pw.SizedBox(width: 10),
