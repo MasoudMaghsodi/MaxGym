@@ -29,10 +29,10 @@ jobs:
       - run: flutter test
 
   # ---------------------------------------------------------------------------
-  # JOB 2: Build Production Android APK
+  # JOB 2: Build Production Android APK & Publish Official GitHub Release
   # ---------------------------------------------------------------------------
   build_android:
-    name: Build MaxGym Release APK
+    name: Build MaxGym Release APK & Publish Release
     needs: test_suite
     runs-on: ubuntu-latest
     steps:
@@ -53,11 +53,37 @@ jobs:
             --split-debug-info=build/symbols \
             --dart-define=APP_DOMAIN=maxgym.privatepath.ir \
             --dart-define=GITHUB_REPO=MasoudMaghsodi/MaxGym
+      - name: Prepare MaxGym-Release.apk
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/MaxGym-Release.apk
       - name: Upload MaxGym-Release.apk Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MaxGym-Release-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/MaxGym-Release.apk
+      - name: Create or Update Official GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          tag_name: v1.2.0
+          name: "MAX GYM Official Release v1.2.0"
+          make_latest: true
+          body: |
+            ## 🏋️‍♂️ MAX GYM Official Production Release (Android APK)
+            ### **NO PAIN NO GAIN • EST. 2019**
+            
+            * **Version:** 1.2.0
+            * **Web & iOS PWA Portal:** [https://maxgym.privatepath.ir](https://maxgym.privatepath.ir)
+            * **Direct APK Download:** [MaxGym-Release.apk](https://github.com/MasoudMaghsodi/MaxGym/releases/download/v1.2.0/MaxGym-Release.apk)
+            
+            ### 📱 Highlights:
+            - Dual-role Coach management & Athlete online portal (6-digit access code `PC-XXXXXX`).
+            - Offline-first SQLite database with automatic two-way Supabase sync.
+            - Realtime WebSocket chat and live workout plan sync.
+            - 3D interactive muscle anatomy heatmap and 3D gyro tilt cards.
+            - Super-Admin console & remote Kill-Switch.
+          files: build/app/outputs/flutter-apk/MaxGym-Release.apk
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # JOB 3: Build & Auto-Deploy Web PWA to GitHub Pages (maxgym.privatepath.ir)
@@ -86,10 +112,13 @@ jobs:
             --base-href "/" \
             --dart-define=APP_DOMAIN=maxgym.privatepath.ir \
             --dart-define=GITHUB_REPO=MasoudMaghsodi/MaxGym
-      - name: Configure Custom Cloudflare Domain (CNAME) & SPA 404 Fallback
+      - name: Configure Custom Domain (CNAME), Cache-Buster & SPA 404 Fallback
         run: |
           echo "maxgym.privatepath.ir" > build/web/CNAME
           cp build/web/index.html build/web/404.html
+          BUILD_TS=$(date +%s)
+          sed -i "s/flutter_bootstrap.js/flutter_bootstrap.js?v=${BUILD_TS}/g" build/web/index.html
+          sed -i "s/flutter_bootstrap.js/flutter_bootstrap.js?v=${BUILD_TS}/g" build/web/404.html
       - name: Publish to gh-pages Branch
         uses: peaceiris/actions-gh-pages@v4
         with:
