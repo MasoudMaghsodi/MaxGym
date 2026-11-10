@@ -57,6 +57,7 @@ flutter:
 
   assets:
     - assets/fonts/
+    - assets/images/maxgym_logo.jpeg
 
   fonts:
     - family: Vazirmatn
