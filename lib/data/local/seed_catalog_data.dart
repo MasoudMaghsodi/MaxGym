@@ -38,28 +38,88 @@ class SeedCatalogData {
   static const String _cdnBase =
       'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises';
 
-  /// آدرس مستقیم فایل JSON شامل کل ۸۷۳ حرکت استاندارد جهانی روی CDN رایگان
   static const String global873ExercisesJsonUrl =
       'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/dist/exercises.json';
   static const String global800ExercisesJsonUrl = global873ExercisesJsonUrl;
 
-  /// مترجم هوشمند خودکار نام حرکات انگلیسی به اصطلاحات رایج باشگاهی فارسی
   static String translateEnglishExerciseToPersian(String enName) =>
       translateExerciseNameToPersian(enName);
 
+  /// مترجم پیشرفته عبارات تخصصی بدنسازی به فارسی خالص و استاندارد باشگاهی
   static String translateExerciseNameToPersian(String enName) {
-    final dictionary = <String, String>{
+    final phraseDictionary = <String, String>{
+      'One-Arm Pronated Dumbbell Triceps Extension':
+          'پشتبازو دمبل تکدست چرخشی خوابیده',
+      'Smith Machine Close-Grip Bench Press':
+          'پرس سینه دستجمع با دستگاه اسمیت',
+      'Standing Low-Pulley One-Arm Triceps Extension':
+          'پشتبازو سیمکش تکدست ایستاده از پایین',
+      'Front Incline Dumbbell Raise': 'نشر از جلو دمبل روی میز شیبدار',
+      'Leverage Shoulder Press': 'پرس سرشانه دستگاه اهرمی',
+      'Leverage Decline Chest Press': 'پرس زیرسینه دستگاه اهرمی',
+      'Leverage Incline Chest Press': 'پرس بالاسینه دستگاه اهرمی',
+      'Leverage Chest Press': 'پرس سینه دستگاه اهرمی',
+      'Flat Bench Cable Flyes': 'قفسه سینه سیمکش روی میز تخت',
+      'Bodyweight Flyes': 'فلای سینه با وزن بدن (رینگ/TRX)',
+      'Double Kettlebell Jerk': 'جِرک جفت کتلبل بالای سر',
+      'Barbell Bench Press - Medium Grip': 'پرس سینه هالتر دست متوسط',
+      'Barbell Incline Bench Press - Medium Grip': 'پرس بالاسینه هالتر',
+      'Incline Dumbbell Bench Press': 'پرس بالاسینه دمبل',
+      'Wide-Grip Lat Pulldown': 'لت سیمکش دست باز از جلو',
+      'Close-Grip Front Lat Pulldown': 'لت سیمکش دست جمع از جلو',
+    };
+
+    if (phraseDictionary.containsKey(enName.trim())) {
+      return phraseDictionary[enName.trim()]!;
+    }
+
+    final wordDictionary = <String, String>{
+      'One-Arm': 'تکدست',
+      'One Arm': 'تکدست',
+      'Single-Arm': 'تکدست',
+      'Single Arm': 'تکدست',
+      'Single-Leg': 'تکپا',
+      'Single Leg': 'تکپا',
+      'Two-Arm': 'جفتدست',
+      'Double': 'جفت',
+      'Alternating': 'متناوب',
+      'Alternate': 'متناوب',
+      'Pronated': 'مچ چرخشی',
+      'Supinated': 'مچ برعکس',
+      'Neutral-Grip': 'مچ موازی',
+      'Close-Grip': 'دستجمع',
+      'Wide-Grip': 'دستباز',
+      'Reverse-Grip': 'دستبرعکس',
+      'Reverse Grip': 'دستبرعکس',
+      'Underhand': 'دستبرعکس',
+      'Overhand': 'دستازرو',
+      'Flat Bench': 'میز تخت',
+      'Incline': 'بالاسینه / شیبدار',
+      'Decline': 'زیرسینه / شیب منفی',
+      'Seated': 'نشسته',
+      'Standing': 'ایستاده',
+      'Lying': 'خوابیده',
+      'Kneeling': 'روی زانو',
+      'Bent-Over': 'خم',
+      'Bent Over': 'خم',
+      'Low-Pulley': 'سیمکش از پایین',
+      'High-Pulley': 'سیمکش از بالا',
+      'Smith Machine': 'دستگاه اسمیت',
+      'Leverage': 'دستگاه اهرمی',
+      'Bodyweight': 'وزن بدن',
       'Barbell': 'هالتر',
       'Dumbbell': 'دمبل',
       'Cable': 'سیمکش',
       'Machine': 'دستگاه',
       'Smith': 'اسمیت',
-      'EZ-Bar': 'هالترخم (EZ)',
+      'EZ-Bar': 'هالتر خم (EZ)',
       'Kettlebell': 'کتلبل',
       'Band': 'کش ورزشی',
       'Bench Press': 'پرس سینه',
-      'Incline': 'بالاسینه',
-      'Decline': 'زیرسینه',
+      'Chest Press': 'پرس سینه',
+      'Shoulder Press': 'پرس سرشانه',
+      'Military Press': 'پرس سرشانه نظامی',
+      'Arnold': 'آرنولدی',
       'Flyes': 'قفسه (فلای)',
       'Fly': 'فلای',
       'Push-Up': 'شنا سوئدی',
@@ -73,25 +133,18 @@ class SeedCatalogData {
       'Pullups': 'بارفیکس',
       'Chin-Up': 'بارفیکس دست برعکس',
       'Row': 'روئینگ (زیربغل)',
-      'Bent Over': 'خم',
-      'Seated': 'نشسته',
-      'Standing': 'ایستاده',
-      'Lying': 'خوابیده',
-      'One-Arm': 'تکدست',
-      'Single-Arm': 'تکدست',
-      'Single-Leg': 'تکپا',
       'Deadlift': 'ددلیفت',
       'Romanian': 'رومانیایی',
       'Sumo': 'سومو',
       'Shrug': 'شراگ (کول)',
-      'Shoulder Press': 'پرس سرشانه',
-      'Military Press': 'پرس سرشانه نظامی',
-      'Arnold': 'آرنولدی',
       'Lateral Raise': 'نشر جانب',
       'Front Raise': 'نشر از جلو',
       'Rear Delt': 'سرشانه خلفی',
       'Face Pull': 'فیسپول',
       'Upright Row': 'کول هالتر/دمبل',
+      'Raise': 'نشر',
+      'Press': 'پرس',
+      'Jerk': 'پرتاب بالای سر (جرک)',
       'Curl': 'جلوبازو',
       'Hammer': 'چکشی',
       'Preacher': 'لاری',
@@ -100,6 +153,8 @@ class SeedCatalogData {
       'Reverse': 'معکوس (ساعد)',
       'Triceps': 'پشتبازو',
       'Tricep': 'پشتبازو',
+      'Biceps': 'جلوبازو',
+      'Bicep': 'جلوبازو',
       'Pushdown': 'سیمکش ایستاده',
       'Skullcrusher': 'اسکالکراشر (خوابیده)',
       'Kickback': 'کیکبک',
@@ -123,22 +178,34 @@ class SeedCatalogData {
       'Leg Raise': 'زیرشکم',
       'Plank': 'پلانک',
       'Russian Twist': 'چرخش روسی (پهلو)',
-      'Wide-Grip': 'دست باز',
-      'Close-Grip': 'دست جمع',
-      'Alternate': 'متناوب',
     };
 
     String translated = enName;
-    dictionary.forEach((en, fa) {
+    wordDictionary.forEach((en, fa) {
       translated = translated.replaceAll(
-        RegExp(en, caseSensitive: false),
+        RegExp('\\b$en\\b', caseSensitive: false),
         fa,
       );
     });
-    return translated == enName ? 'حرکت $enName' : '$translated ($enName)';
+
+    translated = translated
+        .replaceAll('-', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return translated == enName ? 'حرکت $enName' : translated;
   }
 
-  /// نگاشت عضلات استاندارد دیتابیس جهانی ۸۷۳ حرکتی به ۸ گروه عضلانی اصلی اپ
+  /// پاکسازی نامهای قدیمی که در دیتابیس با پرانتز انگلیسی تکراری ذخیره شده بودند
+  static String extractCleanPersianTitle(String rawFa, String rawEn) {
+    var s = rawFa.trim();
+    if (rawEn.isNotEmpty) {
+      s = s.replaceAll('($rawEn)', '').trim();
+    }
+    s = s.replaceAll(RegExp(r'\([A-Za-z0-9\s\-/]+\)$'), '').trim();
+    return translateExerciseNameToPersian(s.isEmpty ? rawEn : s);
+  }
+
   static String mapGlobalMuscleGroup(String rawMuscle) {
     final m = rawMuscle.toLowerCase();
     if (m.contains('chest')) return 'chest';
@@ -167,7 +234,6 @@ class SeedCatalogData {
   static String mapGlobalMuscleToCategory(String rawMuscle) =>
       mapGlobalMuscleGroup(rawMuscle);
 
-  /// دانلود و تبدیل خودکار کل ۸۷۳ حرکت از GitHub در پسزمینه (فقط یکبار)
   static Future<List<ExerciseSeedItem>> fetchAll873GlobalExercises() async {
     try {
       final client = HttpClient()
@@ -194,10 +260,12 @@ class SeedCatalogData {
         final equipment = (map['equipment'] as String?) ?? 'bodyweight';
 
         final images = List<String>.from(map['images'] ?? const []);
-        final imgStart =
-            images.isNotEmpty ? '$_cdnBase/${images.first}' : '$_cdnBase/$id/0.jpg';
-        final imgEnd =
-            images.length > 1 ? '$_cdnBase/${images[1]}' : '$_cdnBase/$id/1.jpg';
+        final imgStart = images.isNotEmpty
+            ? '$_cdnBase/${images.first}'
+            : '$_cdnBase/$id/0.jpg';
+        final imgEnd = images.length > 1
+            ? '$_cdnBase/${images[1]}'
+            : '$_cdnBase/$id/1.jpg';
 
         final List<String> injuries = [];
         final lowerName = nameEn.toLowerCase();
@@ -236,7 +304,6 @@ class SeedCatalogData {
     }
   }
 
-  /// بانک غنی حرکات پایه آفلاین (که حتی قبل از اولین اتصال اینترنت در گوشی آماده است)
   static const List<ExerciseSeedItem> initialExercises = [
     // ================= CHEST (سینه) =================
     ExerciseSeedItem(
@@ -471,7 +538,7 @@ class SeedCatalogData {
     ),
     ExerciseSeedItem(
       id: 'One-Arm_Dumbbell_Row',
-      nameFa: 'زیربغل تک دمبل خم (ارهای)',
+      nameFa: 'زیربغل تکدمبل خم (ارهای)',
       nameEn: 'One-Arm Dumbbell Row',
       targetMuscle: 'back',
       equipment: 'dumbbell',
@@ -970,9 +1037,7 @@ class SeedCatalogData {
     ),
   ];
 
-  /// بانک جامع ۳۰ مکمل، ویتامین، مینرال و آمینواسید تخصصی ورزشکاران
   static const List<Map<String, String>> supplementCatalog = [
-    // --- پروتئینها و گینرها ---
     {
       'id': 'whey_protein',
       'nameFa': 'پروتئین وی کنسانتره (Whey Protein)',
@@ -1018,8 +1083,6 @@ class SeedCatalogData {
       'defaultTimingFa': 'بعد از تمرین (بدون لاکتوز)',
       'defaultTimingEn': 'Post-Workout (Lactose-Free)',
     },
-
-    // --- افزایش قدرت، پمپ و استقامت ---
     {
       'id': 'creatine',
       'nameFa': 'کراتین مونوهیدرات میکرونایزد (Creatine)',
@@ -1065,8 +1128,6 @@ class SeedCatalogData {
       'defaultTimingFa': '۳۰ دقیقه قبل از تمرین',
       'defaultTimingEn': '30 Mins Pre-Workout',
     },
-
-    // --- آمینواسیدها و ریکاوری ---
     {
       'id': 'bcaa_eaa',
       'nameFa': 'بیسیایای / آمینو ضروری (BCAA / EAA)',
@@ -1094,8 +1155,6 @@ class SeedCatalogData {
       'defaultTimingFa': 'همراه صبحانه، قبل تمرین و شب',
       'defaultTimingEn': 'Split with main meals',
     },
-
-    // --- چربیسوزها و متابولیسم ---
     {
       'id': 'l_carnitine',
       'nameFa': 'ال-کارنیتین مایع یا قرص (L-Carnitine)',
@@ -1114,8 +1173,6 @@ class SeedCatalogData {
       'defaultTimingFa': 'همراه وعده ناهار و شام',
       'defaultTimingEn': 'With Lunch & Dinner',
     },
-
-    // --- ویتامینها، مینرالها و سلامت عمومی (Vitamins & Minerals) ---
     {
       'id': 'multivitamin',
       'nameFa': 'مولتیویتامین مینرال تخصصی ورزشی',
@@ -1217,7 +1274,7 @@ class SeedCatalogData {
     },
     {
       'id': 'glucosamine',
-      'nameFa': 'گلوکزآمین، کندروئیتین و MSM (مفاصل و غضروف)',
+      'nameFa': 'گلوکزامین، کندروئیتین و MSM (مفاصل و غضروف)',
       'nameEn': 'Glucosamine + Chondroitin + MSM',
       'defaultDosageFa': '۲ عدد قرص در روز',
       'defaultDosageEn': '2 Tablets Daily',
@@ -1270,13 +1327,13 @@ class SeedCatalogData {
       'defaultTimingEn': 'Morning Fasted with Water',
     },
     {
-      'id': 'glucosamine',
-      'nameFa': 'گلوکزامین، کندرویتین و MSM (محافظت و غضروف‌سازی مفاصل)',
-      'nameEn': 'Glucosamine, Chondroitin & MSM Complex',
-      'defaultDosageFa': '۱ تا ۲ قرص',
-      'defaultDosageEn': '1-2 Tablets',
-      'defaultTimingFa': 'همراه با وعده غذایی اصلی',
-      'defaultTimingEn': 'With Main Meal',
+      'id': 'collagen_peptides',
+      'nameFa': 'کلاژن پپتاید هیدرولیزشده (سلامت تاندون و مفاصل)',
+      'nameEn': 'Hydrolyzed Collagen Peptides (10g)',
+      'defaultDosageFa': '۱ اسکوپ (۱۰ گرم)',
+      'defaultDosageEn': '1 Scoop (10g)',
+      'defaultTimingFa': 'همراه ویتامین C صبحها',
+      'defaultTimingEn': 'Morning with Vitamin C',
     },
     {
       'id': 'coq10',
@@ -1289,7 +1346,7 @@ class SeedCatalogData {
     },
     {
       'id': 'cordyceps',
-      'nameFa': 'قارچ کوردیسپس (افزایش اکسیژن‌رسانی و استقامت هوازی)',
+      'nameFa': 'قارچ کوردیسپس (افزایش اکسیژنرسانی و استقامت هوازی)',
       'nameEn': 'Cordyceps Mushroom Extract (750mg)',
       'defaultDosageFa': '۱ تا ۲ کپسول',
       'defaultDosageEn': '1-2 Capsules',
@@ -1298,18 +1355,16 @@ class SeedCatalogData {
     },
     {
       'id': 'tribulus',
-      'nameFa': 'تریبولوس ترستریس (بهینه‌سازی طبیعی سطح تستوسترون)',
+      'nameFa': 'تریبولوس ترستریس (بهینهسازی طبیعی سطح تستوسترون)',
       'nameEn': 'Tribulus Terrestris Extract (1000mg)',
       'defaultDosageFa': '۱ قرص ۱۰۰۰ میلیگرم',
       'defaultDosageEn': '1 Tablet (1000mg)',
-      'defaultTimingFa': 'صبح‌ها یا قبل از تمرین',
+      'defaultTimingFa': 'صبحها یا قبل از تمرین',
       'defaultTimingEn': 'Morning or Pre-Workout',
     },
   ];
 
-  /// بانک جامع ۴۰ ماده غذایی پرکاربرد (ایرانی و بینالمللی) برای ساخت فوقسریع رژیم
   static const List<Map<String, String>> quickFoodCatalog = [
-    // --- منابع پروتئین حیوانی و گیاهی ---
     {
       'nameFa': 'سینه مرغ گریل یا آبپز (بدون پوست)',
       'nameEn': 'Grilled Skinless Chicken Breast',
@@ -1394,8 +1449,6 @@ class SeedCatalogData {
       'unitFa': '۳ قاشق غذاخوری',
       'unitEn': '3 Tbsp',
     },
-
-    // --- منابع کربوهیدرات پیچیده و انرژی ---
     {
       'nameFa': 'برنج سفید ایرانی کته یا آبکش (بدون روغن)',
       'nameEn': 'Steamed White Basmati Rice',
@@ -1462,8 +1515,6 @@ class SeedCatalogData {
       'unitFa': '۳ عدد ورق رایسکیک',
       'unitEn': '3 Rice Cakes',
     },
-
-    // --- میوهها، سبزیجات و قبل تمرین ---
     {
       'nameFa': 'موز متوسط (عالی برای قبل و بعد از تمرین)',
       'nameEn': 'Medium Ripe Banana',
@@ -1494,8 +1545,6 @@ class SeedCatalogData {
       'unitFa': '۱ کاسه بزرگ همراه وعده اصلی',
       'unitEn': '1 Large Bowl',
     },
-
-    // --- چربیهای سالم و مغزیجات ---
     {
       'nameFa': 'کره بادامزمینی ۱۰۰٪ طبیعی (بدون شکر افزوده)',
       'nameEn': '100% Natural Peanut Butter',
@@ -1539,7 +1588,7 @@ class SeedCatalogData {
       'unitEn': '10g Square + Espresso',
     },
     {
-      'nameFa': 'کره بادام زمینی طبیعی بدون شکر',
+      'nameFa': 'کره بادامزمینی طبیعی بدون شکر',
       'nameEn': 'Natural Peanut Butter (No Sugar)',
       'unitFa': '۱ قاشق غذاخوری (۱۵ گرم)',
       'unitEn': '1 Tbsp (15g)',
@@ -1551,7 +1600,7 @@ class SeedCatalogData {
       'unitEn': '2-3 Medium Dates',
     },
     {
-      'nameFa': 'سیب‌زمینی شیرین آبپز یا تنوری',
+      'nameFa': 'سیبزمینی شیرین آبپز یا تنوری',
       'nameEn': 'Baked or Boiled Sweet Potato',
       'unitFa': '۱ عدد متوسط (۱۵۰ گرم)',
       'unitEn': '1 Medium (150g)',

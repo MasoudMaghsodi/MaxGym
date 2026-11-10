@@ -15,6 +15,7 @@ import '../../core/utils/number_parser.dart';
 import '../../core/widgets/maxgym_3d_widgets.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/database_models.dart';
+import '../../data/local/seed_catalog_data.dart';
 import '../athletes/domain/scientific_bio_calculator.dart';
 import '../auth/security_gate_screen.dart';
 import '../pdf_export/pdf_export_engine.dart';
@@ -142,18 +143,51 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     });
   }
 
+  Widget _buildNeonImagePlaceholder(Color primary) {
+    return Container(
+      color: const Color(0xFF0B100D),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: primary.withOpacity(0.12),
+              border: Border.all(color: primary.withOpacity(0.35)),
+            ),
+            child: Icon(LucideIcons.dumbbell, size: 26, color: primary),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'MAX GYM MOTION',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              color: primary.withOpacity(0.65),
+              letterSpacing: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showFullScreenExerciseImage(
       BuildContext context, WorkoutItemEntity ex, bool isFa) {
+    final cleanFa = SeedCatalogData.extractCleanPersianTitle(
+            ex.exerciseNameFa, ex.exerciseNameEn)
+        .toCleanPersian();
+    final primary = Theme.of(context).colorScheme.primary;
+
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: const Color(0xFF0E1411),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: BorderSide(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
-            width: 1.5,
-          ),
+          side: BorderSide(color: primary.withOpacity(0.5), width: 1.5),
         ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 680),
@@ -163,10 +197,18 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  isFa ? ex.exerciseNameFa : ex.exerciseNameEn,
+                  isFa ? cleanFa : ex.exerciseNameEn,
                   style: const TextStyle(
                       fontWeight: FontWeight.w900, fontSize: 16),
                   textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    ex.exerciseNameEn,
+                    style: const TextStyle(fontSize: 12, color: Colors.white60),
+                  ),
                 ),
                 const SizedBox(height: 14),
                 InteractiveViewer(
@@ -178,9 +220,11 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                           child: CachedNetworkImage(
                             cacheManager: SmartExerciseCacheManager.instance,
                             imageUrl: ex.imageStartUrl,
-                            height: 220,
+                            height: 210,
                             width: double.infinity,
                             fit: BoxFit.contain,
+                            errorWidget: (_, __, ___) =>
+                                _buildNeonImagePlaceholder(primary),
                           ),
                         ),
                       const SizedBox(height: 10),
@@ -190,9 +234,11 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                           child: CachedNetworkImage(
                             cacheManager: SmartExerciseCacheManager.instance,
                             imageUrl: ex.imageEndUrl,
-                            height: 220,
+                            height: 210,
                             width: double.infinity,
                             fit: BoxFit.contain,
+                            errorWidget: (_, __, ___) =>
+                                _buildNeonImagePlaceholder(primary),
                           ),
                         ),
                     ],
@@ -244,7 +290,9 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
             'p_athlete_feedback': log.athleteFeedback,
           });
         } catch (_) {
-          await client.from('athlete_workout_logs').upsert(log.toSupabaseJson());
+          await client
+              .from('athlete_workout_logs')
+              .upsert(log.toSupabaseJson());
         }
       }
     } catch (_) {}
@@ -350,12 +398,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                   ),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: AppColors.warning, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.warning.withOpacity(0.35),
-                      blurRadius: 12,
-                    ),
-                  ],
                 ),
                 alignment: Alignment.center,
                 child: Directionality(
@@ -429,6 +471,143 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     );
   }
 
+  /// رادار مهندسی تلمتری فشار بیومکانیکی عضلات (جایگزین حرفهای آدمک کارتونی)
+  Widget _buildBiometricMuscleTelemetryHud(
+      WorkoutDayPlan activeDay, bool isFa, Color primary) {
+    final totalSets =
+        activeDay.exercises.fold<int>(0, (sum, ex) => sum + ex.sets.length);
+    final Map<String, int> muscleSetCounts = {};
+    for (final ex in activeDay.exercises) {
+      final m = ex.targetMuscle.isNotEmpty
+          ? ex.targetMuscle
+          : (activeDay.targetMuscles.isNotEmpty
+              ? activeDay.targetMuscles.first
+              : 'chest');
+      muscleSetCounts[m] = (muscleSetCounts[m] ?? 0) + ex.sets.length;
+    }
+    for (final tm in activeDay.targetMuscles) {
+      muscleSetCounts.putIfAbsent(tm, () => 3);
+    }
+
+    const muscleLabelsFa = {
+      'chest': 'سینه (Pectorals)',
+      'back': 'زیربغل و لت (Lats)',
+      'shoulders': 'سرشانه (Deltoids)',
+      'biceps': 'جلوبازو و ساعد (Biceps)',
+      'triceps': 'پشتبازو (Triceps)',
+      'legs': 'چهارسر و همسترینگ (Legs)',
+      'abs': 'شکم و میانتنه (Core)',
+      'calves': 'ساق پا (Calves)',
+    };
+
+    return MaxGymGlassCard(
+      accentColor: primary,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.activity, color: primary, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isFa
+                            ? 'تلمتری بیومکانیک و فشار عضلانی جلسه'
+                            : 'BIOMETRIC MUSCLE LOAD TELEMETRY',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: primary.withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: primary.withOpacity(0.45)),
+                ),
+                child: Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    '${activeDay.exercises.length} MOVES • $totalSets SETS',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: primary,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...muscleSetCounts.entries.map((entry) {
+            final ratio =
+                (entry.value / (totalSets > 0 ? totalSets : 1)).clamp(0.25, 1.0);
+            final label = isFa
+                ? (muscleLabelsFa[entry.key] ?? entry.key.toUpperCase())
+                : entry.key.toUpperCase();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          '${entry.value} SETS ACTIVE • ${(ratio * 100).round()}% LOAD',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: ratio,
+                      minHeight: 7,
+                      backgroundColor: Colors.white10,
+                      color: primary,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInteractiveWorkoutTab(FullProgramEntity? program,
       BioAnalysisResult bio, bool isFa, ThemeData theme) {
     final primary = theme.colorScheme.primary;
@@ -467,9 +646,8 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     final progress = totalMoves > 0 ? doneMoves / totalMoves : 0.0;
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       children: [
-        // ۱. هیرو بنر شیشهای پیشرفت تمرین روزانه
         MaxGymGlassCard(
           accentColor: primary,
           padding: const EdgeInsets.all(20),
@@ -481,9 +659,9 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      program.title,
+                      program.title.toCleanPersian(),
                       style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w900),
+                          fontSize: 17, fontWeight: FontWeight.w900),
                     ),
                   ),
                   Container(
@@ -492,12 +670,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                     decoration: BoxDecoration(
                       color: primary,
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primary.withOpacity(0.45),
-                          blurRadius: 10,
-                        ),
-                      ],
                     ),
                     child: Directionality(
                       textDirection: TextDirection.ltr,
@@ -518,7 +690,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 borderRadius: BorderRadius.circular(10),
                 child: LinearProgressIndicator(
                   value: progress,
-                  minHeight: 10,
+                  minHeight: 9,
                   backgroundColor: Colors.black45,
                 ),
               ),
@@ -527,9 +699,8 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         ),
         const SizedBox(height: 16),
 
-        // ۲. نوار انتخاب روزهای هفته با طراحی کپسولی نئونی
         SizedBox(
-          height: 50,
+          height: 48,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: program.days.length,
@@ -550,18 +721,10 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                       color: selected ? primary : Colors.white12,
                       width: 1.4,
                     ),
-                    boxShadow: selected
-                        ? [
-                            BoxShadow(
-                              color: primary.withOpacity(0.35),
-                              blurRadius: 12,
-                            )
-                          ]
-                        : null,
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    isFa ? d.dayNameFa : d.dayNameEn,
+                    isFa ? d.dayNameFa.toCleanPersian() : d.dayNameEn,
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
                       color: selected ? Colors.black : Colors.white,
@@ -595,16 +758,17 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
             ),
           )
         else ...[
-          Interactive3DMuscleAnatomy(
-            activeMuscles: activeDay.targetMuscles,
-            isFa: isFa,
-          ),
+          _buildBiometricMuscleTelemetryHud(activeDay, isFa, primary),
           const SizedBox(height: 18),
           ...List.generate(activeDay.exercises.length, (idx) {
             final ex = activeDay.exercises[idx];
             final isDone = _completedExerciseIds.contains(ex.id);
             final restSec =
                 ex.sets.isNotEmpty ? ex.sets.first.restSeconds : 60;
+
+            final cleanPersianTitle = SeedCatalogData.extractCleanPersianTitle(
+                    ex.exerciseNameFa, ex.exerciseNameEn)
+                .toCleanPersian();
 
             return MaxGymGlassCard(
               margin: const EdgeInsets.only(bottom: 18),
@@ -615,13 +779,12 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // استیج دوقلوی سینمایی نمایش شروع و پایان حرکت بدون بریدگی (BoxFit.contain)
                   if (ex.imageStartUrl.isNotEmpty)
                     GestureDetector(
                       onTap: () =>
                           _showFullScreenExerciseImage(context, ex, isFa),
                       child: Container(
-                        height: 195,
+                        height: 185,
                         decoration: const BoxDecoration(
                           color: Color(0xFF090D0B),
                           borderRadius:
@@ -642,11 +805,12 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                                               SmartExerciseCacheManager.instance,
                                           imageUrl: ex.imageStartUrl,
                                           fit: BoxFit.contain,
+                                          placeholder: (_, __) =>
+                                              _buildNeonImagePlaceholder(
+                                                  primary),
                                           errorWidget: (_, __, ___) =>
-                                              const Center(
-                                            child: Icon(LucideIcons.dumbbell,
-                                                size: 32),
-                                          ),
+                                              _buildNeonImagePlaceholder(
+                                                  primary),
                                         ),
                                       ),
                                       Positioned(
@@ -687,11 +851,12 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                                               ? ex.imageEndUrl
                                               : ex.imageStartUrl,
                                           fit: BoxFit.contain,
+                                          placeholder: (_, __) =>
+                                              _buildNeonImagePlaceholder(
+                                                  primary),
                                           errorWidget: (_, __, ___) =>
-                                              const Center(
-                                            child: Icon(LucideIcons.dumbbell,
-                                                size: 32),
-                                          ),
+                                              _buildNeonImagePlaceholder(
+                                                  primary),
                                         ),
                                       ),
                                       Positioned(
@@ -744,7 +909,32 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: primary.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: primary.withOpacity(0.6),
+                                    width: 1.5),
+                              ),
+                              child: Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: Text(
+                                  '0${idx + 1}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    color: primary,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -759,26 +949,47 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                                             AppColors.warning.withOpacity(0.2),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: Text(
-                                        '🔗 SUPERSET (${ex.supersetGroupId})',
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w900,
-                                          color: AppColors.warning,
+                                      child: Directionality(
+                                        textDirection: TextDirection.ltr,
+                                        child: Text(
+                                          '🔗 SUPERSET (${ex.supersetGroupId})',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppColors.warning,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   Text(
-                                    '${idx + 1}. ${isFa ? ex.exerciseNameFa : ex.exerciseNameEn}',
+                                    isFa
+                                        ? cleanPersianTitle
+                                        : ex.exerciseNameEn,
                                     style: const TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 16),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 16,
+                                      color: Colors.white,
+                                    ),
                                   ),
+                                  if (isFa && ex.exerciseNameEn.isNotEmpty) ...[
+                                    const SizedBox(height: 3),
+                                    Directionality(
+                                      textDirection: TextDirection.ltr,
+                                      child: Text(
+                                        ex.exerciseNameEn,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: primary.withOpacity(0.85),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                   if (ex.coachNote.isNotEmpty)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 6),
                                       child: Text(
-                                        '📌 نکته مربی: ${ex.coachNote}',
+                                        '📌 نکته مربی: ${ex.coachNote.toCleanPersian()}',
                                         style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.bold,
@@ -933,7 +1144,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isFa ? meal.titleFa : meal.titleEn,
+                    isFa ? meal.titleFa.toCleanPersian() : meal.titleEn,
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 15,
@@ -948,7 +1159,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                       padding: const EdgeInsets.only(bottom: 6),
                       child: Text(
                         isFa
-                            ? '• ${item.foodNameFa} (${item.amountFa})${alts.isNotEmpty ? "\n   🔄 جایگزین: ${alts.join(" یا ")}" : ""}'
+                            ? '• ${item.foodNameFa.toCleanPersian()} (${item.amountFa.toCleanPersian()})${alts.isNotEmpty ? "\n   🔄 جایگزین: ${alts.join(" یا ").toCleanPersian()}" : ""}'
                             : '• ${item.foodNameEn} (${item.amountEn})${alts.isNotEmpty ? "\n   🔄 OR: ${alts.join(" / ")}" : ""}',
                         style: const TextStyle(height: 1.5),
                       ),
@@ -975,10 +1186,10 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                     ),
                     child: Icon(LucideIcons.pill, color: primary),
                   ),
-                  title: Text(isFa ? s.nameFa : s.nameEn,
+                  title: Text(isFa ? s.nameFa.toCleanPersian() : s.nameEn,
                       style: const TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: Text(isFa
-                      ? '${s.dosageFa} | ${s.timingFa}'
+                      ? '${s.dosageFa.toCleanPersian()} | ${s.timingFa.toCleanPersian()}'
                       : '${s.dosageEn} | ${s.timingEn}'),
                 ),
               );
@@ -1148,7 +1359,8 @@ class _MandatoryAthleteProfileCompletionGateState
                       isFa
                           ? 'ورزشکار عزیز، این فرم فقط در اولین ورود شما نمایش داده میشود. پس از تکمیل، میتوانید با ایمیل، شماره تماس یا کد اختصاصی خود وارد شوید:'
                           : 'Complete your profile once to unlock your portal:',
-                      style: const TextStyle(color: Colors.white70, height: 1.5),
+                      style:
+                          const TextStyle(color: Colors.white70, height: 1.5),
                     ),
                     const SizedBox(height: 18),
                     Row(
@@ -1432,10 +1644,8 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
                               borderRadius: BorderRadius.only(
                                 topLeft: const Radius.circular(18),
                                 topRight: const Radius.circular(18),
-                                bottomLeft:
-                                    Radius.circular(isMe ? 18 : 4),
-                                bottomRight:
-                                    Radius.circular(isMe ? 4 : 18),
+                                bottomLeft: Radius.circular(isMe ? 18 : 4),
+                                bottomRight: Radius.circular(isMe ? 4 : 18),
                               ),
                               border: Border.all(
                                 color: isMe
