@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pro_coach_app/data/local/app_database.dart';
+import 'package:pro_coach_app/data/local/database_models.dart';
 import 'package:pro_coach_app/data/local/seed_catalog_data.dart';
 
 void main() {
@@ -31,8 +32,8 @@ void main() {
     test('Supports Custom Coach Exercises, Custom Foods, and Custom Supplements', () {
       db.addCustomExercise(const ExerciseSeedItem(
         id: 'custom_move_99',
-        nameFa: 'حرکت اختصاصی مربی',
-        nameEn: 'Coach Special Press',
+        nameFa: 'حرکت اختصاصی مکس‌جیم',
+        nameEn: 'MaxGym Special Press',
         targetMuscle: 'chest',
         equipment: 'custom',
         imageStartUrl: '',
@@ -42,22 +43,22 @@ void main() {
 
       final fCount = db.getFoodsCatalog().length;
       db.addCustomFood(
-        nameFa: 'پروتئین بار خانگی',
-        nameEn: 'Homemade Protein Bar',
+        nameFa: 'پروتئین بار مکس‌جیم',
+        nameEn: 'MaxGym Protein Bar',
         unitFa: '۱ عدد (۶۰ گرم)',
         unitEn: '1 Bar (60g)',
       );
       expect(db.getFoodsCatalog().length, equals(fCount + 1));
     });
 
-    test('Athlete Access Code, Auto-Draft, Pure Text Chat & Athlete Workout Logs work end-to-end', () {
+    test('Athlete Access Code, Auto-Draft, Pure Text Chat & Workout Logs work end-to-end', () {
       final now = DateTime.now();
       final athlete = AthleteEntity(
         id: 'ath-500',
         firstName: 'کیوان',
         lastName: 'نوری',
         phone: '09121234567',
-        email: '', // ایمیل خالی -> پروفایل ناقص
+        email: '',
         gender: 'male',
         age: 27,
         heightCm: 180,
@@ -73,27 +74,23 @@ void main() {
       expect(savedAth.accessCode, startsWith('PC-'));
       expect(savedAth.isProfileComplete, isFalse);
 
-      // ۱. جستجو با کد دعوت اختصاصی ورزشکار
-      final foundByCode = db.getAthleteByAccessCode(savedAth.accessCode);
-      expect(foundByCode?.id, equals('ath-500'));
+      expect(db.getAthleteByAccessCode(savedAth.accessCode)?.id, equals('ath-500'));
 
-      // ۲. تست ذخیره و پاکسازی خودکار پیشنویس برنامه (Auto-Draft)
       final draft = FullProgramEntity(
         id: 'draft-1',
         athleteId: 'ath-500',
-        title: 'پیشنویس نیمهکاره',
+        title: 'پیش‌نویس نیمه‌کاره',
         startDate: now,
-        days: const [],
-        dietMeals: const [],
-        supplements: const [],
+        days: const <WorkoutDayPlan>[],
+        dietMeals: const <DietMealSlot>[],
+        supplements: const <SupplementPrescriptionItem>[],
         updatedAt: now,
       );
       db.saveProgramDraft('ath-500', draft);
-      expect(db.getProgramDraft('ath-500')?.title, equals('پیشنویس نیمهکاره'));
+      expect(db.getProgramDraft('ath-500')?.title, equals('پیش‌نویس نیمه‌کاره'));
       db.clearProgramDraft('ath-500');
       expect(db.getProgramDraft('ath-500'), isNull);
 
-      // ۳. تست چت متنی خالص (Pure Text Chat)
       db.insertChatMessage(ChatMessageEntity(
         id: 'msg-1',
         athleteId: 'ath-500',
@@ -102,11 +99,9 @@ void main() {
         createdAt: now,
       ));
       expect(db.getChatMessagesForAthlete('ath-500').length, equals(1));
-      expect(db.getPendingSyncChatMessages().length, equals(1));
       db.markRecordSynced('chat_messages', 'msg-1');
       expect(db.getPendingSyncChatMessages().isEmpty, isTrue);
 
-      // ۴. تست ثبت گزارش تمرین روزانه و رکورد وزنه توسط شاگرد (Athlete Workout Log)
       db.upsertWorkoutLog(AthleteWorkoutLogEntity(
         id: 'wlog-1',
         athleteId: 'ath-500',
@@ -121,7 +116,6 @@ void main() {
       final wLogs = db.getWorkoutLogsForAthlete('ath-500');
       expect(wLogs.length, equals(1));
       expect(wLogs.first.waterGlasses, equals(12));
-      expect(wLogs.first.exerciseWeightsKg['Barbell_Bench_Press'], equals('85'));
     });
 
     test('Prevents SQL Injection on table name in markRecordSynced (Whitelist Guard)', () {

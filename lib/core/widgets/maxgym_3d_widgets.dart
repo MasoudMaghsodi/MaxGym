@@ -186,7 +186,7 @@ class _Interactive3DMuscleAnatomyState
                   const SizedBox(width: 8),
                   Text(
                     widget.isFa
-                        ? 'هیتمپ سهبعدی آناتومی عضلات (${_showBackView ? "نمای پشت" : "نمای جلو"})'
+                        ? 'هیت‌مپ سه‌بعدی آناتومی عضلات (${_showBackView ? "نمای پشت" : "نمای جلو"})'
                         : '3D Muscle Heatmap (${_showBackView ? "Posterior" : "Anterior"})',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
