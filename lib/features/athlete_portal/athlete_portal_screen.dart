@@ -107,20 +107,20 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         .listen((rows) {
       if (rows.isNotEmpty && mounted) {
         final r = rows.first;
-        final updated = AthleteEntity(
-          id: r['id'] as String,
+        final updated = _athlete.copyWith(
           firstName: r['first_name'] as String? ?? _athlete.firstName,
           lastName: r['last_name'] as String? ?? _athlete.lastName,
           phone: r['phone'] as String? ?? _athlete.phone,
           email: r['email'] as String? ?? _athlete.email,
           accessCode: r['access_code'] as String? ?? _athlete.accessCode,
+          passwordHash: r['password_hash'] as String? ?? _athlete.passwordHash,
+          isCodeBurned: r['is_code_burned'] as bool? ?? _athlete.isCodeBurned,
+          streakDays: (r['streak_days'] as num?)?.toInt() ?? _athlete.streakDays,
           gender: r['gender'] as String? ?? _athlete.gender,
           age: (r['age'] as num?)?.toInt() ?? _athlete.age,
           heightCm: (r['height_cm'] as num?)?.toDouble() ?? _athlete.heightCm,
           weightKg: (r['weight_kg'] as num?)?.toDouble() ?? _athlete.weightKg,
           fitnessGoal: r['fitness_goal'] as String? ?? _athlete.fitnessGoal,
-          injuryTags: _athlete.injuryTags,
-          createdAt: _athlete.createdAt,
           updatedAt: DateTime.now(),
           syncStatus: 'synced',
         );
@@ -145,115 +145,299 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
 
   Widget _buildNeonImagePlaceholder(Color primary) {
     return Container(
-      color: const Color(0xFF0B100D),
+      color: const Color(0xFF0D110F),
       alignment: Alignment.center,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: primary.withOpacity(0.12),
-              border: Border.all(color: primary.withOpacity(0.35)),
-            ),
-            child: Icon(LucideIcons.dumbbell, size: 26, color: primary),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'MAX GYM MOTION',
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w900,
-              color: primary.withOpacity(0.65),
-              letterSpacing: 1.5,
-            ),
-          ),
-        ],
-      ),
+      child: Icon(LucideIcons.dumbbell,
+          size: 24, color: primary.withOpacity(0.65)),
     );
   }
 
-  void _showFullScreenExerciseImage(
+  /// استیج سینمایی حرکت (به سبک گوشی وسط در عکس ۲ - Concentration Curl)
+  void _showCinematicExerciseStageModal(
       BuildContext context, WorkoutItemEntity ex, bool isFa) {
     final cleanFa = SeedCatalogData.extractCleanPersianTitle(
             ex.exerciseNameFa, ex.exerciseNameEn)
         .toCleanPersian();
     final primary = Theme.of(context).colorScheme.primary;
+    final restSec = ex.sets.isNotEmpty ? ex.sets.first.restSeconds : 60;
+    final weightCtrl =
+        TextEditingController(text: _loggedWeights[ex.id] ?? '');
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF0E1411),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: primary.withOpacity(0.5), width: 1.5),
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF0E1210),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.84,
+          maxChildSize: 0.94,
+          minChildSize: 0.60,
+          expand: false,
+          builder: (_, scrollCtrl) {
+            return ListView(
+              controller: scrollCtrl,
+              padding: const EdgeInsets.all(22),
               children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                // قاب تصویر دوتایی بزرگ شروع و پایان حرکت
+                Container(
+                  height: 220,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141816),
+                    borderRadius: BorderRadius.circular(26),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(26),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: CachedNetworkImage(
+                                  cacheManager:
+                                      SmartExerciseCacheManager.instance,
+                                  imageUrl: ex.imageStartUrl,
+                                  fit: BoxFit.contain,
+                                  errorWidget: (_, __, ___) =>
+                                      _buildNeonImagePlaceholder(primary),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 10,
+                                right: 10,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black87,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    isFa ? 'شروع حرکت' : 'START POSE',
+                                    style: const TextStyle(
+                                        fontSize: 10, color: Colors.white70),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(width: 1, color: Colors.white10),
+                        Expanded(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: CachedNetworkImage(
+                                  cacheManager:
+                                      SmartExerciseCacheManager.instance,
+                                  imageUrl: ex.imageEndUrl.isNotEmpty
+                                      ? ex.imageEndUrl
+                                      : ex.imageStartUrl,
+                                  fit: BoxFit.contain,
+                                  errorWidget: (_, __, ___) =>
+                                      _buildNeonImagePlaceholder(primary),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 10,
+                                left: 10,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: primary,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    isFa ? 'فرم انقباض' : 'FINISH POSE',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isFa ? cleanFa : ex.exerciseNameEn,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text(
+                              ex.exerciseNameEn,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1F1C),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(LucideIcons.timer, size: 15, color: primary),
+                          const SizedBox(width: 6),
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text(
+                              '${restSec}s Rest',
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (ex.coachNote.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: primary.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: primary.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      '📌 نکته فنی مربی: ${ex.coachNote.toCleanPersian()}',
+                      style: const TextStyle(fontSize: 13, height: 1.5),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
                 Text(
-                  isFa ? cleanFa : ex.exerciseNameEn,
+                  isFa
+                      ? 'پروتکل ستها (برای شروع تایمر استراحت روی هر ست بزنید):'
+                      : 'Sets Protocol (Tap any set to start rest timer):',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 16),
-                  textAlign: TextAlign.center,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white70),
                 ),
-                const SizedBox(height: 4),
-                Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Text(
-                    ex.exerciseNameEn,
-                    style: const TextStyle(fontSize: 12, color: Colors.white60),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                InteractiveViewer(
-                  child: Column(
-                    children: [
-                      if (ex.imageStartUrl.isNotEmpty)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: CachedNetworkImage(
-                            cacheManager: SmartExerciseCacheManager.instance,
-                            imageUrl: ex.imageStartUrl,
-                            height: 210,
-                            width: double.infinity,
-                            fit: BoxFit.contain,
-                            errorWidget: (_, __, ___) =>
-                                _buildNeonImagePlaceholder(primary),
+                const SizedBox(height: 10),
+                ...ex.sets.map((s) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF151917),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.06)),
+                    ),
+                    child: ListTile(
+                      onTap: () {
+                        _startRestTimer(s.restSeconds);
+                        Navigator.pop(ctx);
+                      },
+                      leading: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: primary.withOpacity(0.18),
+                        child: Text(
+                          '${s.setNumber}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: primary,
+                            fontSize: 12,
                           ),
                         ),
-                      const SizedBox(height: 10),
-                      if (ex.imageEndUrl.isNotEmpty)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: CachedNetworkImage(
-                            cacheManager: SmartExerciseCacheManager.instance,
-                            imageUrl: ex.imageEndUrl,
-                            height: 210,
-                            width: double.infinity,
-                            fit: BoxFit.contain,
-                            errorWidget: (_, __, ___) =>
-                                _buildNeonImagePlaceholder(primary),
-                          ),
+                      ),
+                      title: Text(
+                        isFa ? 'تکرار هدف: ${s.reps}' : 'Target Reps: ${s.reps}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 14),
+                      ),
+                      subtitle: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          'Tempo: ${s.tempo}  •  Rest: ${s.restSeconds}s${s.isDropSet ? "  •  DROP SET" : ""}',
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.white54),
                         ),
-                    ],
+                      ),
+                      trailing: Icon(LucideIcons.playCircle, color: primary),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: weightCtrl,
+                  keyboardType: TextInputType.number,
+                  onChanged: (v) => _loggedWeights[ex.id] = v.toEnglishDigits(),
+                  decoration: InputDecoration(
+                    labelText: isFa
+                        ? 'ثبت رکورد وزنه زدهشده (kg)'
+                        : 'Log Weight Lifted (kg)',
+                    prefixIcon: const Icon(LucideIcons.trophy),
                   ),
                 ),
-                const SizedBox(height: 14),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text(isFa ? 'بستن تصویر' : 'Close'),
+                const SizedBox(height: 18),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _completedExerciseIds.add(ex.id);
+                    });
+                    _startRestTimer(restSec);
+                    Navigator.pop(ctx);
+                  },
+                  icon: const Icon(LucideIcons.checkCircle2),
+                  label: Text(isFa
+                      ? 'تکمیل حرکت و شروع تایمر استراحت'
+                      : 'Mark Done & Start Rest Timer'),
                 ),
               ],
-            ),
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -340,40 +524,61 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 68,
         title: Row(
           children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: AppColors.success,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.success.withOpacity(0.8),
-                    blurRadius: 8,
+            // آواتار دایرهای با حلقه نئونی دقیقاً به سبک عکس ۲ (Hello Emma 👋)
+            GestureDetector(
+              onTap: () => setState(() => _selectedTabIndex = 3),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF181D1A),
+                  border: Border.all(color: primary, width: 1.8),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _athlete.firstName.isNotEmpty
+                      ? _athlete.firstName.characters.first.toUpperCase()
+                      : 'M',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 17,
+                    color: primary,
                   ),
-                ],
+                ),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _athlete.fullName,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w900),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _athlete.fullName,
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w900),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text('👋', style: TextStyle(fontSize: 14)),
+                    ],
                   ),
+                  const SizedBox(height: 2),
                   Directionality(
                     textDirection: TextDirection.ltr,
                     child: Text(
-                      'LIVE • 🔥 ${bio.targetCalories} kcal | 🥩 ${bio.proteinGrams}g P',
-                      style: TextStyle(
+                      '🔥 ${bio.targetCalories} Kcal  •  🥩 ${bio.proteinGrams}g P  •  ⚡ ${_athlete.streakDays}d Streak',
+                      style: const TextStyle(
                         fontSize: 11,
-                        color: primary,
-                        fontWeight: FontWeight.bold,
+                        color: Colors.white60,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -387,17 +592,11 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
             GestureDetector(
               onTap: () => setState(() => _remainingRestSeconds = 0),
               child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.warning.withOpacity(0.35),
-                      AppColors.danger.withOpacity(0.25),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.warning, width: 1.5),
+                  color: primary,
+                  borderRadius: BorderRadius.circular(30),
                 ),
                 alignment: Alignment.center,
                 child: Directionality(
@@ -406,7 +605,8 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                     '⏱ ${_remainingRestSeconds}s',
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
-                      color: AppColors.warning,
+                      color: Colors.black,
+                      fontSize: 12,
                     ),
                   ),
                 ),
@@ -428,7 +628,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
             ),
           IconButton(
             tooltip: isFa ? 'خروج' : 'Sign Out',
-            icon: const Icon(LucideIcons.logOut, color: AppColors.danger),
+            icon: const Icon(LucideIcons.logOut, color: Colors.white54),
             onPressed: () => ref.read(securityGateProvider.notifier).signOut(),
           ),
         ],
@@ -446,6 +646,8 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 athlete: _athlete,
                 currentSenderRole: 'athlete',
               ),
+              _buildAthleteProfileAndAchievementsTab(
+                  activeProgram, measurements, bio, isFa, theme),
             ],
           ),
         ),
@@ -466,143 +668,10 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
             icon: const Icon(LucideIcons.messageSquare),
             label: isFa ? 'چت زنده مربی' : 'Live Chat',
           ),
-        ],
-      ),
-    );
-  }
-
-  /// رادار مهندسی تلمتری فشار بیومکانیکی عضلات (جایگزین حرفهای آدمک کارتونی)
-  Widget _buildBiometricMuscleTelemetryHud(
-      WorkoutDayPlan activeDay, bool isFa, Color primary) {
-    final totalSets =
-        activeDay.exercises.fold<int>(0, (sum, ex) => sum + ex.sets.length);
-    final Map<String, int> muscleSetCounts = {};
-    for (final ex in activeDay.exercises) {
-      final m = ex.targetMuscle.isNotEmpty
-          ? ex.targetMuscle
-          : (activeDay.targetMuscles.isNotEmpty
-              ? activeDay.targetMuscles.first
-              : 'chest');
-      muscleSetCounts[m] = (muscleSetCounts[m] ?? 0) + ex.sets.length;
-    }
-    for (final tm in activeDay.targetMuscles) {
-      muscleSetCounts.putIfAbsent(tm, () => 3);
-    }
-
-    const muscleLabelsFa = {
-      'chest': 'سینه (Pectorals)',
-      'back': 'زیربغل و لت (Lats)',
-      'shoulders': 'سرشانه (Deltoids)',
-      'biceps': 'جلوبازو و ساعد (Biceps)',
-      'triceps': 'پشتبازو (Triceps)',
-      'legs': 'چهارسر و همسترینگ (Legs)',
-      'abs': 'شکم و میانتنه (Core)',
-      'calves': 'ساق پا (Calves)',
-    };
-
-    return MaxGymGlassCard(
-      accentColor: primary,
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.activity, color: primary, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        isFa
-                            ? 'تلمتری بیومکانیک و فشار عضلانی جلسه'
-                            : 'BIOMETRIC MUSCLE LOAD TELEMETRY',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13,
-                          color: Colors.white,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: primary.withOpacity(0.16),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: primary.withOpacity(0.45)),
-                ),
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Text(
-                    '${activeDay.exercises.length} MOVES • $totalSets SETS',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      color: primary,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          NavigationDestination(
+            icon: const Icon(LucideIcons.userCheck),
+            label: isFa ? 'پروفایل من' : 'Profile',
           ),
-          const SizedBox(height: 14),
-          ...muscleSetCounts.entries.map((entry) {
-            final ratio =
-                (entry.value / (totalSets > 0 ? totalSets : 1)).clamp(0.25, 1.0);
-            final label = isFa
-                ? (muscleLabelsFa[entry.key] ?? entry.key.toUpperCase())
-                : entry.key.toUpperCase();
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Directionality(
-                        textDirection: TextDirection.ltr,
-                        child: Text(
-                          '${entry.value} SETS ACTIVE • ${(ratio * 100).round()}% LOAD',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: primary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: ratio,
-                      minHeight: 7,
-                      backgroundColor: Colors.white10,
-                      color: primary,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
         ],
       ),
     );
@@ -644,63 +713,99 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         .where((e) => _completedExerciseIds.contains(e.id))
         .length;
     final progress = totalMoves > 0 ? doneMoves / totalMoves : 0.0;
+    final totalSets =
+        activeDay.exercises.fold<int>(0, (sum, ex) => sum + ex.sets.length);
 
     return ListView(
       padding: const EdgeInsets.all(18),
       children: [
-        MaxGymGlassCard(
-          accentColor: primary,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        // ۱. بنر کپسولی گرادینت نئونی (دقیقاً به سبک بنر سبز بالای عکس ۲ - New Challenge / START)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: LinearGradient(
+              colors: [
+                primary,
+                const Color(0xFF388E3C),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: primary.withOpacity(0.28),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: const BoxDecoration(
+                  color: Colors.black87,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(LucideIcons.trophy, color: primary, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
                       program.title.toCleanPersian(),
                       style: const TextStyle(
-                          fontSize: 17, fontWeight: FontWeight.w900),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.black,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: primary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Directionality(
-                      textDirection: TextDirection.ltr,
-                      child: Text(
-                        '${(progress * 100).round()}% DONE',
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 11,
-                        ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isFa
+                          ? 'اعتبار دوره: ${program.durationWeeks} هفته  •  ${program.remainingDays} روز باقیمانده'
+                          : '${program.durationWeeks} Weeks Challenge  •  ${program.remainingDays}d Left',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 9,
-                  backgroundColor: Colors.black45,
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    '${(progress * 100).round()}%',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black,
+                      fontSize: 12,
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
 
+        // ۲. نوار تقویم کپسولی عمودی (دقیقاً به سبک عکس ۲ چپ - Sun Mon Tue Wed 16)
         SizedBox(
-          height: 48,
+          height: 76,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: program.days.length,
@@ -712,23 +817,51 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 onTap: () => setState(() => _selectedDayIdx = i),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 220),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  width: 66,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: selected ? primary : const Color(0xFF151C18),
+                    color: selected ? primary : const Color(0xFF141715),
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(
-                      color: selected ? primary : Colors.white12,
-                      width: 1.4,
+                      color: selected
+                          ? primary
+                          : Colors.white.withOpacity(0.07),
                     ),
                   ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    isFa ? d.dayNameFa.toCleanPersian() : d.dayNameEn,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: selected ? Colors.black : Colors.white,
-                    ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        isFa
+                            ? d.dayNameFa.toCleanPersian()
+                            : d.dayNameEn.substring(0, 3),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight:
+                              selected ? FontWeight.w900 : FontWeight.w600,
+                          color: selected ? Colors.black : Colors.white60,
+                        ),
+                      ),
+                      Container(
+                        width: 28,
+                        height: 28,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: selected
+                              ? Colors.black.withOpacity(0.16)
+                              : Colors.white.withOpacity(0.05),
+                        ),
+                        child: Text(
+                          '0${i + 1}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: selected ? Colors.black : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -739,7 +872,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
 
         if (activeDay.isRestDay)
           MaxGymGlassCard(
-            accentColor: Colors.cyanAccent,
             padding: const EdgeInsets.all(38),
             child: Column(
               children: [
@@ -758,322 +890,312 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
             ),
           )
         else ...[
-          _buildBiometricMuscleTelemetryHud(activeDay, isFa, primary),
-          const SizedBox(height: 18),
-          ...List.generate(activeDay.exercises.length, (idx) {
-            final ex = activeDay.exercises[idx];
-            final isDone = _completedExerciseIds.contains(ex.id);
-            final restSec =
-                ex.sets.isNotEmpty ? ex.sets.first.restSeconds : 60;
-
-            final cleanPersianTitle = SeedCatalogData.extractCleanPersianTitle(
-                    ex.exerciseNameFa, ex.exerciseNameEn)
-                .toCleanPersian();
-
-            return MaxGymGlassCard(
-              margin: const EdgeInsets.only(bottom: 18),
-              padding: EdgeInsets.zero,
-              accentColor: isDone
-                  ? AppColors.success
-                  : (ex.supersetGroupId != null ? AppColors.warning : primary),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (ex.imageStartUrl.isNotEmpty)
-                    GestureDetector(
-                      onTap: () =>
-                          _showFullScreenExerciseImage(context, ex, isFa),
-                      child: Container(
-                        height: 185,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF090D0B),
-                          borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(23)),
+          // ۳. کارت گیج نیمدایره مدرج (به سبک عکس ۱ راست - Track Record 50% Progress)
+          MaxGymGlassCard(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      isFa ? 'گزارش پیشرفت جلسه امروز' : 'Session Track Record',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white70,
+                      ),
+                    ),
+                    Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Text(
+                        activeDay.targetMuscles.join(' • ').toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: primary,
                         ),
-                        child: Stack(
+                      ),
+                    ),
+                  ],
+                ),
+                MaxGymDashedArcGauge(
+                  progress: progress,
+                  centerValue: '${(progress * 100).round()}%',
+                  subtitle: isFa
+                      ? '$doneMoves از $totalMoves حرکت تکمیل شده'
+                      : '$doneMoves of $totalMoves Moves Completed',
+                  activeColor: primary,
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1B1F1D),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(6),
-                                        child: CachedNetworkImage(
-                                          cacheManager:
-                                              SmartExerciseCacheManager.instance,
-                                          imageUrl: ex.imageStartUrl,
-                                          fit: BoxFit.contain,
-                                          placeholder: (_, __) =>
-                                              _buildNeonImagePlaceholder(
-                                                  primary),
-                                          errorWidget: (_, __, ___) =>
-                                              _buildNeonImagePlaceholder(
-                                                  primary),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        bottom: 8,
-                                        right: 10,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black87,
-                                            borderRadius:
-                                                BorderRadius.circular(6),
-                                            border: Border.all(
-                                                color: Colors.white24),
-                                          ),
-                                          child: Text(
-                                            isFa ? 'شروع حرکت' : 'START',
-                                            style: const TextStyle(
-                                                fontSize: 10,
-                                                color: Colors.white70),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(width: 1.5, color: Colors.white12),
-                                Expanded(
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(6),
-                                        child: CachedNetworkImage(
-                                          cacheManager:
-                                              SmartExerciseCacheManager.instance,
-                                          imageUrl: ex.imageEndUrl.isNotEmpty
-                                              ? ex.imageEndUrl
-                                              : ex.imageStartUrl,
-                                          fit: BoxFit.contain,
-                                          placeholder: (_, __) =>
-                                              _buildNeonImagePlaceholder(
-                                                  primary),
-                                          errorWidget: (_, __, ___) =>
-                                              _buildNeonImagePlaceholder(
-                                                  primary),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        bottom: 8,
-                                        left: 10,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black87,
-                                            borderRadius:
-                                                BorderRadius.circular(6),
-                                            border: Border.all(
-                                                color:
-                                                    primary.withOpacity(0.5)),
-                                          ),
-                                          child: Text(
-                                            isFa ? 'انقباض / پایان' : 'FINISH',
-                                            style: TextStyle(
-                                                fontSize: 10, color: primary),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              isFa ? 'مجموع ستها' : 'Total Sets',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.white60),
                             ),
-                            Positioned(
-                              top: 10,
-                              left: 10,
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(LucideIcons.maximize2,
-                                    size: 15, color: Colors.white70),
+                            Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Text(
+                                '$totalSets Sets',
+                                style: const TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w900),
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
-
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1B1F1D),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: primary.withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                    color: primary.withOpacity(0.6),
-                                    width: 1.5),
+                            Text(
+                              isFa ? 'استمرار تمرین' : 'Streak',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.white60),
+                            ),
+                            Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Text(
+                                '${_athlete.streakDays} Days 🔥',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                    color: primary),
                               ),
-                              child: Directionality(
-                                textDirection: TextDirection.ltr,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // ۴. لیست حرکات به سبک ردیفهای افقی ژورنالی و فشرده (دقیقاً مثل عکس ۴ راست - WEEK 1 - DAY 1)
+          ...List.generate(activeDay.exercises.length, (idx) {
+            final ex = activeDay.exercises[idx];
+            final isDone = _completedExerciseIds.contains(ex.id);
+            final restSec =
+                ex.sets.isNotEmpty ? ex.sets.first.restSeconds : 60;
+            final repsSample =
+                ex.sets.isNotEmpty ? ex.sets.first.reps : '10-12';
+
+            final cleanPersianTitle = SeedCatalogData.extractCleanPersianTitle(
+                    ex.exerciseNameFa, ex.exerciseNameEn)
+                .toCleanPersian();
+
+            return MaxGymGlassCard(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () =>
+                        _showCinematicExerciseStageModal(context, ex, isFa),
+                    child: Row(
+                      children: [
+                        // تامبنیل مربعی گوشهگرد با نشانگر شماره حرکت (مثل عکس ۴ راست)
+                        Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(18),
+                              child: Container(
+                                width: 82,
+                                height: 82,
+                                color: const Color(0xFF0C0F0D),
+                                child: ex.imageStartUrl.isNotEmpty
+                                    ? CachedNetworkImage(
+                                        cacheManager:
+                                            SmartExerciseCacheManager.instance,
+                                        imageUrl: ex.imageStartUrl,
+                                        fit: BoxFit.cover,
+                                        placeholder: (_, __) =>
+                                            _buildNeonImagePlaceholder(primary),
+                                        errorWidget: (_, __, ___) =>
+                                            _buildNeonImagePlaceholder(primary),
+                                      )
+                                    : _buildNeonImagePlaceholder(primary),
+                              ),
+                            ),
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black87,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
                                 child: Text(
                                   '0${idx + 1}',
                                   style: TextStyle(
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w900,
                                     color: primary,
-                                    fontSize: 13,
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (ex.supersetGroupId != null)
-                                    Container(
-                                      margin: const EdgeInsets.only(bottom: 6),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            AppColors.warning.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Directionality(
-                                        textDirection: TextDirection.ltr,
-                                        child: Text(
-                                          '🔗 SUPERSET (${ex.supersetGroupId})',
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w900,
-                                            color: AppColors.warning,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  Text(
-                                    isFa
-                                        ? cleanPersianTitle
-                                        : ex.exerciseNameEn,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 16,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  if (isFa && ex.exerciseNameEn.isNotEmpty) ...[
-                                    const SizedBox(height: 3),
-                                    Directionality(
-                                      textDirection: TextDirection.ltr,
-                                      child: Text(
-                                        ex.exerciseNameEn,
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          fontWeight: FontWeight.w600,
-                                          color: primary.withOpacity(0.85),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  if (ex.coachNote.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 6),
-                                      child: Text(
-                                        '📌 نکته مربی: ${ex.coachNote.toCleanPersian()}',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: primary),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            Transform.scale(
-                              scale: 1.25,
-                              child: Checkbox(
-                                value: isDone,
-                                activeColor: AppColors.success,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(6)),
-                                onChanged: (v) {
-                                  setState(() {
-                                    if (v == true) {
-                                      _completedExerciseIds.add(ex.id);
-                                      _startRestTimer(restSec);
-                                    } else {
-                                      _completedExerciseIds.remove(ex.id);
-                                    }
-                                  });
-                                },
-                              ),
-                            ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: ex.sets.map((s) {
-                            return ActionChip(
-                              avatar: Icon(LucideIcons.timer,
-                                  size: 14, color: primary),
-                              label: Text(
-                                'ست ${s.setNumber}: ${s.reps} | تمپو: ${s.tempo}',
+                        const SizedBox(width: 14),
+                        // مشخصات حرکت در ۳ خط تمیز و تفکیکشده
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (ex.supersetGroupId != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Directionality(
+                                    textDirection: TextDirection.ltr,
+                                    child: Text(
+                                      '🔗 SUPERSET (${ex.supersetGroupId})',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.warning,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              Text(
+                                isFa ? cleanPersianTitle : ex.exerciseNameEn,
                                 style: const TextStyle(
-                                    fontSize: 12, fontWeight: FontWeight.bold),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                  color: Colors.white,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              onPressed: () => _startRestTimer(s.restSeconds),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                onChanged: (val) {
-                                  _loggedWeights[ex.id] = val.toEnglishDigits();
-                                },
-                                keyboardType: TextInputType.number,
-                                decoration: InputDecoration(
-                                  hintText: isFa
-                                      ? 'ثبت رکورد وزنه (مثلاً 85 kg)'
-                                      : 'Log weight lifted (kg)',
-                                  prefixIcon:
-                                      const Icon(LucideIcons.trophy, size: 18),
+                              if (isFa && ex.exerciseNameEn.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Directionality(
+                                  textDirection: TextDirection.ltr,
+                                  child: Text(
+                                    ex.exerciseNameEn,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white54,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 6),
+                              Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: Text(
+                                  'Sets: ${ex.sets.length}   •   Reps: $repsSample   •   Rest: ${restSec}s',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: primary,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            ElevatedButton.icon(
-                              onPressed: () => _startRestTimer(restSec),
-                              icon: const Icon(LucideIcons.timer, size: 16),
-                              label: Directionality(
-                                textDirection: TextDirection.ltr,
-                                child: Text('${restSec}s'),
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
+                        ),
+                        // چکباکس تکمیل حرکت و شروع خودکار تایمر استراحت
+                        Transform.scale(
+                          scale: 1.15,
+                          child: Checkbox(
+                            value: isDone,
+                            activeColor: primary,
+                            checkColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6)),
+                            onChanged: (v) {
+                              setState(() {
+                                if (v == true) {
+                                  _completedExerciseIds.add(ex.id);
+                                  _startRestTimer(restSec);
+                                } else {
+                                  _completedExerciseIds.remove(ex.id);
+                                }
+                              });
+                            },
+                          ),
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(height: 10),
+                  // نوار پایینی ثبت سریع وزنه و دکمه تایمر
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 42,
+                          child: TextField(
+                            onChanged: (val) {
+                              _loggedWeights[ex.id] = val.toEnglishDigits();
+                            },
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(fontSize: 12),
+                            decoration: InputDecoration(
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 0),
+                              hintText: isFa
+                                  ? 'ثبت رکورد وزنه (مثلاً 85 kg)'
+                                  : 'Log weight lifted (kg)',
+                              prefixIcon:
+                                  const Icon(LucideIcons.trophy, size: 15),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => _startRestTimer(restSec),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: Icon(LucideIcons.timer, size: 15, color: primary),
+                        label: Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text('${restSec}s'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             );
           }),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           ElevatedButton.icon(
             onPressed: () => _submitDailyWorkoutLog(program),
             icon: const Icon(LucideIcons.award),
@@ -1096,6 +1218,22 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        // ۱. ستونهای عمودی ماکروها دقیقاً به سبک عکس ۲ راست (`Your Daily Nutrition`)
+        Text(
+          isFa ? 'نیاز تغذیهای روزانه شما' : 'Your Daily Nutrition',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 12),
+        MaxGymNeonMacroRings(
+          targetCalories: bio.targetCalories,
+          proteinGrams: bio.proteinGrams,
+          carbsGrams: bio.carbsGrams,
+          fatGrams: bio.fatGrams,
+          isFa: isFa,
+        ),
+        const SizedBox(height: 16),
+
+        // ۲. ردیاب آبرسانی بدن
         MaxGymGlassCard(
           accentColor: Colors.lightBlueAccent,
           padding: const EdgeInsets.all(18),
@@ -1138,7 +1276,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
           ...program.dietMeals.where((m) => m.items.isNotEmpty).map((meal) {
             return MaxGymGlassCard(
               margin: const EdgeInsets.only(bottom: 14),
-              accentColor: primary,
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1199,8 +1336,328 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
       ],
     );
   }
+
+  /// تب چهارم: پروفایل اختصاصی ورزشکار، کارت عضویت VIP، دستاوردها (به سبک عکس ۳ چپ) و تغییر رمز عبور
+  Widget _buildAthleteProfileAndAchievementsTab(
+      FullProgramEntity? program,
+      List<MeasurementLogEntity> measurements,
+      BioAnalysisResult bio,
+      bool isFa,
+      ThemeData theme) {
+    final primary = theme.colorScheme.primary;
+    final db = ref.read(appDatabaseProvider);
+    final workoutLogs = db.getWorkoutLogsForAthlete(_athlete.id);
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        // ۱. کارت دیجیتال عضویت باشگاه (MAX GYM VIP Digital Pass)
+        Container(
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1A221E), Color(0xFF111513)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: primary.withOpacity(0.35), width: 1.2),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: primary.withOpacity(0.20),
+                    child: Text(
+                      _athlete.firstName.isNotEmpty
+                          ? _athlete.firstName.characters.first.toUpperCase()
+                          : 'M',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _athlete.fullName,
+                          style: const TextStyle(
+                              fontSize: 19, fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 4),
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            _athlete.email.isNotEmpty
+                                ? _athlete.email
+                                : _athlete.phone,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.white60),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.16),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      isFa ? 'حساب تاییدشده ✓' : 'VERIFIED ✓',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.success,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 28, color: Colors.white10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _profileStatCol(
+                      isFa ? 'وزن فعلی' : 'Weight', '${_athlete.weightKg} kg'),
+                  _profileStatCol(
+                      isFa ? 'قد' : 'Height', '${_athlete.heightCm.toInt()} cm'),
+                  _profileStatCol(
+                      isFa ? 'شاخص BMI' : 'BMI', bio.bmi.toString()),
+                  _profileStatCol(isFa ? 'استمرار' : 'Streak',
+                      '${_athlete.streakDays} 🔥'),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        // ۲. کارت دستاوردها و رکوردهای شخصی (Achievements - به سبک عکس ۳ چپ fitonist)
+        MaxGymGlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isFa
+                            ? 'دستاوردها و رکوردهای شما 🔥'
+                            : 'Achievements & Best Results 🔥',
+                        style: const TextStyle(
+                            fontSize: 14, color: Colors.white70),
+                      ),
+                      const SizedBox(height: 4),
+                      Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          '${bio.targetCalories} kcal',
+                          style: const TextStyle(
+                              fontSize: 26, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: primary.withOpacity(0.14),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(LucideIcons.award, color: primary, size: 28),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: Colors.cyanAccent.withOpacity(0.15),
+                  child: const Icon(LucideIcons.dumbbell,
+                      color: Colors.cyanAccent, size: 18),
+                ),
+                title: Text(
+                  isFa
+                      ? '${workoutLogs.length} جلسه تمرینی تکمیل و ثبتشده'
+                      : '${workoutLogs.length} Completed Workout Sessions',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 13.5),
+                ),
+                subtitle: Text(
+                  isFa
+                      ? 'رکورد استمرار فعلی: ${_athlete.streakDays} روز متوالی'
+                      : 'Active consistency streak: ${_athlete.streakDays} days',
+                  style: const TextStyle(fontSize: 11.5, color: Colors.white54),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        // ۳. تغییر رمز عبور شخصی و بروزرسانی وزن هفتگی
+        MaxGymGlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                isFa
+                    ? 'تنظیمات امنیتی و بروزرسانی پرونده'
+                    : 'Account Security & Check-In',
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                onPressed: () => _showUpdateWeightAndPasswordDialog(isFa),
+                icon: const Icon(LucideIcons.lock, size: 16),
+                label: Text(isFa
+                    ? 'تغییر رمز عبور شخصی / ثبت وزن جدید'
+                    : 'Change Password / Update Weight'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _profileStatCol(String label, String val) {
+    return Column(
+      children: [
+        Text(label,
+            style: const TextStyle(fontSize: 11, color: Colors.white54)),
+        const SizedBox(height: 4),
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Text(
+            val,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showUpdateWeightAndPasswordDialog(bool isFa) {
+    final weightCtrl =
+        TextEditingController(text: _athlete.weightKg.toStringAsFixed(1));
+    final newPassCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isFa
+            ? 'بروزرسانی وزن و رمز عبور شخصی'
+            : 'Update Weight & Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: TextField(
+                controller: weightCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: isFa ? 'وزن فعلی (kg)' : 'Current Weight (kg)',
+                  prefixIcon: const Icon(LucideIcons.scale),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: TextField(
+                controller: newPassCtrl,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: isFa
+                      ? 'رمز عبور جدید (در صورت تمایل به تغییر)'
+                      : 'New Password (optional)',
+                  prefixIcon: const Icon(LucideIcons.keyRound),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(isFa ? 'انصراف' : 'Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newW =
+                  weightCtrl.text.toSafeDouble() ?? _athlete.weightKg;
+              final newP = newPassCtrl.text.trim();
+              final newHash = newP.length >= 6
+                  ? AthleteEntity.hashPassword(newP)
+                  : _athlete.passwordHash;
+
+              final updated = _athlete.copyWith(
+                weightKg: newW,
+                passwordHash: newHash,
+                isCodeBurned: true,
+                updatedAt: DateTime.now(),
+              );
+              ref.read(appDatabaseProvider).upsertAthlete(updated);
+              setState(() => _athlete = updated);
+
+              try {
+                await SupabaseConfig.clientOrNull?.rpc(
+                  'athlete_activate_and_burn_code',
+                  params: {
+                    'p_athlete_id': updated.id,
+                    'p_access_code': updated.accessCode,
+                    'p_first_name': updated.firstName,
+                    'p_last_name': updated.lastName,
+                    'p_phone': updated.phone,
+                    'p_email': updated.email,
+                    'p_password_hash': updated.passwordHash,
+                    'p_age': updated.age,
+                    'p_height_cm': updated.heightCm,
+                    'p_weight_kg': updated.weightKg,
+                  },
+                );
+              } catch (_) {}
+
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(isFa
+                        ? '✅ پروفایل و رمز عبور شما با موفقیت بروزرسانی شد!'
+                        : '✅ Profile updated!'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
+            child: Text(isFa ? 'ذخیره تغییرات' : 'Save'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
+/// گیت اجباری تکمیل پروفایل اولیه ورزشکار + تعیین رمز عبور شخصی و ابطال کد یکبارمصرف (PC-XXXXXX)
 class _MandatoryAthleteProfileCompletionGate extends ConsumerStatefulWidget {
   final AthleteEntity athlete;
   final void Function(AthleteEntity updated) onCompleted;
@@ -1221,6 +1678,7 @@ class _MandatoryAthleteProfileCompletionGateState
   late TextEditingController _lastCtrl;
   late TextEditingController _phoneCtrl;
   late TextEditingController _emailCtrl;
+  late TextEditingController _passwordCtrl;
   late TextEditingController _ageCtrl;
   late TextEditingController _heightCtrl;
   late TextEditingController _weightCtrl;
@@ -1234,6 +1692,7 @@ class _MandatoryAthleteProfileCompletionGateState
     _lastCtrl = TextEditingController(text: a.lastName);
     _phoneCtrl = TextEditingController(text: a.phone);
     _emailCtrl = TextEditingController(text: a.email);
+    _passwordCtrl = TextEditingController();
     _ageCtrl = TextEditingController(text: a.age.toString());
     _heightCtrl = TextEditingController(text: a.heightCm.toStringAsFixed(0));
     _weightCtrl = TextEditingController(text: a.weightKg.toStringAsFixed(1));
@@ -1245,6 +1704,7 @@ class _MandatoryAthleteProfileCompletionGateState
     _lastCtrl.dispose();
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
+    _passwordCtrl.dispose();
     _ageCtrl.dispose();
     _heightCtrl.dispose();
     _weightCtrl.dispose();
@@ -1256,7 +1716,8 @@ class _MandatoryAthleteProfileCompletionGateState
     final first = _firstCtrl.text.trim();
     final last = _lastCtrl.text.trim();
     final phone = _phoneCtrl.text.toEnglishDigits();
-    final email = _emailCtrl.text.trim();
+    final email = _emailCtrl.text.trim().toLowerCase();
+    final rawPass = _passwordCtrl.text.trim();
     final age = _ageCtrl.text.toSafeInt() ?? 25;
     final height = _heightCtrl.text.toSafeDouble() ?? 175;
     final weight = _weightCtrl.text.toSafeDouble() ?? 75;
@@ -1264,12 +1725,13 @@ class _MandatoryAthleteProfileCompletionGateState
     if (first.isEmpty ||
         last.isEmpty ||
         phone.length < 8 ||
-        !email.contains('@')) {
+        !email.contains('@') ||
+        rawPass.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(isFa
-              ? 'لطفاً تمام فیلدها (نام، نام خانوادگی، موبایل و ایمیل معتبر) را کامل وارد کنید.'
-              : 'Please complete all required fields including a valid email.'),
+              ? 'لطفاً تمام فیلدها (نام، موبایل، ایمیل معتبر و رمز عبور حداقل ۶ کاراکتری) را کامل وارد کنید.'
+              : 'Please complete all required fields including a 6+ char password.'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -1277,6 +1739,7 @@ class _MandatoryAthleteProfileCompletionGateState
     }
 
     setState(() => _saving = true);
+    final hashedPassword = AthleteEntity.hashPassword(rawPass);
 
     final updated = AthleteEntity(
       id: widget.athlete.id,
@@ -1285,6 +1748,8 @@ class _MandatoryAthleteProfileCompletionGateState
       phone: phone,
       email: email,
       accessCode: widget.athlete.accessCode,
+      passwordHash: hashedPassword,
+      isCodeBurned: true, // ابطال کد یکبارمصرف پس از تعیین رمز عبور
       gender: widget.athlete.gender,
       age: age,
       heightCm: height,
@@ -1302,13 +1767,14 @@ class _MandatoryAthleteProfileCompletionGateState
       final client = SupabaseConfig.clientOrNull;
       if (client != null) {
         try {
-          await client.rpc('athlete_complete_profile', params: {
+          await client.rpc('athlete_activate_and_burn_code', params: {
             'p_athlete_id': updated.id,
             'p_access_code': updated.accessCode,
             'p_first_name': updated.firstName,
             'p_last_name': updated.lastName,
             'p_phone': updated.phone,
             'p_email': updated.email,
+            'p_password_hash': updated.passwordHash,
             'p_age': updated.age,
             'p_height_cm': updated.heightCm,
             'p_weight_kg': updated.weightKg,
@@ -1319,6 +1785,8 @@ class _MandatoryAthleteProfileCompletionGateState
             'last_name': updated.lastName,
             'phone': updated.phone,
             'email': updated.email,
+            'password_hash': updated.passwordHash,
+            'is_code_burned': true,
             'age': updated.age,
             'height_cm': updated.heightCm,
             'weight_kg': updated.weightKg,
@@ -1357,8 +1825,8 @@ class _MandatoryAthleteProfileCompletionGateState
                   children: [
                     Text(
                       isFa
-                          ? 'ورزشکار عزیز، این فرم فقط در اولین ورود شما نمایش داده میشود. پس از تکمیل، میتوانید با ایمیل، شماره تماس یا کد اختصاصی خود وارد شوید:'
-                          : 'Complete your profile once to unlock your portal:',
+                          ? 'ورزشکار عزیز، کد دعوت یکبارمصرف شما تایید شد! لطفاً مشخصات و رمز عبور شخصی خود را تعیین کنید (کد دعوت پس از این مرحله باطل شده و در دفعات بعد با ایمیل و رمز عبور خود وارد خواهید شد):'
+                          : 'Your one-time invite code is verified! Set your email and personal password for future logins:',
                       style:
                           const TextStyle(color: Colors.white70, height: 1.5),
                     ),
@@ -1384,21 +1852,41 @@ class _MandatoryAthleteProfileCompletionGateState
                       ],
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _phoneCtrl,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: isFa ? 'شماره تماس *' : 'Phone Number *',
-                        prefixIcon: const Icon(LucideIcons.phone),
+                    Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: TextField(
+                        controller: _phoneCtrl,
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          labelText: isFa ? 'شماره تماس *' : 'Phone Number *',
+                          prefixIcon: const Icon(LucideIcons.phone),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: InputDecoration(
-                        labelText: isFa ? 'آدرس ایمیل *' : 'Email Address *',
-                        prefixIcon: const Icon(LucideIcons.mail),
+                    Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: TextField(
+                        controller: _emailCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: InputDecoration(
+                          labelText: isFa ? 'آدرس ایمیل *' : 'Email Address *',
+                          prefixIcon: const Icon(LucideIcons.mail),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: TextField(
+                        controller: _passwordCtrl,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: isFa
+                              ? 'تعیین رمز عبور شخصی (حداقل ۶ کاراکتر) *'
+                              : 'Set Personal Password (min 6 chars) *',
+                          prefixIcon: const Icon(LucideIcons.lock),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1439,8 +1927,8 @@ class _MandatoryAthleteProfileCompletionGateState
                       onPressed: _saving ? null : _saveCompleteProfile,
                       icon: const Icon(LucideIcons.checkCircle2),
                       label: Text(isFa
-                          ? 'ثبت دائمی و ورود به پنل ورزشکار'
-                          : 'Save & Enter Portal'),
+                          ? 'ثبت دائمی، ابطال کد دعوت و ورود به پنل'
+                          : 'Activate Account & Enter Portal'),
                     ),
                   ],
                 ),

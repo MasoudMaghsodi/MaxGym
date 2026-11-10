@@ -11,6 +11,7 @@ import '../../core/config/supabase_config.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/theme/branding_provider.dart';
+import '../../core/utils/number_parser.dart';
 import '../../core/widgets/maxgym_3d_widgets.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/database_models.dart';
@@ -64,7 +65,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
   static const _kCachedSuspended = 'sec_cached_is_suspended';
   static const _kCachedLockMsg = 'sec_cached_lock_msg';
   static const _kCachedDevContact = 'sec_cached_dev_contact';
-  static const _kCachedAthleteCode = 'sec_cached_athlete_code';
+  static const _kCachedAthleteId = 'sec_cached_athlete_id';
 
   StreamSubscription<List<Map<String, dynamic>>>? _appControlRealtimeSub;
   StreamSubscription<List<Map<String, dynamic>>>? _coachProfileRealtimeSub;
@@ -145,11 +146,17 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         return;
       }
 
-      final savedAthleteCode =
-          await _secureStore.read(key: _kCachedAthleteCode);
-      if (savedAthleteCode != null && savedAthleteCode.isNotEmpty) {
-        await signInAthleteByCode(savedAthleteCode);
-        return;
+      final savedAthleteId = await _secureStore.read(key: _kCachedAthleteId);
+      if (savedAthleteId != null && savedAthleteId.isNotEmpty) {
+        final localAth =
+            _ref.read(appDatabaseProvider).getAthleteById(savedAthleteId);
+        if (localAth != null) {
+          state = SecurityGateState(
+            status: SecurityGateStatus.athletePortalActive,
+            loggedInAthlete: localAth,
+          );
+          return;
+        }
       }
 
       final session = client.auth.currentSession;
@@ -213,6 +220,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
       if (fullName.isNotEmpty) {
         final currentBrand = _ref.read(brandingProvider);
         if (currentBrand.coachName == 'مربی ارشد مکسجیم' ||
+            currentBrand.coachName == 'مربی ارشد مکسجیم' ||
             currentBrand.coachName == 'مربی حرفهای' ||
             currentBrand.coachName == 'مربی حرفهای') {
           await _ref
@@ -236,8 +244,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     final cachedApproved = await _secureStore.read(key: _kCachedApproved);
     final cachedMsg = await _secureStore.read(key: _kCachedLockMsg);
     final cachedContact = await _secureStore.read(key: _kCachedDevContact);
-    final cachedAthleteCode =
-        await _secureStore.read(key: _kCachedAthleteCode);
+    final cachedAthleteId = await _secureStore.read(key: _kCachedAthleteId);
 
     if (cachedSuspended == 'true') {
       state = SecurityGateState(
@@ -249,10 +256,9 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
       return;
     }
 
-    if (cachedAthleteCode != null && cachedAthleteCode.isNotEmpty) {
-      final localAth = _ref
-          .read(appDatabaseProvider)
-          .getAthleteByAccessCode(cachedAthleteCode);
+    if (cachedAthleteId != null && cachedAthleteId.isNotEmpty) {
+      final localAth =
+          _ref.read(appDatabaseProvider).getAthleteById(cachedAthleteId);
       if (localAth != null) {
         state = SecurityGateState(
           status: SecurityGateStatus.athletePortalActive,
@@ -271,9 +277,103 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     state = const SecurityGateState(status: SecurityGateStatus.unauthenticated);
   }
 
-  Future<void> signInAthleteByCode(String rawCode) async {
+  /// پردازش داده دریافتی ورزشکار از سرور و ذخیره در SQLite
+  Future<AthleteEntity> _hydrateAthleteBundleFromServer(
+      Map<String, dynamic> res, String fallbackCode) async {
+    final db = _ref.read(appDatabaseProvider);
+    final athMap = res['athlete'] as Map<String, dynamic>;
+    final progsList = res['programs'] as List<dynamic>? ?? [];
+    final measList = res['measurements'] as List<dynamic>? ?? [];
+
+    final rawTags = athMap['injury_tags'];
+    final List<String> tags = rawTags is String
+        ? List<String>.from(jsonDecode(rawTags))
+        : List<String>.from(rawTags ?? []);
+
+    final athlete = AthleteEntity(
+      id: athMap['id'] as String,
+      firstName: athMap['first_name'] as String? ?? '',
+      lastName: athMap['last_name'] as String? ?? '',
+      phone: athMap['phone'] as String? ?? '',
+      email: athMap['email'] as String? ?? '',
+      accessCode:
+          athMap['access_code'] as String? ?? fallbackCode.toUpperCase(),
+      passwordHash: athMap['password_hash'] as String? ?? '',
+      isCodeBurned: athMap['is_code_burned'] as bool? ?? false,
+      streakDays: (athMap['streak_days'] as num?)?.toInt() ?? 1,
+      gender: athMap['gender'] as String? ?? 'male',
+      age: (athMap['age'] as num?)?.toInt() ?? 25,
+      heightCm: (athMap['height_cm'] as num?)?.toDouble() ?? 175,
+      weightKg: (athMap['weight_kg'] as num?)?.toDouble() ?? 75,
+      fitnessGoal: athMap['fitness_goal'] as String? ?? 'lean_bulk',
+      injuryTags: tags,
+      createdAt: DateTime.parse(athMap['created_at'] as String).toLocal(),
+      updatedAt: DateTime.parse(athMap['updated_at'] as String).toLocal(),
+      syncStatus: 'synced',
+    );
+    db.upsertAthlete(athlete);
+
+    for (final pRow in progsList) {
+      if (pRow is! Map<String, dynamic>) continue;
+      final rawDays = pRow['days_json'];
+      final decodedDays =
+          (rawDays is String ? jsonDecode(rawDays) : rawDays) as List<dynamic>;
+      final rawMeals = pRow['diet_meals_json'];
+      final mealsStr = rawMeals is String ? rawMeals : jsonEncode(rawMeals);
+      final rawSupps = pRow['supplements_json'];
+      final suppsStr = rawSupps is String ? rawSupps : jsonEncode(rawSupps);
+
+      db.upsertProgram(FullProgramEntity(
+        id: pRow['id'] as String,
+        athleteId: athlete.id,
+        title: pRow['title'] as String? ?? '',
+        startDate: DateTime.parse(pRow['start_date'] as String).toLocal(),
+        durationWeeks: (pRow['duration_weeks'] as num?)?.toInt() ?? 4,
+        days: decodedDays
+            .map((e) => WorkoutDayPlan.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        dietMeals: DietMealSlot.decodeList(mealsStr),
+        waterLiters: (pRow['water_liters'] as num?)?.toDouble() ?? 3.5,
+        supplements: SupplementPrescriptionItem.decodeList(suppsStr),
+        updatedAt: DateTime.now(),
+        syncStatus: 'synced',
+      ));
+    }
+
+    for (final mRow in measList) {
+      if (mRow is! Map<String, dynamic>) continue;
+      db.insertMeasurementLog(MeasurementLogEntity(
+        id: mRow['id'] as String,
+        athleteId: athlete.id,
+        recordedAt: DateTime.parse(mRow['recorded_at'] as String).toLocal(),
+        weightKg: (mRow['weight_kg'] as num).toDouble(),
+        bodyFatPercent: (mRow['body_fat_percent'] as num?)?.toDouble(),
+        shoulderCm: (mRow['shoulder_cm'] as num?)?.toDouble(),
+        chestCm: (mRow['chest_cm'] as num?)?.toDouble(),
+        waistCm: (mRow['waist_cm'] as num?)?.toDouble(),
+        hipsCm: (mRow['hips_cm'] as num?)?.toDouble(),
+        bicepsCm: (mRow['biceps_cm'] as num?)?.toDouble(),
+        forearmCm: (mRow['forearm_cm'] as num?)?.toDouble(),
+        thighCm: (mRow['thigh_cm'] as num?)?.toDouble(),
+        calfCm: (mRow['calf_cm'] as num?)?.toDouble(),
+        updatedAt: DateTime.now(),
+        syncStatus: 'synced',
+      ));
+    }
+
+    return athlete;
+  }
+
+  /// ۱. ورود ورزشکار با کد دعوت یکبارمصرف (فقط در اولین ورود قبل از باطل شدن کد)
+  Future<void> signInAthleteByCode(String rawCode, {String? password}) async {
     final code = rawCode.trim();
     if (code.isEmpty) return;
+
+    // اگر کاربر رمز عبور را هم وارد کرده باشد، با متد ایمیل/موبایل + رمز عبور بررسی میکنیم
+    if (password != null && password.trim().isNotEmpty) {
+      await signInAthleteWithPassword(code, password.trim());
+      return;
+    }
 
     state = const SecurityGateState(status: SecurityGateStatus.loading);
     final db = _ref.read(appDatabaseProvider);
@@ -290,89 +390,17 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         ).timeout(const Duration(seconds: 8));
 
         if (res != null && res is Map<String, dynamic>) {
-          final athMap = res['athlete'] as Map<String, dynamic>;
-          final progsList = res['programs'] as List<dynamic>? ?? [];
-          final measList = res['measurements'] as List<dynamic>? ?? [];
-
-          final rawTags = athMap['injury_tags'];
-          final List<String> tags = rawTags is String
-              ? List<String>.from(jsonDecode(rawTags))
-              : List<String>.from(rawTags ?? []);
-
-          final athlete = AthleteEntity(
-            id: athMap['id'] as String,
-            firstName: athMap['first_name'] as String? ?? '',
-            lastName: athMap['last_name'] as String? ?? '',
-            phone: athMap['phone'] as String? ?? '',
-            email: athMap['email'] as String? ?? '',
-            accessCode: athMap['access_code'] as String? ?? code.toUpperCase(),
-            gender: athMap['gender'] as String? ?? 'male',
-            age: (athMap['age'] as num?)?.toInt() ?? 25,
-            heightCm: (athMap['height_cm'] as num?)?.toDouble() ?? 175,
-            weightKg: (athMap['weight_kg'] as num?)?.toDouble() ?? 75,
-            fitnessGoal: athMap['fitness_goal'] as String? ?? 'lean_bulk',
-            injuryTags: tags,
-            createdAt: DateTime.parse(athMap['created_at'] as String).toLocal(),
-            updatedAt: DateTime.parse(athMap['updated_at'] as String).toLocal(),
-            syncStatus: 'synced',
-          );
-          db.upsertAthlete(athlete);
-
-          for (final pRow in progsList) {
-            if (pRow is! Map<String, dynamic>) continue;
-            final rawDays = pRow['days_json'];
-            final decodedDays =
-                (rawDays is String ? jsonDecode(rawDays) : rawDays)
-                    as List<dynamic>;
-            final rawMeals = pRow['diet_meals_json'];
-            final mealsStr =
-                rawMeals is String ? rawMeals : jsonEncode(rawMeals);
-            final rawSupps = pRow['supplements_json'];
-            final suppsStr =
-                rawSupps is String ? rawSupps : jsonEncode(rawSupps);
-
-            db.upsertProgram(FullProgramEntity(
-              id: pRow['id'] as String,
-              athleteId: athlete.id,
-              title: pRow['title'] as String? ?? '',
-              startDate: DateTime.parse(pRow['start_date'] as String).toLocal(),
-              durationWeeks: (pRow['duration_weeks'] as num?)?.toInt() ?? 4,
-              days: decodedDays
-                  .map((e) =>
-                      WorkoutDayPlan.fromJson(e as Map<String, dynamic>))
-                  .toList(),
-              dietMeals: DietMealSlot.decodeList(mealsStr),
-              waterLiters: (pRow['water_liters'] as num?)?.toDouble() ?? 3.5,
-              supplements: SupplementPrescriptionItem.decodeList(suppsStr),
-              updatedAt: DateTime.now(),
-              syncStatus: 'synced',
-            ));
+          if (res['error'] == 'CODE_BURNED') {
+            state = SecurityGateState(
+              status: SecurityGateStatus.unauthenticated,
+              errorMessage: res['message'] as String? ??
+                  'این کد دعوت یکبارمصرف قبلاً استفاده و باطل شده است. لطفاً با ایمیل/موبایل و رمز عبور خود وارد شوید.',
+            );
+            return;
           }
 
-          for (final mRow in measList) {
-            if (mRow is! Map<String, dynamic>) continue;
-            db.insertMeasurementLog(MeasurementLogEntity(
-              id: mRow['id'] as String,
-              athleteId: athlete.id,
-              recordedAt:
-                  DateTime.parse(mRow['recorded_at'] as String).toLocal(),
-              weightKg: (mRow['weight_kg'] as num).toDouble(),
-              bodyFatPercent: (mRow['body_fat_percent'] as num?)?.toDouble(),
-              shoulderCm: (mRow['shoulder_cm'] as num?)?.toDouble(),
-              chestCm: (mRow['chest_cm'] as num?)?.toDouble(),
-              waistCm: (mRow['waist_cm'] as num?)?.toDouble(),
-              hipsCm: (mRow['hips_cm'] as num?)?.toDouble(),
-              bicepsCm: (mRow['biceps_cm'] as num?)?.toDouble(),
-              forearmCm: (mRow['forearm_cm'] as num?)?.toDouble(),
-              thighCm: (mRow['thigh_cm'] as num?)?.toDouble(),
-              calfCm: (mRow['calf_cm'] as num?)?.toDouble(),
-              updatedAt: DateTime.now(),
-              syncStatus: 'synced',
-            ));
-          }
-
-          await _secureStore.write(
-              key: _kCachedAthleteCode, value: athlete.accessCode);
+          final athlete = await _hydrateAthleteBundleFromServer(res, code);
+          await _secureStore.write(key: _kCachedAthleteId, value: athlete.id);
           state = SecurityGateState(
             status: SecurityGateStatus.athletePortalActive,
             loggedInAthlete: athlete,
@@ -384,8 +412,16 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
 
     final localAthlete = db.getAthleteByAccessCode(code);
     if (localAthlete != null) {
-      await _secureStore.write(
-          key: _kCachedAthleteCode, value: localAthlete.accessCode);
+      if (localAthlete.isCodeBurned && localAthlete.passwordHash.isNotEmpty) {
+        state = const SecurityGateState(
+          status: SecurityGateStatus.unauthenticated,
+          errorMessage:
+              'این کد دعوت یکبارمصرف قبلاً استفاده و باطل شده است! لطفاً رمز عبور خود را وارد کنید.',
+        );
+        return;
+      }
+
+      await _secureStore.write(key: _kCachedAthleteId, value: localAthlete.id);
       state = SecurityGateState(
         status: SecurityGateStatus.athletePortalActive,
         loggedInAthlete: localAthlete,
@@ -396,8 +432,115 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     state = const SecurityGateState(
       status: SecurityGateStatus.unauthenticated,
       errorMessage:
-          'ورزشکاری با این کد/موبایل/ایمیل یافت نشد. لطفاً کد ۶ رقمی (مثلاً PC-XXXXXX) را از مربی خود دریافت کنید.',
+          'ورزشکاری با این کد دعوت یافت نشد یا کد قبلاً باطل شده است. اگر قبلاً ثبتنام کردهاید، با ایمیل/موبایل و رمز عبور وارد شوید.',
     );
+  }
+
+  /// ۲. ورود دائمی ورزشکار با ایمیل یا شماره موبایل + رمز عبور شخصی
+  Future<void> signInAthleteWithPassword(
+      String identifier, String rawPassword) async {
+    state = const SecurityGateState(status: SecurityGateStatus.loading);
+    final db = _ref.read(appDatabaseProvider);
+    final hashed = AthleteEntity.hashPassword(rawPassword);
+
+    try {
+      if (!SupabaseConfig.isInitialized) {
+        await SupabaseConfig.initializeSafely();
+      }
+      final client = SupabaseConfig.clientOrNull;
+      if (client != null) {
+        final res = await client.rpc(
+          'athlete_login_with_password',
+          params: {
+            'p_identifier': identifier.trim(),
+            'p_password_hash': hashed,
+          },
+        ).timeout(const Duration(seconds: 8));
+
+        if (res != null && res is Map<String, dynamic>) {
+          final athlete =
+              await _hydrateAthleteBundleFromServer(res, identifier);
+          await _secureStore.write(key: _kCachedAthleteId, value: athlete.id);
+          state = SecurityGateState(
+            status: SecurityGateStatus.athletePortalActive,
+            loggedInAthlete: athlete,
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+
+    final localAth =
+        db.authenticateAthleteWithPassword(identifier, rawPassword);
+    if (localAth != null) {
+      await _secureStore.write(key: _kCachedAthleteId, value: localAth.id);
+      state = SecurityGateState(
+        status: SecurityGateStatus.athletePortalActive,
+        loggedInAthlete: localAth,
+      );
+      return;
+    }
+
+    state = const SecurityGateState(
+      status: SecurityGateStatus.unauthenticated,
+      errorMessage:
+          'ایمیل/شماره موبایل یا رمز عبور ورزشکار اشتباه است. در صورت فراموشی، گزینه «بازیابی رمز عبور» را بزنید.',
+    );
+  }
+
+  /// ۳. بازیابی رمز عبور ورزشکار (تطابق ایمیل + شماره موبایل)
+  Future<bool> resetAthletePassword({
+    required String email,
+    required String phone,
+    required String newPassword,
+  }) async {
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanPhone = phone.toEnglishDigits();
+    final newHash = AthleteEntity.hashPassword(newPassword);
+    final db = _ref.read(appDatabaseProvider);
+
+    bool updatedRemote = false;
+    try {
+      final client = SupabaseConfig.clientOrNull;
+      if (client != null) {
+        final res = await client.rpc(
+          'athlete_reset_password_by_verification',
+          params: {
+            'p_email': cleanEmail,
+            'p_phone': cleanPhone,
+            'p_new_password_hash': newHash,
+          },
+        );
+        updatedRemote = res == true;
+      }
+    } catch (_) {}
+
+    bool updatedLocal = false;
+    for (final a in db.getAllActiveAthletes()) {
+      if (a.email.trim().toLowerCase() == cleanEmail &&
+          a.phone.trim() == cleanPhone) {
+        db.upsertAthlete(a.copyWith(
+          passwordHash: newHash,
+          isCodeBurned: true,
+          updatedAt: DateTime.now(),
+        ));
+        updatedLocal = true;
+      }
+    }
+
+    return updatedRemote || updatedLocal;
+  }
+
+  /// ۴. ارسال ایمیل بازیابی رمز عبور برای مربی (Supabase Auth Password Recovery)
+  Future<bool> sendCoachPasswordResetEmail(String email) async {
+    try {
+      final client = SupabaseConfig.clientOrNull;
+      if (client == null) return false;
+      await client.auth.resetPasswordForEmail(email.trim());
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> signUpCoach({
@@ -590,6 +733,7 @@ class CoachAuthScreen extends ConsumerStatefulWidget {
 
 class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
   bool _isAthleteMode = false;
+  bool _athleteHasPasswordMode = false; // false = کد یکبارمصرف، true = ایمیل/موبایل + رمز
   bool _isLogin = true;
   bool _obscurePass = true;
 
@@ -598,6 +742,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _athleteCodeCtrl = TextEditingController();
+  final _athletePasswordCtrl = TextEditingController();
 
   @override
   void dispose() {
@@ -606,6 +751,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _athleteCodeCtrl.dispose();
+    _athletePasswordCtrl.dispose();
     super.dispose();
   }
 
@@ -618,20 +764,25 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
           children: [
             const Icon(LucideIcons.crown, color: AppColors.warning),
             const SizedBox(width: 8),
-            Text(isFa
-                ? 'ورود به کنسول سوپر-ادمین MAX GYM'
-                : 'MAX GYM Super-Admin Login'),
+            Expanded(
+              child: Text(isFa
+                  ? 'ورود به کنسول سوپر-ادمین MAX GYM'
+                  : 'MAX GYM Super-Admin Login'),
+            ),
           ],
         ),
-        content: TextField(
-          controller: pinCtrl,
-          obscureText: true,
-          onSubmitted: (_) => _verifyPinAndOpenAdmin(ctx, pinCtrl.text),
-          decoration: InputDecoration(
-            labelText: isFa
-                ? 'رمز مستر مدیریت (فقط توسعهدهنده)'
-                : 'Master Admin PIN',
-            prefixIcon: const Icon(LucideIcons.keyRound),
+        content: Directionality(
+          textDirection: TextDirection.ltr,
+          child: TextField(
+            controller: pinCtrl,
+            obscureText: true,
+            onSubmitted: (_) => _verifyPinAndOpenAdmin(ctx, pinCtrl.text),
+            decoration: InputDecoration(
+              labelText: isFa
+                  ? 'رمز مستر مدیریت (فقط توسعهدهنده)'
+                  : 'Master Admin PIN',
+              prefixIcon: const Icon(LucideIcons.keyRound),
+            ),
           ),
         ),
         actions: [
@@ -667,12 +818,189 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
     }
   }
 
+  /// پنجره فراموشی و بازیابی رمز عبور (هم برای مربی و هم برای ورزشکار)
+  void _showForgotPasswordModal(bool isFa) {
+    final emailCtrl = TextEditingController(
+      text: _isAthleteMode ? _athleteCodeCtrl.text : _emailCtrl.text,
+    );
+    final phoneCtrl = TextEditingController();
+    final newPassCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF121614),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(LucideIcons.keyRound,
+                      color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _isAthleteMode
+                          ? (isFa
+                              ? 'بازیابی رمز عبور ورزشکار'
+                              : 'Reset Athlete Password')
+                          : (isFa
+                              ? 'بازیابی رمز عبور مربی (ایمیل)'
+                              : 'Coach Password Recovery'),
+                      style: const TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _isAthleteMode
+                    ? (isFa
+                        ? 'ایمیل و شماره موبایلی که در پروفایل ورزشی خود ثبت کردهاید را وارد کنید تا رمز عبور جدید برایتان تنظیم شود:'
+                        : 'Enter your registered Email and Phone number to set a new password:')
+                    : (isFa
+                        ? 'آدرس ایمیل مربیگری خود را وارد کنید تا لینک تغییر رمز عبور به ایمیل شما ارسال شود:'
+                        : 'Enter your coach email to receive a password reset link:'),
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+              const SizedBox(height: 16),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: TextField(
+                  controller: emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: isFa ? 'ایمیل ثبتشده *' : 'Registered Email *',
+                    prefixIcon: const Icon(LucideIcons.mail),
+                  ),
+                ),
+              ),
+              if (_isAthleteMode) ...[
+                const SizedBox(height: 12),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: isFa
+                          ? 'شماره موبایل ثبتشده *'
+                          : 'Registered Phone *',
+                      prefixIcon: const Icon(LucideIcons.phone),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: TextField(
+                    controller: newPassCtrl,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: isFa
+                          ? 'رمز عبور جدید (حداقل ۶ کاراکتر) *'
+                          : 'New Password (min 6 chars) *',
+                      prefixIcon: const Icon(LucideIcons.lock),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  if (_isAthleteMode) {
+                    if (!emailCtrl.text.contains('@') ||
+                        phoneCtrl.text.trim().length < 8 ||
+                        newPassCtrl.text.trim().length < 6) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(isFa
+                              ? 'لطفاً ایمیل، شماره موبایل و رمز جدید (حداقل ۶ کاراکتر) را کامل وارد کنید.'
+                              : 'Please fill all fields properly.'),
+                          backgroundColor: AppColors.danger,
+                        ),
+                      );
+                      return;
+                    }
+                    final ok = await ref
+                        .read(securityGateProvider.notifier)
+                        .resetAthletePassword(
+                          email: emailCtrl.text,
+                          phone: phoneCtrl.text,
+                          newPassword: newPassCtrl.text,
+                        );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(ok
+                              ? (isFa
+                                  ? '✅ رمز عبور جدید شما با موفقیت ثبت شد! اکنون وارد شوید.'
+                                  : '✅ Password reset successfully!')
+                              : (isFa
+                                  ? '❌ مشخصات واردشده با پرونده ورزشی مطابقت ندارد (یا از مربی بخواهید کد جدید صادر کند).'
+                                  : '❌ Verification failed.')),
+                          backgroundColor:
+                              ok ? AppColors.success : AppColors.danger,
+                        ),
+                      );
+                    }
+                  } else {
+                    if (!emailCtrl.text.contains('@')) return;
+                    final ok = await ref
+                        .read(securityGateProvider.notifier)
+                        .sendCoachPasswordResetEmail(emailCtrl.text);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(ok
+                              ? (isFa
+                                  ? '✅ لینک بازیابی رمز عبور به ایمیل شما ارسال شد.'
+                                  : '✅ Password reset email sent!')
+                              : (isFa
+                                  ? 'خطا در ارسال ایمیل بازیابی. اتصال اینترنت را بررسی کنید.'
+                                  : 'Error sending reset email.')),
+                          backgroundColor:
+                              ok ? AppColors.success : AppColors.danger,
+                        ),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(LucideIcons.checkCircle2),
+                label: Text(_isAthleteMode
+                    ? (isFa ? 'ثبت رمز عبور جدید' : 'Set New Password')
+                    : (isFa ? 'ارسال لینک بازیابی به ایمیل' : 'Send Reset Link')),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _submit() {
     final isFa = AppStrings.of(context).isFa;
 
     if (_isAthleteMode) {
-      final code = _athleteCodeCtrl.text.trim();
-      if (code.length < 3) {
+      final codeOrId = _athleteCodeCtrl.text.trim();
+      final athPass = _athletePasswordCtrl.text.trim();
+
+      if (codeOrId.length < 3) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isFa
@@ -683,7 +1011,25 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
         );
         return;
       }
-      ref.read(securityGateProvider.notifier).signInAthleteByCode(code);
+
+      if (_athleteHasPasswordMode || athPass.isNotEmpty) {
+        if (athPass.length < 4) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isFa
+                  ? 'لطفاً رمز عبور شخصی خود را وارد کنید.'
+                  : 'Please enter your password.'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+          return;
+        }
+        ref
+            .read(securityGateProvider.notifier)
+            .signInAthleteWithPassword(codeOrId, athPass);
+      } else {
+        ref.read(securityGateProvider.notifier).signInAthleteByCode(codeOrId);
+      }
       return;
     }
 
@@ -738,7 +1084,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0E0C),
+        backgroundColor: const Color(0xFF080A09),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -828,25 +1174,28 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
       ),
       body: Stack(
         children: [
-          // پسزمینه استودیویی با دو هاله نوری نئونی (Cyber Mesh Glow)
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(0.3, -0.3),
-                  colors: [
-                    primary.withOpacity(0.20),
-                    const Color(0xFF0A0E0C),
-                    const Color(0xFF060807),
-                  ],
-                  radius: 1.15,
+          Positioned(
+            top: -120,
+            right: -80,
+            child: IgnorePointer(
+              child: Container(
+                width: 340,
+                height: 340,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      primary.withOpacity(0.16),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
           Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(22),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1180),
                 child: isWideLaptop
@@ -865,7 +1214,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                         ],
                       )
                     : ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 450),
+                        constraints: const BoxConstraints(maxWidth: 440),
                         child: _buildAuthFormCard(isFa, theme, primary),
                       ),
               ),
@@ -878,63 +1227,44 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
 
   Widget _buildWidescreenBrandShowcase(bool isFa, Color primary) {
     Widget featureTile(IconData icon, String title, String subtitle) {
-      return MaxGym3DTiltCard(
-        glowColor: primary,
-        margin: const EdgeInsets.only(bottom: 14),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                primary.withOpacity(0.14),
-                const Color(0xFF121815).withOpacity(0.92),
-              ],
+      return MaxGymGlassCard(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: primary.withOpacity(0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: primary, size: 20),
             ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: primary.withOpacity(0.32), width: 1.2),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: primary.withOpacity(0.20),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: primary.withOpacity(0.25),
-                      blurRadius: 10,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: Colors.white,
                     ),
-                  ],
-                ),
-                child: Icon(icon, color: primary, size: 22),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white60,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.white70,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
@@ -944,23 +1274,20 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
       children: [
         Row(
           children: [
-            MaxGym3DTiltCard(
-              glowColor: primary,
-              child: Container(
-                width: 114,
-                height: 114,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(26),
-                  border: Border.all(color: primary, width: 2.5),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Image.asset(
-                    MaxGymBrandConfig.bundledLogoAsset,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        Icon(LucideIcons.dumbbell, size: 54, color: primary),
-                  ),
+            Container(
+              width: 108,
+              height: 108,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: primary, width: 2),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Image.asset(
+                  MaxGymBrandConfig.bundledLogoAsset,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Icon(LucideIcons.dumbbell, size: 50, color: primary),
                 ),
               ),
             ),
@@ -969,32 +1296,13 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: primary.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: primary.withOpacity(0.5)),
-                    ),
-                    child: Text(
-                      'PRO COACHING SAAS • v2.0',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        color: primary,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   Text(
                     'MAX GYM ECOSYSTEM',
                     style: TextStyle(
-                      fontSize: 32,
+                      fontSize: 30,
                       fontWeight: FontWeight.w900,
                       color: primary,
-                      letterSpacing: 2,
+                      letterSpacing: 1.8,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1004,7 +1312,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: Colors.white70,
-                      letterSpacing: 1.8,
+                      letterSpacing: 1.5,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1012,19 +1320,19 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                     isFa
                         ? 'پلتفرم جامع مدیریت هوشمند مربیان، طراحی برنامه تمرینی/غذایی/مکمل و پرتال آنلاین ورزشکاران باشگاه مکس'
                         : 'Enterprise Coaching, Workout/Diet Builder & Live Athlete Portal',
-                    style: const TextStyle(fontSize: 13, color: Colors.white70),
+                    style: const TextStyle(fontSize: 13, color: Colors.white60),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 28),
         featureTile(
           LucideIcons.dumbbell,
           isFa
-              ? 'طراحی برنامه فوقسریع + بانک ۸۰۰ حرکت و هیتمپ سهبعدی عضلات'
-              : '800+ Exercise Library & 3D Muscle Heatmap',
+              ? 'طراحی برنامه فوقسریع + بانک ۸۰۰ حرکت و تلمتری عضلات'
+              : '800+ Exercise Library & Muscle Telemetry',
           isFa
               ? 'پشتیبانی از سوپرست، دراپست، تمپو، هشدار آسیبدیدگی و Drag & Drop'
               : 'Supersets, Tempo, Injury Alerts & Drag-and-Drop',
@@ -1039,22 +1347,13 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
               : 'Automated Mifflin-St Jeor / Katch-McArdle & Radar Charts',
         ),
         featureTile(
-          LucideIcons.zap,
+          LucideIcons.shieldCheck,
           isFa
-              ? 'پرتال زنده ورزشکار (Realtime) + چت آنی + تایمر استراحت'
-              : 'Realtime Athlete Portal & Live Chat',
+              ? 'کد دعوت یکبارمصرف + احراز هویت ایمیل و رمز عبور شخصی'
+              : 'One-Time Invite Code Burn & Personal Password Auth',
           isFa
-              ? 'ورود آسان شاگرد با کد اختصاصی، موبایل یا ایمیل در اندروید و آیفون (PWA)'
-              : 'Instant sync across Android, iOS Safari PWA, and Desktop',
-        ),
-        featureTile(
-          LucideIcons.fileCheck2,
-          isFa
-              ? 'خروجی PDF اختصاصی با برندینگ MAX GYM و تاریخ شمسی/میلادی'
-              : 'Custom White-Label Vector PDF Export',
-          isFa
-              ? 'چاپ تصاویر بزرگ شروع و پایان حرکت، جداول رژیم جایگزین و مکملها'
-              : 'High-resolution pose thumbnails, meal alternatives & stacks',
+              ? 'ابطال خودکار کد دعوت پس از اولین ورود و جایگزینی با ایمیل و رمز عبور ورزشکار'
+              : 'Automatic code burn on first login with full password recovery',
         ),
       ],
     );
@@ -1062,8 +1361,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
 
   Widget _buildAuthFormCard(bool isFa, ThemeData theme, Color primary) {
     return MaxGymGlassCard(
-      accentColor: primary,
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(26),
       borderRadius: 28,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1085,7 +1383,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
             onSelectionChanged: (s) =>
                 setState(() => _isAthleteMode = s.first),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 20),
           Text(
             _isAthleteMode
                 ? (isFa
@@ -1101,13 +1399,13 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
             style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           if (widget.errorMessage != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.danger.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.danger.withOpacity(0.14),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppColors.danger.withOpacity(0.4)),
               ),
               child: Text(
@@ -1116,20 +1414,74 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                 textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
           ],
           if (_isAthleteMode) ...[
-            TextField(
-              controller: _athleteCodeCtrl,
-              onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(
-                labelText: isFa
-                    ? 'کد اختصاصی (PC-XXXXXX)، شماره موبایل یا ایمیل ورزشکار'
-                    : 'Access Code (PC-XXXXXX), Phone, or Email',
-                prefixIcon: const Icon(LucideIcons.keyRound),
+            // سوییچ بین «ورود با ایمیل/رمز عبور» و «اولین ورود با کد یکبارمصرف مربی»
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                ChoiceChip(
+                  label: Text(
+                    isFa
+                        ? '🔑 اولین ورود (کد یکبارمصرف)'
+                        : '🔑 First-Time Code',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  selected: !_athleteHasPasswordMode,
+                  onSelected: (_) =>
+                      setState(() => _athleteHasPasswordMode = false),
+                ),
+                ChoiceChip(
+                  label: Text(
+                    isFa ? '🔒 ورود با رمز عبور' : '🔒 Password Login',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  selected: _athleteHasPasswordMode,
+                  onSelected: (_) =>
+                      setState(() => _athleteHasPasswordMode = true),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: TextField(
+                controller: _athleteCodeCtrl,
+                onSubmitted: (_) => _submit(),
+                decoration: InputDecoration(
+                  labelText: isFa
+                      ? 'کد اختصاصی (PC-XXXXXX)، شماره موبایل یا ایمیل ورزشکار'
+                      : 'Access Code (PC-XXXXXX), Phone, or Email',
+                  prefixIcon: const Icon(LucideIcons.keyRound),
+                ),
               ),
             ),
-            const SizedBox(height: 22),
+            if (_athleteHasPasswordMode) ...[
+              const SizedBox(height: 12),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: TextField(
+                  controller: _athletePasswordCtrl,
+                  obscureText: _obscurePass,
+                  onSubmitted: (_) => _submit(),
+                  decoration: InputDecoration(
+                    labelText:
+                        isFa ? 'رمز عبور شخصی ورزشکار' : 'Athlete Password',
+                    prefixIcon: const Icon(LucideIcons.lock),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                          _obscurePass ? LucideIcons.eyeOff : LucideIcons.eye),
+                      onPressed: () =>
+                          setState(() => _obscurePass = !_obscurePass),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -1138,6 +1490,17 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                 label: Text(isFa
                     ? 'مشاهده برنامه تمرینی و چت با مربی'
                     : 'Enter Athlete Portal'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => _showForgotPasswordModal(isFa),
+              icon: const Icon(LucideIcons.helpCircle, size: 15),
+              label: Text(
+                isFa
+                    ? 'رمز عبور خود را فراموش کردهاید؟ بازیابی رمز'
+                    : 'Forgot Athlete Password?',
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
               ),
             ),
           ] else ...[
@@ -1166,34 +1529,40 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
               ),
               const SizedBox(height: 12),
             ],
-            TextField(
-              controller: _emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              autocorrect: false,
-              decoration: InputDecoration(
-                labelText: isFa ? 'ایمیل مربی' : 'Email Address',
-                prefixIcon: const Icon(LucideIcons.mail),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _passwordCtrl,
-              obscureText: _obscurePass,
-              enableSuggestions: false,
-              autocorrect: false,
-              onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(
-                labelText: isFa ? 'رمز عبور' : 'Password',
-                prefixIcon: const Icon(LucideIcons.lock),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                      _obscurePass ? LucideIcons.eyeOff : LucideIcons.eye),
-                  onPressed: () =>
-                      setState(() => _obscurePass = !_obscurePass),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: TextField(
+                controller: _emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                decoration: InputDecoration(
+                  labelText: isFa ? 'ایمیل مربی' : 'Email Address',
+                  prefixIcon: const Icon(LucideIcons.mail),
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: TextField(
+                controller: _passwordCtrl,
+                obscureText: _obscurePass,
+                enableSuggestions: false,
+                autocorrect: false,
+                onSubmitted: (_) => _submit(),
+                decoration: InputDecoration(
+                  labelText: isFa ? 'رمز عبور' : 'Password',
+                  prefixIcon: const Icon(LucideIcons.lock),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                        _obscurePass ? LucideIcons.eyeOff : LucideIcons.eye),
+                    onPressed: () =>
+                        setState(() => _obscurePass = !_obscurePass),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -1207,21 +1576,38 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                         : 'Register & Request Approval')),
               ),
             ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => setState(() => _isLogin = !_isLogin),
-              child: Text(
-                _isLogin
-                    ? (isFa
-                        ? 'حساب مربیگری ندارید؟ ثبتنام مربی جدید'
-                        : 'Don\'t have an account? Register')
-                    : (isFa
-                        ? 'قبلاً ثبتنام کردهاید؟ ورود به حساب'
-                        : 'Already registered? Sign In'),
-              ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                  child: TextButton(
+                    onPressed: () => setState(() => _isLogin = !_isLogin),
+                    child: Text(
+                      _isLogin
+                          ? (isFa
+                              ? 'ثبتنام مربی جدید'
+                              : 'Register New Coach')
+                          : (isFa ? 'ورود به حساب' : 'Sign In'),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+                if (_isLogin)
+                  Flexible(
+                    child: TextButton(
+                      onPressed: () => _showForgotPasswordModal(isFa),
+                      child: Text(
+                        isFa ? 'فراموشی رمز عبور؟' : 'Forgot Password?',
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.white70),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ],
-          const Divider(height: 28, color: Colors.white12),
+          const Divider(height: 24, color: Colors.white10),
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 12,

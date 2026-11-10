@@ -1,8 +1,7 @@
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 
-/// ۱. کارت سهبعدی تعاملی با پرسپکتیو ماتریس 3D، نورپردازی استودیویی و درخشش نئونی
+/// ۱. کارت سهبعدی تعاملی با پرسپکتیو نرم و سایه عمیق استودیویی
 class MaxGym3DTiltCard extends StatefulWidget {
   final Widget child;
   final Color? glowColor;
@@ -31,8 +30,8 @@ class _MaxGym3DTiltCardState extends State<MaxGym3DTiltCard> {
     final dx = (details.localPosition.dx - size.width / 2) / (size.width / 2);
     final dy = (details.localPosition.dy - size.height / 2) / (size.height / 2);
     setState(() {
-      _rotateY = (dx * 0.12).clamp(-0.16, 0.16);
-      _rotateX = (-dy * 0.12).clamp(-0.16, 0.16);
+      _rotateY = (dx * 0.10).clamp(-0.14, 0.14);
+      _rotateX = (-dy * 0.10).clamp(-0.14, 0.14);
     });
   }
 
@@ -79,16 +78,16 @@ class _MaxGym3DTiltCardState extends State<MaxGym3DTiltCard> {
                 ..setEntry(3, 2, 0.0014)
                 ..rotateX(_rotateX)
                 ..rotateY(_rotateY)
-                ..scale(_isPressed ? 0.97 : (_isHovered ? 1.015 : 1.0)),
+                ..scale(_isPressed ? 0.97 : (_isHovered ? 1.012 : 1.0)),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(26),
                 boxShadow: [
                   BoxShadow(
-                    color: accent.withOpacity(
-                        _isPressed ? 0.36 : (_isHovered ? 0.26 : 0.14)),
-                    blurRadius: _isHovered ? 28 : 18,
-                    spreadRadius: _isHovered ? 2 : 0,
-                    offset: Offset(-_rotateY * 22, _rotateX * 22 + 8),
+                    color: _isHovered
+                        ? accent.withOpacity(0.22)
+                        : Colors.black.withOpacity(0.45),
+                    blurRadius: _isHovered ? 28 : 20,
+                    offset: Offset(-_rotateY * 18, _rotateX * 18 + 10),
                   ),
                 ],
               ),
@@ -101,7 +100,7 @@ class _MaxGym3DTiltCardState extends State<MaxGym3DTiltCard> {
   }
 }
 
-/// ۲. کارت شیشهای بنتو (Bento Glassmorphic Card) با خط نوری بالای کارت و هاله نئونی
+/// ۲. کارت مات مخملی (Matte Obsidian Card - به سبک عکس ۲ و ۳ بدون کادرهای سبز شلوغ)
 class MaxGymGlassCard extends StatelessWidget {
   final Widget child;
   final Color? accentColor;
@@ -115,7 +114,7 @@ class MaxGymGlassCard extends StatelessWidget {
     this.accentColor,
     this.padding = const EdgeInsets.all(18),
     this.margin,
-    this.borderRadius = 24,
+    this.borderRadius = 26,
   });
 
   @override
@@ -128,68 +127,190 @@ class MaxGymGlassCard extends StatelessWidget {
       margin: margin,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(borderRadius),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  glow.withOpacity(0.14),
-                  const Color(0xFF141B17).withOpacity(0.92),
-                  const Color(0xFF0D120F).withOpacity(0.96),
-                ]
-              : [
-                  Colors.white,
-                  glow.withOpacity(0.06),
-                ],
-        ),
+        color: isDark ? const Color(0xFF141715) : Colors.white,
         border: Border.all(
-          color: isDark ? glow.withOpacity(0.32) : glow.withOpacity(0.25),
-          width: 1.3,
+          color: isDark
+              ? Colors.white.withOpacity(0.065)
+              : Colors.black.withOpacity(0.06),
+          width: 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark ? glow.withOpacity(0.10) : Colors.black12,
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: isDark ? Colors.black.withOpacity(0.45) : Colors.black12,
+            blurRadius: 22,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Stack(
-            children: [
+        child: Stack(
+          children: [
+            // هاله بسیار ظریف نقطهای در گوشه بالا-راست (فقط ۸٪ شفافیت برای حفظ سادگی مات)
+            if (isDark)
               Positioned(
-                top: 0,
-                left: 24,
-                right: 24,
-                child: Container(
-                  height: 1.2,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.transparent,
-                        Colors.white.withOpacity(isDark ? 0.35 : 0.6),
-                        Colors.transparent,
-                      ],
+                top: -45,
+                right: -45,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 130,
+                    height: 130,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          glow.withOpacity(0.11),
+                          Colors.transparent,
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-              Padding(
-                padding: padding,
-                child: child,
+            // خط بازتاب نور استودیویی بسیار ظریف در سقف کارت
+            Positioned(
+              top: 0,
+              left: 32,
+              right: 32,
+              child: Container(
+                height: 1.0,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      Colors.white.withOpacity(isDark ? 0.16 : 0.5),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
               ),
-            ],
-          ),
+            ),
+            Padding(
+              padding: padding,
+              child: child,
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// ۳. حلقههای نئونی سهگانه ماکرو و کالری (Apple Fitness+ / Whoop Style Macro Rings)
+/// ۳. گیج نیمدایره مدرج خطچین (Dashed Semi-Circle Progress Arc - دقیقاً مثل عکس ۱ راست)
+class MaxGymDashedArcGauge extends StatelessWidget {
+  final double progress; // 0.0 to 1.0
+  final String centerValue;
+  final String subtitle;
+  final Color? activeColor;
+
+  const MaxGymDashedArcGauge({
+    super.key,
+    required this.progress,
+    required this.centerValue,
+    required this.subtitle,
+    this.activeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = activeColor ?? Theme.of(context).colorScheme.primary;
+    return SizedBox(
+      height: 125,
+      width: double.infinity,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: progress.clamp(0.0, 1.0)),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.easeOutCubic,
+        builder: (context, animVal, _) {
+          return CustomPaint(
+            painter: _DashedSemiArcPainter(
+              progress: animVal,
+              activeColor: primary,
+            ),
+            child: Align(
+              alignment: const Alignment(0, 0.45),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      centerValue,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white60,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DashedSemiArcPainter extends CustomPainter {
+  final double progress;
+  final Color activeColor;
+
+  _DashedSemiArcPainter({
+    required this.progress,
+    required this.activeColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height * 0.88);
+    final radius = math.min(size.width * 0.40, size.height * 0.80);
+    const totalTicks = 42;
+    final activeTicks = (totalTicks * progress).round();
+
+    for (int i = 0; i <= totalTicks; i++) {
+      final t = i / totalTicks;
+      final angle = math.pi + (t * math.pi);
+      final isLit = i <= activeTicks && progress > 0;
+
+      final innerR = radius - 10;
+      final outerR = radius;
+
+      final p1 = Offset(
+        center.dx + innerR * math.cos(angle),
+        center.dy + innerR * math.sin(angle),
+      );
+      final p2 = Offset(
+        center.dx + outerR * math.cos(angle),
+        center.dy + outerR * math.sin(angle),
+      );
+
+      final paint = Paint()
+        ..color = isLit ? activeColor : Colors.white.withOpacity(0.12)
+        ..strokeWidth = 2.6
+        ..strokeCap = StrokeCap.round;
+
+      canvas.drawLine(p1, p2, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedSemiArcPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+/// ۴. کارتهای عمودی تغذیه و ماکرو به سبک تصویر ۲ (`Your Daily Nutrition`: Calories, Proteins, Carbs, Fats)
 class MaxGymNeonMacroRings extends StatelessWidget {
   final int targetCalories;
   final int proteinGrams;
@@ -208,140 +329,154 @@ class MaxGymNeonMacroRings extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalCalFromMacros =
-        (proteinGrams * 4) + (carbsGrams * 4) + (fatGrams * 9);
-    final safeTotal = totalCalFromMacros > 0 ? totalCalFromMacros : 2000;
-
-    final pRatio = ((proteinGrams * 4) / safeTotal).clamp(0.15, 0.85);
-    final cRatio = ((carbsGrams * 4) / safeTotal).clamp(0.15, 0.85);
-    final fRatio = ((fatGrams * 9) / safeTotal).clamp(0.15, 0.85);
-
-    return MaxGymGlassCard(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 135,
-            height: 135,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 1100),
-              curve: Curves.easeOutCubic,
-              builder: (context, animValue, _) {
-                return CustomPaint(
-                  painter: _ConcentricMacroRingsPainter(
-                    proteinProgress: pRatio * animValue,
-                    carbsProgress: cRatio * animValue,
-                    fatProgress: fRatio * animValue,
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.local_fire_department_rounded,
-                            color: Color(0xFF72C832), size: 20),
-                        Directionality(
-                          textDirection: TextDirection.ltr,
-                          child: Text(
-                            '$targetCalories',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          isFa ? 'کیلوکالری هدف' : 'TARGET KCAL',
-                          style: const TextStyle(
-                              fontSize: 9, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _verticalNutritionPillar(
+                icon: Icons.local_fire_department_rounded,
+                iconColor: const Color(0xFFFF5E3A),
+                title: isFa ? 'کالری هدف' : 'Calories',
+                mainValue: '$targetCalories',
+                unit: 'Kcal',
+                subValue: isFa ? 'روزانه' : 'Daily Target',
+                fillRatio: 0.82,
+              ),
             ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _macroLegendRow(
-                  color: const Color(0xFFFF3B5C),
-                  label: isFa ? 'پروتئین عضلهساز' : 'Protein',
-                  grams: '${proteinGrams}g',
-                  kcal: '${proteinGrams * 4} kcal',
-                ),
-                const SizedBox(height: 10),
-                _macroLegendRow(
-                  color: const Color(0xFFFFB800),
-                  label: isFa ? 'کربوهیدرات انرژی' : 'Net Carbs',
-                  grams: '${carbsGrams}g',
-                  kcal: '${carbsGrams * 4} kcal',
-                ),
-                const SizedBox(height: 10),
-                _macroLegendRow(
-                  color: const Color(0xFFB84DFF),
-                  label: isFa ? 'چربیهای ضروری' : 'Healthy Fats',
-                  grams: '${fatGrams}g',
-                  kcal: '${fatGrams * 9} kcal',
-                ),
-              ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: _verticalNutritionPillar(
+                icon: Icons.scatter_plot_rounded,
+                iconColor: const Color(0xFF00C2FF),
+                title: isFa ? 'پروتئین' : 'Proteins',
+                mainValue: '$proteinGrams',
+                unit: 'g',
+                subValue: '${proteinGrams * 4} Kcal',
+                fillRatio: 0.75,
+              ),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _verticalNutritionPillar(
+                icon: Icons.bolt_rounded,
+                iconColor: const Color(0xFFFFB800),
+                title: isFa ? 'کربوهیدرات' : 'Carbs',
+                mainValue: '$carbsGrams',
+                unit: 'g',
+                subValue: '${carbsGrams * 4} Kcal',
+                fillRatio: 0.68,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _verticalNutritionPillar(
+                icon: Icons.water_drop_rounded,
+                iconColor: const Color(0xFFB84DFF),
+                title: isFa ? 'چربی مفید' : 'Fats',
+                mainValue: '$fatGrams',
+                unit: 'g',
+                subValue: '${fatGrams * 9} Kcal',
+                fillRatio: 0.45,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
-  Widget _macroLegendRow({
-    required Color color,
-    required String label,
-    required String grams,
-    required String kcal,
+  Widget _verticalNutritionPillar({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String mainValue,
+    required String unit,
+    required String subValue,
+    required double fillRatio,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.30)),
+        color: const Color(0xFF141715),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(color: color.withOpacity(0.6), blurRadius: 6),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Colors.white60,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: mainValue,
+                      style: const TextStyle(
+                        fontFamily: 'Vazirmatn',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                    TextSpan(
+                      text: ' $unit',
+                      style: TextStyle(
+                        fontFamily: 'Vazirmatn',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: iconColor,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            ],
+            ),
           ),
+          const SizedBox(height: 4),
           Directionality(
             textDirection: TextDirection.ltr,
             child: Text(
-              '$grams ($kcal)',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                color: color,
+              '/ $subValue',
+              style: const TextStyle(
+                fontSize: 10,
+                color: Colors.white38,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: fillRatio,
+              minHeight: 4,
+              backgroundColor: Colors.white10,
+              color: iconColor,
             ),
           ),
         ],
@@ -350,56 +485,7 @@ class MaxGymNeonMacroRings extends StatelessWidget {
   }
 }
 
-class _ConcentricMacroRingsPainter extends CustomPainter {
-  final double proteinProgress;
-  final double carbsProgress;
-  final double fatProgress;
-
-  _ConcentricMacroRingsPainter({
-    required this.proteinProgress,
-    required this.carbsProgress,
-    required this.fatProgress,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    const strokeWidth = 10.5;
-
-    void drawRing(double radius, double progress, Color color) {
-      final bgPaint = Paint()
-        ..color = color.withOpacity(0.16)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round;
-
-      final fgPaint = Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round;
-
-      canvas.drawCircle(center, radius, bgPaint);
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        -math.pi / 2,
-        2 * math.pi * progress.clamp(0.05, 0.98),
-        false,
-        fgPaint,
-      );
-    }
-
-    drawRing(size.width / 2 - 6, proteinProgress, const Color(0xFFFF3B5C));
-    drawRing(size.width / 2 - 20, carbsProgress, const Color(0xFFFFB800));
-    drawRing(size.width / 2 - 34, fatProgress, const Color(0xFFB84DFF));
-  }
-
-  @override
-  bool shouldRepaint(covariant _ConcentricMacroRingsPainter oldDelegate) =>
-      true;
-}
-
-/// ۴. گیج طیفی مدرن برای نمایش بصری BMI و WHtR
+/// ۵. گیج طیفی مدرن برای نمایش بصری BMI و WHtR
 class MaxGymSpectrumGauge extends StatelessWidget {
   final String title;
   final String valueText;
@@ -433,7 +519,7 @@ class MaxGymSpectrumGauge extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey),
+                      color: Colors.white60),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -450,7 +536,7 @@ class MaxGymSpectrumGauge extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
               final barWidth = constraints.maxWidth;
@@ -461,7 +547,7 @@ class MaxGymSpectrumGauge extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 children: [
                   Container(
-                    height: 8,
+                    height: 6,
                     width: double.infinity,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
@@ -483,7 +569,7 @@ class MaxGymSpectrumGauge extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.black, width: 2),
+                        border: Border.all(color: Colors.black, width: 2.5),
                         boxShadow: [
                           BoxShadow(
                             color: accentColor.withOpacity(0.9),
@@ -498,10 +584,13 @@ class MaxGymSpectrumGauge extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             statusText,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.white70),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -511,9 +600,9 @@ class MaxGymSpectrumGauge extends StatelessWidget {
   }
 }
 
-/// ۵. مدل آناتومی و هیتمپ سهبعدی عضلات بدن با قابلیت Auto-Flip هوشمند به نمای پشت
+/// ۶. پنل انتخابگر رادیویی عضلات هدف (به سبک تصویر ۳ - Target Muscles با حذف کامل آدمک کارتونی)
 class Interactive3DMuscleAnatomy extends StatefulWidget {
-  final List<String> activeMuscles; // ['chest', 'biceps', 'legs', ...]
+  final List<String> activeMuscles;
   final void Function(String muscleId)? onMuscleTapped;
   final bool isFa;
 
@@ -530,55 +619,10 @@ class Interactive3DMuscleAnatomy extends StatefulWidget {
 }
 
 class _Interactive3DMuscleAnatomyState
-    extends State<Interactive3DMuscleAnatomy>
-    with SingleTickerProviderStateMixin {
-  late bool _showBackView;
-  late AnimationController _spinCtrl;
-
-  /// بررسی اینکه آیا عضلات فعال فعلی مربوط به پشت بدن (پشتبازو / زیربغل) هستند یا خیر
-  bool _shouldAutoShowBackView(List<String> muscles) {
-    if (muscles.isEmpty) return false;
-    final hasFrontOnly = muscles.any(
-        (m) => m == 'chest' || m == 'biceps' || m == 'abs');
-    final hasBackOnly =
-        muscles.any((m) => m == 'back' || m == 'triceps');
-    return hasBackOnly && !hasFrontOnly;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _showBackView = _shouldAutoShowBackView(widget.activeMuscles);
-    _spinCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 550),
-      value: _showBackView ? 1.0 : 0.0,
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant Interactive3DMuscleAnatomy oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.activeMuscles.join(',') != widget.activeMuscles.join(',')) {
-      final targetBack = _shouldAutoShowBackView(widget.activeMuscles);
-      if (targetBack != _showBackView) {
-        _flip3DBody();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _spinCtrl.dispose();
-    super.dispose();
-  }
+    extends State<Interactive3DMuscleAnatomy> {
+  bool _showBackView = false;
 
   void _flip3DBody() {
-    if (_showBackView) {
-      _spinCtrl.reverse();
-    } else {
-      _spinCtrl.forward();
-    }
     setState(() => _showBackView = !_showBackView);
   }
 
@@ -593,26 +637,31 @@ class _Interactive3DMuscleAnatomyState
               'id': 'shoulders',
               'fa': 'سرشانه خلفی و کول',
               'en': 'Rear Delts & Traps',
+              'zone': 'UPPER POSTERIOR',
             },
             {
               'id': 'back',
               'fa': 'زیربغل و لت (Lats)',
               'en': 'Back & Lats',
+              'zone': 'MID POSTERIOR',
             },
             {
               'id': 'triceps',
               'fa': 'پشتبازو (Triceps)',
               'en': 'Triceps',
+              'zone': 'ARM EXTENSORS',
             },
             {
               'id': 'legs',
               'fa': 'همسترینگ و سرینی',
               'en': 'Glutes & Hamstrings',
+              'zone': 'LOWER POSTERIOR',
             },
             {
               'id': 'calves',
               'fa': 'ساق پا (Calves)',
               'en': 'Calves',
+              'zone': 'GASTROCNEMIUS',
             },
           ]
         : [
@@ -620,56 +669,44 @@ class _Interactive3DMuscleAnatomyState
               'id': 'shoulders',
               'fa': 'سرشانه (Deltoids)',
               'en': 'Shoulders',
+              'zone': 'ANTERIOR DELT',
             },
             {
               'id': 'chest',
               'fa': 'سینه (Pectorals)',
               'en': 'Chest',
+              'zone': 'PECTORALIS MAJOR',
             },
             {
               'id': 'biceps',
               'fa': 'جلوبازو و ساعد',
               'en': 'Biceps & Forearms',
+              'zone': 'ARM FLEXORS',
             },
             {
               'id': 'abs',
               'fa': 'شکم و میانتنه (Core)',
               'en': 'Abs & Core',
+              'zone': 'RECTUS ABDOMINIS',
             },
             {
               'id': 'legs',
               'fa': 'چهارسر ران (Quads)',
               'en': 'Quadriceps',
+              'zone': 'QUADRICEPS FEMORIS',
             },
             {
               'id': 'calves',
               'fa': 'ساق پا',
               'en': 'Calves',
+              'zone': 'SOLEUS / CALF',
             },
           ];
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          colors: [
-            primary.withOpacity(0.22),
-            const Color(0xFF101713),
-            const Color(0xFF0A0E0C),
-          ],
-          radius: 1.0,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: primary.withOpacity(0.42), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: primary.withOpacity(0.14),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+    return MaxGymGlassCard(
+      padding: const EdgeInsets.all(18),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -677,8 +714,15 @@ class _Interactive3DMuscleAnatomyState
               Expanded(
                 child: Row(
                   children: [
-                    Icon(Icons.view_in_ar_rounded, color: primary, size: 20),
-                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: primary.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.radar_rounded, color: primary, size: 18),
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
@@ -688,8 +732,8 @@ class _Interactive3DMuscleAnatomyState
                               ? 'هیت‌مپ سه‌بعدی آناتومی عضلات (${_showBackView ? "نمای پشت" : "نمای جلو"})'
                               : '3D Muscle Heatmap (${_showBackView ? "Posterior" : "Anterior"})',
                           style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13.5,
                             color: Colors.white,
                           ),
                         ),
@@ -703,12 +747,12 @@ class _Interactive3DMuscleAnatomyState
                 onPressed: _flip3DBody,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: primary,
-                  side: BorderSide(color: primary),
+                  side: BorderSide(color: primary.withOpacity(0.5)),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   visualDensity: VisualDensity.compact,
                 ),
-                icon: const Icon(Icons.threed_rotation, size: 15),
+                icon: const Icon(Icons.swap_horiz_rounded, size: 16),
                 label: Text(
                   widget.isFa ? 'چرخش 3D بدن' : 'Rotate 3D',
                   style: const TextStyle(fontSize: 11),
@@ -716,309 +760,114 @@ class _Interactive3DMuscleAnatomyState
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          AnimatedBuilder(
-            animation: _spinCtrl,
-            builder: (context, child) {
-              final angle = _spinCtrl.value * math.pi;
-              return Transform(
-                alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..setEntry(3, 2, 0.0012)
-                  ..rotateY(angle > math.pi / 2 ? angle - math.pi : angle),
-                child: SizedBox(
-                  height: 270,
+          const SizedBox(height: 16),
+          // کارتهای انتخابگر رادیویی عضلات به سبک تصویر ۳ (fitonist - Target muscles)
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: muscleNodes.map((m) {
+              final id = m['id'] as String;
+              final isActive = widget.activeMuscles.contains(id);
+              return GestureDetector(
+                onTap: () => widget.onMuscleTapped?.call(id),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 165,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? primary.withOpacity(0.14)
+                        : const Color(0xFF1B1F1D),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: isActive
+                          ? primary
+                          : Colors.white.withOpacity(0.06),
+                      width: isActive ? 1.6 : 1.0,
+                    ),
+                  ),
                   child: Row(
                     children: [
-                      Expanded(
-                        flex: 5,
-                        child: CustomPaint(
-                          painter: _Body3DSilhouettePainter(
-                            activeMuscles: widget.activeMuscles,
-                            glowColor: primary,
-                            isBackView: _showBackView,
+                      // حلقه رادیویی نئونی دقیقاً مثل عکس ۳ (fitonist)
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isActive ? primary : Colors.transparent,
+                          border: Border.all(
+                            color: isActive ? primary : Colors.white24,
+                            width: 2,
                           ),
-                          child: const SizedBox.expand(),
+                          boxShadow: isActive
+                              ? [
+                                  BoxShadow(
+                                    color: primary.withOpacity(0.5),
+                                    blurRadius: 8,
+                                  )
+                                ]
+                              : null,
                         ),
+                        alignment: Alignment.center,
+                        child: isActive
+                            ? Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  color: Colors.black,
+                                  shape: BoxShape.circle,
+                                ),
+                              )
+                            : null,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        flex: 5,
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: muscleNodes.map((m) {
-                            final id = m['id'] as String;
-                            final isActive = widget.activeMuscles.contains(id);
-                            return GestureDetector(
-                              onTap: () => widget.onMuscleTapped?.call(id),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 220),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  gradient: isActive
-                                      ? LinearGradient(
-                                          colors: [
-                                            primary.withOpacity(0.35),
-                                            primary.withOpacity(0.12),
-                                          ],
-                                        )
-                                      : null,
-                                  color: isActive
-                                      ? null
-                                      : Colors.white.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: isActive ? primary : Colors.white12,
-                                    width: isActive ? 1.8 : 1,
-                                  ),
-                                  boxShadow: isActive
-                                      ? [
-                                          BoxShadow(
-                                            color: primary.withOpacity(0.38),
-                                            blurRadius: 12,
-                                          )
-                                        ]
-                                      : null,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 9,
-                                      height: 9,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: isActive ? primary : Colors.grey,
-                                        boxShadow: isActive
-                                            ? [
-                                                BoxShadow(
-                                                  color: primary,
-                                                  blurRadius: 6,
-                                                )
-                                              ]
-                                            : null,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        widget.isFa
-                                            ? (m['fa'] as String)
-                                            : (m['en'] as String),
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          fontWeight: isActive
-                                              ? FontWeight.w800
-                                              : FontWeight.w500,
-                                          color: isActive
-                                              ? Colors.white
-                                              : Colors.white70,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.isFa
+                                  ? (m['fa'] as String)
+                                  : (m['en'] as String),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: isActive
+                                    ? FontWeight.w900
+                                    : FontWeight.w600,
+                                color:
+                                    isActive ? Colors.white : Colors.white70,
                               ),
-                            );
-                          }).toList(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Text(
+                                m['zone'] as String,
+                                style: TextStyle(
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.bold,
+                                  color:
+                                      isActive ? primary : Colors.white38,
+                                  letterSpacing: 0.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
               );
-            },
+            }).toList(),
           ),
         ],
       ),
     );
   }
-}
-
-class _Body3DSilhouettePainter extends CustomPainter {
-  final List<String> activeMuscles;
-  final Color glowColor;
-  final bool isBackView;
-
-  _Body3DSilhouettePainter({
-    required this.activeMuscles,
-    required this.glowColor,
-    required this.isBackView,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-
-    final gridPaint = Paint()
-      ..color = glowColor.withOpacity(0.08)
-      ..strokeWidth = 1;
-    for (double y = 20; y < size.height; y += 28) {
-      canvas.drawLine(Offset(cx - 75, y), Offset(cx + 75, y), gridPaint);
-    }
-    canvas.drawCircle(
-      Offset(cx, size.height / 2),
-      88,
-      Paint()
-        ..color = glowColor.withOpacity(0.10)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
-    );
-
-    final outlinePaint = Paint()
-      ..color = Colors.white.withOpacity(0.32)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..strokeJoin = StrokeJoin.round;
-
-    Paint fillFor(String id) {
-      final active = activeMuscles.contains(id);
-      return Paint()
-        ..color = active
-            ? glowColor.withOpacity(0.88)
-            : const Color(0xFF25302B).withOpacity(0.75)
-        ..style = PaintingStyle.fill;
-    }
-
-    void drawMusclePath(Path path, String id) {
-      final active = activeMuscles.contains(id);
-      if (active) {
-        canvas.drawPath(
-          path,
-          Paint()
-            ..color = glowColor.withOpacity(0.55)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9),
-        );
-      }
-      canvas.drawPath(path, fillFor(id));
-      canvas.drawPath(path, outlinePaint);
-    }
-
-    final headPath = Path()
-      ..addOval(Rect.fromCenter(center: Offset(cx, 22), width: 24, height: 28));
-    canvas.drawPath(headPath, Paint()..color = const Color(0xFF2C3832));
-    canvas.drawPath(headPath, outlinePaint);
-
-    final trapsPath = Path()
-      ..moveTo(cx - 8, 34)
-      ..lineTo(cx + 8, 34)
-      ..lineTo(cx + 26, 44)
-      ..lineTo(cx - 26, 44)
-      ..close();
-    drawMusclePath(trapsPath, 'shoulders');
-
-    final leftDelt = Path()
-      ..moveTo(cx - 26, 44)
-      ..quadraticBezierTo(cx - 50, 46, cx - 48, 66)
-      ..quadraticBezierTo(cx - 38, 72, cx - 30, 62)
-      ..close();
-    final rightDelt = Path()
-      ..moveTo(cx + 26, 44)
-      ..quadraticBezierTo(cx + 50, 46, cx + 48, 66)
-      ..quadraticBezierTo(cx + 38, 72, cx + 30, 62)
-      ..close();
-    drawMusclePath(leftDelt, 'shoulders');
-    drawMusclePath(rightDelt, 'shoulders');
-
-    if (!isBackView) {
-      final leftPec = Path()
-        ..moveTo(cx - 2, 45)
-        ..lineTo(cx - 26, 45)
-        ..quadraticBezierTo(cx - 32, 64, cx - 24, 76)
-        ..lineTo(cx - 2, 74)
-        ..close();
-      final rightPec = Path()
-        ..moveTo(cx + 2, 45)
-        ..lineTo(cx + 26, 45)
-        ..quadraticBezierTo(cx + 32, 64, cx + 24, 76)
-        ..lineTo(cx + 2, 74)
-        ..close();
-      drawMusclePath(leftPec, 'chest');
-      drawMusclePath(rightPec, 'chest');
-    } else {
-      final backLats = Path()
-        ..moveTo(cx - 26, 45)
-        ..lineTo(cx + 26, 45)
-        ..quadraticBezierTo(cx + 34, 75, cx + 18, 118)
-        ..lineTo(cx - 18, 118)
-        ..quadraticBezierTo(cx - 34, 75, cx - 26, 45)
-        ..close();
-      drawMusclePath(backLats, 'back');
-    }
-
-    if (!isBackView) {
-      final corePath = Path()
-        ..moveTo(cx - 22, 78)
-        ..lineTo(cx + 22, 78)
-        ..lineTo(cx + 17, 130)
-        ..lineTo(cx - 17, 130)
-        ..close();
-      drawMusclePath(corePath, 'abs');
-      canvas.drawLine(Offset(cx, 78), Offset(cx, 128), outlinePaint);
-      canvas.drawLine(Offset(cx - 19, 94), Offset(cx + 19, 94), outlinePaint);
-      canvas.drawLine(Offset(cx - 18, 110), Offset(cx + 18, 110), outlinePaint);
-    } else {
-      final lowerBack = Path()
-        ..moveTo(cx - 17, 118)
-        ..lineTo(cx + 17, 118)
-        ..lineTo(cx + 20, 136)
-        ..lineTo(cx - 20, 136)
-        ..close();
-      drawMusclePath(lowerBack, 'back');
-    }
-
-    final armMuscle = isBackView ? 'triceps' : 'biceps';
-    final leftArm = Path()
-      ..moveTo(cx - 46, 66)
-      ..quadraticBezierTo(cx - 54, 88, cx - 48, 118)
-      ..lineTo(cx - 36, 118)
-      ..quadraticBezierTo(cx - 30, 88, cx - 32, 64)
-      ..close();
-    final rightArm = Path()
-      ..moveTo(cx + 46, 66)
-      ..quadraticBezierTo(cx + 54, 88, cx + 48, 118)
-      ..lineTo(cx + 36, 118)
-      ..quadraticBezierTo(cx + 30, 88, cx + 32, 64)
-      ..close();
-    drawMusclePath(leftArm, armMuscle);
-    drawMusclePath(rightArm, armMuscle);
-
-    final leftQuad = Path()
-      ..moveTo(cx - 20, 134)
-      ..lineTo(cx - 3, 134)
-      ..quadraticBezierTo(cx - 2, 172, cx - 7, 198)
-      ..lineTo(cx - 22, 198)
-      ..quadraticBezierTo(cx - 30, 165, cx - 20, 134)
-      ..close();
-    final rightQuad = Path()
-      ..moveTo(cx + 20, 134)
-      ..lineTo(cx + 3, 134)
-      ..quadraticBezierTo(cx + 2, 172, cx + 7, 198)
-      ..lineTo(cx + 22, 198)
-      ..quadraticBezierTo(cx + 30, 165, cx + 20, 134)
-      ..close();
-    drawMusclePath(leftQuad, 'legs');
-    drawMusclePath(rightQuad, 'legs');
-
-    final leftCalf = Path()
-      ..moveTo(cx - 21, 202)
-      ..lineTo(cx - 8, 202)
-      ..quadraticBezierTo(cx - 5, 224, cx - 10, 252)
-      ..lineTo(cx - 19, 252)
-      ..quadraticBezierTo(cx - 26, 224, cx - 21, 202)
-      ..close();
-    final rightCalf = Path()
-      ..moveTo(cx + 21, 202)
-      ..lineTo(cx + 8, 202)
-      ..quadraticBezierTo(cx + 5, 224, cx + 10, 252)
-      ..lineTo(cx + 19, 252)
-      ..quadraticBezierTo(cx + 26, 224, cx + 21, 202)
-      ..close();
-    drawMusclePath(leftCalf, 'calves');
-    drawMusclePath(rightCalf, 'calves');
-  }
-
-  @override
-  bool shouldRepaint(covariant _Body3DSilhouettePainter oldDelegate) => true;
 }

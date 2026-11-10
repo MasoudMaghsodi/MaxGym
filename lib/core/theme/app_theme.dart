@@ -19,10 +19,11 @@ class AppTheme {
             Brightness.light;
     final Color onPrimaryText = isPrimaryBright ? Colors.black : Colors.white;
 
-    final bgColor = isDark ? const Color(0xFF070A08) : AppColors.lightBg;
+    // پسزمینه مشکی عمیق (Obsidian) و کارتهای ذغالی مات بدون کادر سبز اضافی (الهام از تصویر ۲ و ۳)
+    final bgColor = isDark ? const Color(0xFF080A09) : AppColors.lightBg;
     final surfaceColor =
-        isDark ? const Color(0xFF0F1411) : AppColors.lightSurface;
-    final cardColor = isDark ? const Color(0xFF151C18) : AppColors.lightCard;
+        isDark ? const Color(0xFF101311) : AppColors.lightSurface;
+    final cardColor = isDark ? const Color(0xFF151816) : AppColors.lightCard;
     final textColor =
         isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F1712);
 
@@ -46,7 +47,7 @@ class AppTheme {
       ),
       appBarTheme: AppBarTheme(
         backgroundColor:
-            isDark ? const Color(0xFF0B0F0D) : const Color(0xFF111513),
+            isDark ? const Color(0xFF080A09) : const Color(0xFF111513),
         foregroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -54,46 +55,53 @@ class AppTheme {
         titleTextStyle: const TextStyle(
           fontFamily: 'Vazirmatn',
           fontSize: 17,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w900,
           color: Colors.white,
-          letterSpacing: 0.3,
+          letterSpacing: 0.2,
         ),
       ),
       cardTheme: CardThemeData(
         color: cardColor,
-        elevation: isDark ? 0 : 3,
+        elevation: isDark ? 0 : 2,
         shadowColor: Colors.black26,
         margin: const EdgeInsets.symmetric(vertical: 4),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(24),
           side: BorderSide(
             color: isDark
-                ? effectivePrimary.withOpacity(0.22)
-                : Colors.black.withOpacity(0.08),
-            width: 1.2,
+                ? Colors.white.withOpacity(0.06)
+                : Colors.black.withOpacity(0.06),
+            width: 1.0,
           ),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor:
-            isDark ? const Color(0xFF1C2520) : const Color(0xFFE6ECE8),
-        selectedColor: effectivePrimary.withOpacity(isDark ? 0.28 : 0.18),
+            isDark ? const Color(0xFF1A1E1C) : const Color(0xFFE6ECE8),
+        selectedColor: effectivePrimary,
+        secondarySelectedColor: effectivePrimary,
         side: BorderSide(
-          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black12,
+          color: isDark ? Colors.white.withOpacity(0.07) : Colors.black12,
         ),
         labelStyle: TextStyle(
           fontFamily: 'Vazirmatn',
           fontSize: 12,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: textColor,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        secondaryLabelStyle: TextStyle(
+          fontFamily: 'Vazirmatn',
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          color: onPrimaryText,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? const Color(0xFF111714) : Colors.white,
+        fillColor: isDark ? const Color(0xFF121513) : Colors.white,
         labelStyle: TextStyle(
-          color: isDark ? Colors.white70 : Colors.black87,
+          color: isDark ? Colors.white60 : Colors.black87,
           fontSize: 13,
         ),
         hintStyle: TextStyle(
@@ -101,51 +109,59 @@ class AppTheme {
           fontSize: 13,
         ),
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide:
-              BorderSide(color: isDark ? Colors.white24 : Colors.black26),
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(
+            color: isDark ? Colors.white.withOpacity(0.08) : Colors.black12,
+          ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(
-            color: isDark ? Colors.white.withOpacity(0.10) : Colors.black12,
+            color: isDark ? Colors.white.withOpacity(0.07) : Colors.black12,
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: effectivePrimary, width: 2),
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: effectivePrimary, width: 1.8),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: effectivePrimary,
           foregroundColor: onPrimaryText,
-          elevation: isDark ? 6 : 2,
-          shadowColor: effectivePrimary.withOpacity(0.45),
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
+          elevation: isDark ? 8 : 2,
+          shadowColor: effectivePrimary.withOpacity(0.38),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(30),
           ),
           textStyle: const TextStyle(
             fontFamily: 'Vazirmatn',
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w900,
             fontSize: 14,
           ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: effectivePrimary,
-          side: BorderSide(color: effectivePrimary.withOpacity(0.55), width: 1.4),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          foregroundColor: isDark ? Colors.white : Colors.black87,
+          backgroundColor:
+              isDark ? const Color(0xFF161A18) : Colors.transparent,
+          side: BorderSide(
+            color: isDark
+                ? Colors.white.withOpacity(0.12)
+                : effectivePrimary.withOpacity(0.5),
+            width: 1.2,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(30),
           ),
           textStyle: const TextStyle(
             fontFamily: 'Vazirmatn',
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w700,
             fontSize: 13,
           ),
         ),
@@ -153,20 +169,34 @@ class AppTheme {
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: effectivePrimary,
         foregroundColor: onPrimaryText,
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        elevation: 10,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surfaceColor,
-        indicatorColor: effectivePrimary.withOpacity(0.24),
-        labelTextStyle: WidgetStateProperty.all(
-          TextStyle(
+        backgroundColor: const Color(0xFF0E1110),
+        indicatorColor: effectivePrimary,
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return IconThemeData(color: onPrimaryText, size: 22);
+          }
+          return const IconThemeData(color: Colors.white54, size: 21);
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return TextStyle(
+              fontFamily: 'Vazirmatn',
+              fontSize: 11.5,
+              fontWeight: FontWeight.w900,
+              color: effectivePrimary,
+            );
+          }
+          return const TextStyle(
             fontFamily: 'Vazirmatn',
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: textColor,
-          ),
-        ),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: Colors.white54,
+          );
+        }),
       ),
     );
   }
