@@ -38,13 +38,13 @@ extension PersianNumberSanitizer on String {
         RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u202A-\u202E\u2066-\u2069]'),
         '');
 
-    // ۲. خنثی‌سازی تگ‌های HTML/Script و دستورات خطرناک
+    // ۲. خنثیسازی تگهای HTML/Script و دستورات خطرناک
     s = s
         .replaceAll(RegExp(r'<\s*script[^>]*>', caseSensitive: false), '')
         .replaceAll(RegExp(r'<\s*/\s*script\s*>', caseSensitive: false), '')
         .replaceAll(RegExp(r'javascript\s*:', caseSensitive: false), '');
 
-    // ۳. خنثی‌سازی الگوهای رایج Prompt Injection
+    // ۳. خنثیسازی الگوهای رایج Prompt Injection
     s = s.replaceAll(
       RegExp(
         r'(ignore\s+all\s+previous\s+instructions|system\s+prompt\s*:|you\s+are\s+now\s+in\s+developer\s+mode)',
@@ -57,5 +57,16 @@ extension PersianNumberSanitizer on String {
       s = s.substring(0, maxLength);
     }
     return s;
+  }
+}
+
+extension NumberCurrencyFormatter on num {
+  /// فرمت سهرقمی اعداد مالی (مثلاً 1700000 -> 1,700,000)
+  String toPriceFormat() {
+    final intVal = round();
+    final str = intVal.abs().toString();
+    final reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    final formatted = str.replaceAllMapped(reg, (Match m) => '${m[1]},');
+    return intVal < 0 ? '-$formatted' : formatted;
   }
 }

@@ -13,7 +13,7 @@ class AppStrings {
 
   static const Map<String, Map<String, String>> _localizedValues = {
     'fa': {
-      'app_title': 'پرو کوچ | مدیریت هوشمند ورزشکاران',
+      'app_title': 'مکس جیم | مدیریت هوشمند ورزشکاران',
       'dashboard': 'داشبورد مربی',
       'athletes': 'ورزشکاران',
       'templates': 'قالبهای آماده',
@@ -44,7 +44,7 @@ class AppStrings {
       'unpaid_invoices': 'بدهکاران شهریه و برنامه',
     },
     'en': {
-      'app_title': 'ProCoach | Athlete Management',
+      'app_title': 'MAX GYM | Athlete Management',
       'dashboard': 'Coach Dashboard',
       'athletes': 'Athletes',
       'templates': 'Smart Templates',
@@ -80,7 +80,6 @@ class AppStrings {
     return _localizedValues[locale.languageCode]?[key] ?? key;
   }
 
-  /// متد کمکی برای انتخاب متن دوزبانه از دیتابیس بر اساس زبان فعلی اپ
   String bilingual(String faText, String enText) {
     if (isFa) {
       return faText.isNotEmpty ? faText : enText;

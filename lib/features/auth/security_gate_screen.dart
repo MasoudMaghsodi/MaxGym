@@ -11,6 +11,7 @@ import '../../core/config/supabase_config.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../core/theme/branding_provider.dart';
+import '../../core/widgets/maxgym_3d_widgets.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/database_models.dart';
 import '../admin_and_download/maxgym_hub_and_admin_screen.dart';
@@ -212,6 +213,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
       if (fullName.isNotEmpty) {
         final currentBrand = _ref.read(brandingProvider);
         if (currentBrand.coachName == 'مربی ارشد مکسجیم' ||
+            currentBrand.coachName == 'مربی حرفهای' ||
             currentBrand.coachName == 'مربی حرفهای') {
           await _ref
               .read(brandingProvider.notifier)
@@ -578,9 +580,6 @@ class _SecurityGateWrapperState extends ConsumerState<SecurityGateWrapper>
   }
 }
 
-// =============================================================================
-// صفحه ورود و ویترین عریض دسکتاپ/لپتاپ ۱۶ اینچی + موبایل + دکمه مستقیم سوپر-ادمین
-// =============================================================================
 class CoachAuthScreen extends ConsumerStatefulWidget {
   final String? errorMessage;
   const CoachAuthScreen({super.key, this.errorMessage});
@@ -610,7 +609,6 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
     super.dispose();
   }
 
-  /// باز کردن مستقیم کنسول سوپر-ادمین از بالای صفحه اول با رمز مستر شما (MaxGym@Admin2026)
   void _promptSuperAdminLogin(bool isFa) {
     final pinCtrl = TextEditingController();
     showDialog(
@@ -631,7 +629,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
           onSubmitted: (_) => _verifyPinAndOpenAdmin(ctx, pinCtrl.text),
           decoration: InputDecoration(
             labelText: isFa
-                ? 'رمز مستر مدیریت (پیشفرض: MaxGym@Admin2026)'
+                ? 'رمز مستر مدیریت (فقط توسعهدهنده)'
                 : 'Master Admin PIN',
             prefixIcon: const Icon(LucideIcons.keyRound),
           ),
@@ -739,24 +737,30 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
     final isWideLaptop = screenWidth >= 900;
 
     return Scaffold(
-      // نوار بالای صفحه با دکمه‌های مستقیم «مرکز دانلود» و «کنسول سوپر-ادمین»
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0E1210),
+        backgroundColor: const Color(0xFF0A0E0C),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                MaxGymBrandConfig.bundledLogoAsset,
-                width: 32,
-                height: 32,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    Icon(LucideIcons.dumbbell, color: primary),
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: primary, width: 1.5),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(
+                  MaxGymBrandConfig.bundledLogoAsset,
+                  width: 30,
+                  height: 30,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Icon(LucideIcons.dumbbell, color: primary),
+                ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Flexible(
               child: Text(
                 'MAX GYM',
@@ -764,7 +768,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                 style: TextStyle(
                   color: primary,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
+                  letterSpacing: 2,
                   fontSize: 16,
                 ),
               ),
@@ -800,7 +804,8 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
             ),
           ] else ...[
             IconButton(
-              tooltip: isFa ? 'دانلود اپلیکیشن / راهنمای آیفون' : 'Download App',
+              tooltip:
+                  isFa ? 'دانلود اپلیکیشن / راهنمای آیفون' : 'Download App',
               onPressed: () {
                 Navigator.push(
                   context,
@@ -814,90 +819,122 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
             IconButton(
               tooltip: isFa ? 'پنل سوپر-ادمین' : 'Super-Admin',
               onPressed: () => _promptSuperAdminLogin(isFa),
-              icon: const Icon(LucideIcons.crown, size: 20, color: AppColors.warning),
+              icon: const Icon(LucideIcons.crown,
+                  size: 20, color: AppColors.warning),
             ),
             const SizedBox(width: 4),
           ],
         ],
       ),
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            colors: [
-              primary.withOpacity(0.16),
-              theme.scaffoldBackgroundColor,
-            ],
-            radius: 1.1,
-          ),
-        ),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1180),
-              child: isWideLaptop
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // ستون اول در لپتاپ ۱۶ اینچی: ویترین گرافیکی و امکانات پلتفرم MAX GYM
-                        Expanded(
-                          flex: 6,
-                          child: _buildWidescreenBrandShowcase(isFa, primary),
-                        ),
-                        const SizedBox(width: 40),
-                        // ستون دوم در لپتاپ ۱۶ اینچی: کارت ورود دوگانه
-                        Expanded(
-                          flex: 5,
-                          child: _buildAuthFormCard(isFa, theme, primary),
-                        ),
-                      ],
-                    )
-                  : ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 440),
-                      child: _buildAuthFormCard(isFa, theme, primary),
-                    ),
+      body: Stack(
+        children: [
+          // پسزمینه استودیویی با دو هاله نوری نئونی (Cyber Mesh Glow)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0.3, -0.3),
+                  colors: [
+                    primary.withOpacity(0.20),
+                    const Color(0xFF0A0E0C),
+                    const Color(0xFF060807),
+                  ],
+                  radius: 1.15,
+                ),
+              ),
             ),
           ),
-        ),
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1180),
+                child: isWideLaptop
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            flex: 6,
+                            child: _buildWidescreenBrandShowcase(isFa, primary),
+                          ),
+                          const SizedBox(width: 44),
+                          Expanded(
+                            flex: 5,
+                            child: _buildAuthFormCard(isFa, theme, primary),
+                          ),
+                        ],
+                      )
+                    : ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 450),
+                        child: _buildAuthFormCard(isFa, theme, primary),
+                      ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  /// ویترین حرفهای مخصوص لپتاپ ۱۶ اینچی و دسکتاپ تا صفحه پر، غنی و لوکس دیده شود
   Widget _buildWidescreenBrandShowcase(bool isFa, Color primary) {
     Widget featureTile(IconData icon, String title, String subtitle) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.04),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: primary.withOpacity(0.25)),
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: primary.withOpacity(0.18),
-              child: Icon(icon, color: primary, size: 20),
+      return MaxGym3DTiltCard(
+        glowColor: primary,
+        margin: const EdgeInsets.only(bottom: 14),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                primary.withOpacity(0.14),
+                const Color(0xFF121815).withOpacity(0.92),
+              ],
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 2),
-                  Text(subtitle,
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.grey)),
-                ],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: primary.withOpacity(0.32), width: 1.2),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: primary.withOpacity(0.20),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primary.withOpacity(0.25),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Icon(icon, color: primary, size: 22),
               ),
-            ),
-          ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -907,38 +944,54 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
       children: [
         Row(
           children: [
-            Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: primary, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: primary.withOpacity(0.35),
-                    blurRadius: 24,
+            MaxGym3DTiltCard(
+              glowColor: primary,
+              child: Container(
+                width: 114,
+                height: 114,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: primary, width: 2.5),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Image.asset(
+                    MaxGymBrandConfig.bundledLogoAsset,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        Icon(LucideIcons.dumbbell, size: 54, color: primary),
                   ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: Image.asset(
-                  MaxGymBrandConfig.bundledLogoAsset,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      Icon(LucideIcons.dumbbell, size: 54, color: primary),
                 ),
               ),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 22),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: primary.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: primary.withOpacity(0.5)),
+                    ),
+                    child: Text(
+                      'PRO COACHING SAAS • v2.0',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: primary,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Text(
                     'MAX GYM ECOSYSTEM',
                     style: TextStyle(
-                      fontSize: 30,
+                      fontSize: 32,
                       fontWeight: FontWeight.w900,
                       color: primary,
                       letterSpacing: 2,
@@ -948,10 +1001,10 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                   const Text(
                     'NO PAIN NO GAIN • EST. 2019',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: Colors.white70,
-                      letterSpacing: 1.5,
+                      letterSpacing: 1.8,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -959,14 +1012,14 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                     isFa
                         ? 'پلتفرم جامع مدیریت هوشمند مربیان، طراحی برنامه تمرینی/غذایی/مکمل و پرتال آنلاین ورزشکاران باشگاه مکس'
                         : 'Enterprise Coaching, Workout/Diet Builder & Live Athlete Portal',
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    style: const TextStyle(fontSize: 13, color: Colors.white70),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 30),
         featureTile(
           LucideIcons.dumbbell,
           isFa
@@ -1008,203 +1061,201 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
   }
 
   Widget _buildAuthFormCard(bool isFa, ThemeData theme, Color primary) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SegmentedButton<bool>(
-              segments: [
-                ButtonSegment(
-                  value: false,
-                  icon: const Icon(LucideIcons.shieldCheck, size: 16),
-                  label: Text(isFa ? 'پنل مربی' : 'Coach Mode'),
-                ),
-                ButtonSegment(
-                  value: true,
-                  icon: const Icon(LucideIcons.dumbbell, size: 16),
-                  label: Text(isFa ? 'پنل ورزشکار' : 'Athlete Mode'),
-                ),
-              ],
-              selected: {_isAthleteMode},
-              onSelectionChanged: (s) =>
-                  setState(() => _isAthleteMode = s.first),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              _isAthleteMode
-                  ? (isFa
-                      ? 'ورود ورزشکار به برنامه آنلاین'
-                      : 'Athlete Portal Login')
-                  : (_isLogin
-                      ? (isFa
-                          ? 'ورود امن مربی به سامانه'
-                          : 'Secure Coach Sign-In')
-                      : (isFa
-                          ? 'ثبت‌نام مربی جدید'
-                          : 'New Coach Registration')),
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+    return MaxGymGlassCard(
+      accentColor: primary,
+      padding: const EdgeInsets.all(28),
+      borderRadius: 28,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SegmentedButton<bool>(
+            segments: [
+              ButtonSegment(
+                value: false,
+                icon: const Icon(LucideIcons.shieldCheck, size: 16),
+                label: Text(isFa ? 'پنل مربی' : 'Coach Mode'),
+              ),
+              ButtonSegment(
+                value: true,
+                icon: const Icon(LucideIcons.dumbbell, size: 16),
+                label: Text(isFa ? 'پنل ورزشکار' : 'Athlete Mode'),
+              ),
+            ],
+            selected: {_isAthleteMode},
+            onSelectionChanged: (s) =>
+                setState(() => _isAthleteMode = s.first),
+          ),
+          const SizedBox(height: 22),
+          Text(
+            _isAthleteMode
+                ? (isFa
+                    ? 'ورود ورزشکار به برنامه آنلاین'
+                    : 'Athlete Portal Login')
+                : (_isLogin
+                    ? (isFa
+                        ? 'ورود امن مربی به سامانه'
+                        : 'Secure Coach Sign-In')
+                    : (isFa
+                        ? 'ثبتنام مربی جدید'
+                        : 'New Coach Registration')),
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+          if (widget.errorMessage != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.danger.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.danger.withOpacity(0.4)),
+              ),
+              child: Text(
+                widget.errorMessage!,
+                style: const TextStyle(color: AppColors.danger, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
             ),
             const SizedBox(height: 16),
-            if (widget.errorMessage != null) ...[
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.danger.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  widget.errorMessage!,
-                  style:
-                      const TextStyle(color: AppColors.danger, fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
+          ],
+          if (_isAthleteMode) ...[
+            TextField(
+              controller: _athleteCodeCtrl,
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                labelText: isFa
+                    ? 'کد اختصاصی (PC-XXXXXX)، شماره موبایل یا ایمیل ورزشکار'
+                    : 'Access Code (PC-XXXXXX), Phone, or Email',
+                prefixIcon: const Icon(LucideIcons.keyRound),
               ),
-              const SizedBox(height: 16),
-            ],
-            if (_isAthleteMode) ...[
-              TextField(
-                controller: _athleteCodeCtrl,
-                onSubmitted: (_) => _submit(),
-                decoration: InputDecoration(
-                  labelText: isFa
-                      ? 'کد اختصاصی (PC-XXXXXX)، شماره موبایل یا ایمیل ورزشکار'
-                      : 'Access Code (PC-XXXXXX), Phone, or Email',
-                  prefixIcon: const Icon(LucideIcons.keyRound),
-                ),
+            ),
+            const SizedBox(height: 22),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _submit,
+                icon: const Icon(LucideIcons.arrowRightCircle),
+                label: Text(isFa
+                    ? 'مشاهده برنامه تمرینی و چت با مربی'
+                    : 'Enter Athlete Portal'),
               ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _submit,
-                  icon: const Icon(LucideIcons.arrowRightCircle),
-                  label: Text(isFa
-                      ? 'مشاهده برنامه تمرینی و چت با مربی'
-                      : 'Enter Athlete Portal'),
-                ),
-              ),
-            ] else ...[
-              if (!_isLogin) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _firstNameCtrl,
-                        decoration: InputDecoration(
-                          labelText: isFa ? 'نام *' : 'First Name *',
-                          prefixIcon: const Icon(LucideIcons.user),
-                        ),
+            ),
+          ] else ...[
+            if (!_isLogin) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _firstNameCtrl,
+                      decoration: InputDecoration(
+                        labelText: isFa ? 'نام *' : 'First Name *',
+                        prefixIcon: const Icon(LucideIcons.user),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _lastNameCtrl,
-                        decoration: InputDecoration(
-                          labelText:
-                              isFa ? 'نام خانوادگی *' : 'Last Name *',
-                        ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _lastNameCtrl,
+                      decoration: InputDecoration(
+                        labelText: isFa ? 'نام خانوادگی *' : 'Last Name *',
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-              ],
-              TextField(
-                controller: _emailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                autocorrect: false,
-                decoration: InputDecoration(
-                  labelText: isFa ? 'ایمیل مربی' : 'Email Address',
-                  prefixIcon: const Icon(LucideIcons.mail),
-                ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: _passwordCtrl,
-                obscureText: _obscurePass,
-                enableSuggestions: false,
-                autocorrect: false,
-                onSubmitted: (_) => _submit(),
-                decoration: InputDecoration(
-                  labelText: isFa ? 'رمز عبور' : 'Password',
-                  prefixIcon: const Icon(LucideIcons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                        _obscurePass ? LucideIcons.eyeOff : LucideIcons.eye),
-                    onPressed: () =>
-                        setState(() => _obscurePass = !_obscurePass),
-                  ),
-                ),
+            ],
+            TextField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: isFa ? 'ایمیل مربی' : 'Email Address',
+                prefixIcon: const Icon(LucideIcons.mail),
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _submit,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _passwordCtrl,
+              obscureText: _obscurePass,
+              enableSuggestions: false,
+              autocorrect: false,
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                labelText: isFa ? 'رمز عبور' : 'Password',
+                prefixIcon: const Icon(LucideIcons.lock),
+                suffixIcon: IconButton(
                   icon: Icon(
-                      _isLogin ? LucideIcons.logIn : LucideIcons.userPlus),
-                  label: Text(_isLogin
-                      ? (isFa ? 'ورود به پنل مربی' : 'Sign In')
-                      : (isFa
-                          ? 'ثبتنام و ارسال درخواست تایید'
-                          : 'Register & Request Approval')),
+                      _obscurePass ? LucideIcons.eyeOff : LucideIcons.eye),
+                  onPressed: () =>
+                      setState(() => _obscurePass = !_obscurePass),
                 ),
               ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () => setState(() => _isLogin = !_isLogin),
-                child: Text(
-                  _isLogin
-                      ? (isFa
-                          ? 'حساب مربیگری ندارید؟ ثبتنام مربی جدید'
-                          : 'Don\'t have an account? Register')
-                      : (isFa
-                          ? 'قبلاً ثبتنام کردهاید؟ ورود به حساب'
-                          : 'Already registered? Sign In'),
-                ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _submit,
+                icon: Icon(
+                    _isLogin ? LucideIcons.logIn : LucideIcons.userPlus),
+                label: Text(_isLogin
+                    ? (isFa ? 'ورود به پنل مربی' : 'Sign In')
+                    : (isFa
+                        ? 'ثبتنام و ارسال درخواست تایید'
+                        : 'Register & Request Approval')),
               ),
-            ],
-            const Divider(height: 28),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 12,
-              children: [
-                TextButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const MaxGymDownloadAndPwaHubScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(LucideIcons.download, size: 15),
-                  label: Text(
-                    isFa
-                        ? 'مرکز دانلود اندروید و راهنمای آیفون'
-                        : 'Download APK / iOS Guide',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => _promptSuperAdminLogin(isFa),
-                  icon: const Icon(LucideIcons.crown,
-                      size: 15, color: AppColors.warning),
-                  label: Text(
-                    isFa ? 'ورود سوپر-ادمین' : 'Super-Admin',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.warning),
-                  ),
-                ),
-              ],
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => setState(() => _isLogin = !_isLogin),
+              child: Text(
+                _isLogin
+                    ? (isFa
+                        ? 'حساب مربیگری ندارید؟ ثبتنام مربی جدید'
+                        : 'Don\'t have an account? Register')
+                    : (isFa
+                        ? 'قبلاً ثبتنام کردهاید؟ ورود به حساب'
+                        : 'Already registered? Sign In'),
+              ),
             ),
           ],
-        ),
+          const Divider(height: 28, color: Colors.white12),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            children: [
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MaxGymDownloadAndPwaHubScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(LucideIcons.download, size: 15),
+                label: Text(
+                  isFa
+                      ? 'مرکز دانلود اندروید و راهنمای آیفون'
+                      : 'Download APK / iOS Guide',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => _promptSuperAdminLogin(isFa),
+                icon: const Icon(LucideIcons.crown,
+                    size: 15, color: AppColors.warning),
+                label: Text(
+                  isFa ? 'ورود سوپر-ادمین' : 'Super-Admin',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.warning),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1228,50 +1279,49 @@ class PendingApprovalScreen extends ConsumerWidget {
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(LucideIcons.clock,
-                      size: 56, color: AppColors.warning),
-                  const SizedBox(height: 16),
-                  Text(
-                    isFa
-                        ? 'حساب شما در انتظار تایید مدیر است'
-                        : 'Account Pending Admin Approval',
-                    style: const TextStyle(
-                        fontSize: 19, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    isFa
-                        ? 'مربی گرامی ($coachName - $email)، ثبتنام شما با موفقیت انجام شد. پس از تایید دسترسی شما در پنل سوپر-ادمین، صفحه به صورت خودکار باز میشود.'
-                        : 'Your registration ($email) is complete. Waiting for Super-Admin approval.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () => ref
-                        .read(securityGateProvider.notifier)
-                        .verifySecurityAndSession(),
-                    icon: const Icon(LucideIcons.refreshCw),
-                    label: Text(isFa
-                        ? 'بررسی وضعیت تایید حساب'
-                        : 'Check Approval Status'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton.icon(
-                    onPressed: () =>
-                        ref.read(securityGateProvider.notifier).signOut(),
-                    icon: const Icon(LucideIcons.logOut, size: 16),
-                    label: Text(isFa ? 'خروج از حساب' : 'Sign Out'),
-                  ),
-                ],
-              ),
+          child: MaxGymGlassCard(
+            accentColor: AppColors.warning,
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(LucideIcons.clock,
+                    size: 56, color: AppColors.warning),
+                const SizedBox(height: 16),
+                Text(
+                  isFa
+                      ? 'حساب شما در انتظار تایید مدیر است'
+                      : 'Account Pending Admin Approval',
+                  style: const TextStyle(
+                      fontSize: 19, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  isFa
+                      ? 'مربی گرامی ($coachName - $email)، ثبتنام شما با موفقیت انجام شد. پس از تایید دسترسی شما در پنل سوپر-ادمین، صفحه به صورت خودکار باز میشود.'
+                      : 'Your registration ($email) is complete. Waiting for Super-Admin approval.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => ref
+                      .read(securityGateProvider.notifier)
+                      .verifySecurityAndSession(),
+                  icon: const Icon(LucideIcons.refreshCw),
+                  label: Text(isFa
+                      ? 'بررسی وضعیت تایید حساب'
+                      : 'Check Approval Status'),
+                ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () =>
+                      ref.read(securityGateProvider.notifier).signOut(),
+                  icon: const Icon(LucideIcons.logOut, size: 16),
+                  label: Text(isFa ? 'خروج از حساب' : 'Sign Out'),
+                ),
+              ],
             ),
           ),
         ),

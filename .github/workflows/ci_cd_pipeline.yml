@@ -69,7 +69,7 @@ jobs:
           name: "MAX GYM Official Release v1.2.0"
           make_latest: true
           body: |
-            ## 🏋️‍♂️ MAX GYM Official Production Release (Android APK)
+            ## 🏋️♂️ MAX GYM Official Production Release (Android APK)
             ### **NO PAIN NO GAIN • EST. 2019**
             
             * **Version:** 1.2.0
@@ -77,11 +77,10 @@ jobs:
             * **Direct APK Download:** [MaxGym-Release.apk](https://github.com/MasoudMaghsodi/MaxGym/releases/download/v1.2.0/MaxGym-Release.apk)
             
             ### 📱 Highlights:
-            - Dual-role Coach management & Athlete online portal (6-digit access code `PC-XXXXXX`).
+            - Cyber-Athletic Bento & Glass UI 2.0
+            - Self-hosted CanvasKit WebAssembly (Loads in Iran without VPN)
+            - Dual-role Coach management & Athlete online portal (`PC-XXXXXX`).
             - Offline-first SQLite database with automatic two-way Supabase sync.
-            - Realtime WebSocket chat and live workout plan sync.
-            - 3D interactive muscle anatomy heatmap and 3D gyro tilt cards.
-            - Super-Admin console & remote Kill-Switch.
           files: build/app/outputs/flutter-apk/MaxGym-Release.apk
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -106,12 +105,17 @@ jobs:
           cp assets/images/maxgym_logo.jpeg web/icons/Icon-512.png
           cp assets/images/maxgym_logo.jpeg web/icons/Icon-maskable-192.png
           cp assets/images/maxgym_logo.jpeg web/icons/Icon-maskable-512.png
-      - name: Build Flutter Web PWA
+      - name: Build Flutter Web PWA (Self-Hosted CanvasKit for No-VPN Access)
         run: |
           flutter build web --release \
             --base-href "/" \
+            --dart-define=FLUTTER_WEB_CANVASKIT_URL=/canvaskit/ \
             --dart-define=APP_DOMAIN=maxgym.privatepath.ir \
             --dart-define=GITHUB_REPO=MasoudMaghsodi/MaxGym
+          mkdir -p build/web/canvaskit
+          if [ -d "$FLUTTER_ROOT/bin/cache/flutter_web_sdk/canvaskit" ]; then
+            cp -r $FLUTTER_ROOT/bin/cache/flutter_web_sdk/canvaskit/* build/web/canvaskit/ 2>/dev/null || true
+          fi
       - name: Configure Custom Domain (CNAME), Cache-Buster & SPA 404 Fallback
         run: |
           echo "maxgym.privatepath.ir" > build/web/CNAME
