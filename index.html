@@ -7,6 +7,11 @@
   <meta name="description" content="پلتفرم رسمی مدیریت تمرین، تغذیه و پرتال آنلاین ورزشکاران باشگاه MAX GYM">
   <meta name="theme-color" content="#0B0E0C">
 
+  <!-- Anti-Cache & Auto-Refresh Meta Tags (Prevents stale iOS Safari & Chrome cache) -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <!-- iOS PWA meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -24,6 +29,18 @@
   </style>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // Force immediate service worker update if new release is deployed
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          for (var r of registrations) {
+            r.update();
+          }
+        });
+      });
+    }
+  </script>
+  <script src="flutter_bootstrap.js?v=1794324821" async></script>
 </body>
 </html>
