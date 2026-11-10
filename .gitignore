@@ -48,6 +48,7 @@ ios/.generated/
 *.perspectivev3
 *.xcuserstate
 xcuserdata/
+**/xcshareddata/swiftpm/
 
 # Python / FastAPI
 __pycache__/
