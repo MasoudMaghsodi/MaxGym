@@ -5,32 +5,75 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="پلتفرم رسمی مدیریت تمرین، تغذیه و پرتال آنلاین ورزشکاران باشگاه MAX GYM">
-  <meta name="theme-color" content="#0B0E0C">
+  <meta name="theme-color" content="#070A08">
 
-  <!-- Anti-Cache & Auto-Refresh Meta Tags (Prevents stale iOS Safari & Chrome cache) -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <!-- iOS PWA meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="MAX GYM">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>MAX GYM | پلتفرم هوشمند باشگاه مکس</title>
   <link rel="manifest" href="manifest.json">
   <style>
-    body { background-color: #0B0E0C; margin: 0; padding: 0; overflow: hidden; }
+    body {
+      background-color: #070A08;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #maxgym-preloader {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, rgba(114, 200, 50, 0.18) 0%, #070A08 70%);
+      z-index: 9999;
+      transition: opacity 0.4s ease;
+    }
+    .loader-ring {
+      width: 64px;
+      height: 64px;
+      border: 3px solid rgba(114, 200, 50, 0.2);
+      border-top-color: #72C832;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      box-shadow: 0 0 24px rgba(114, 200, 50, 0.35);
+    }
+    .loader-title {
+      margin-top: 18px;
+      color: #72C832;
+      font-weight: 900;
+      font-size: 22px;
+      letter-spacing: 4px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
+  <div id="maxgym-preloader">
+    <div class="loader-ring"></div>
+    <div class="loader-title">MAX GYM</div>
+  </div>
   <script>
-    // Force immediate service worker update if new release is deployed
+    window.addEventListener('flutter-first-frame', function () {
+      var loader = document.getElementById('maxgym-preloader');
+      if (loader) {
+        loader.style.opacity = '0';
+        setTimeout(function () { loader.remove(); }, 400);
+      }
+    });
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
         navigator.serviceWorker.getRegistrations().then(function (registrations) {
@@ -41,6 +84,6 @@
       });
     }
   </script>
-  <script src="flutter_bootstrap.js?v=1794334476" async></script>
+  <script src="flutter_bootstrap.js?v=1794336229" async></script>
 </body>
 </html>
