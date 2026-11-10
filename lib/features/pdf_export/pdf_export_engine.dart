@@ -73,9 +73,16 @@ class PdfExportEngine {
     }
   }
 
+  /// لود هوشمند عکس حرکت در هم نسخه وب (PWA) و هم نسخه موبایل
   static Future<pw.ImageProvider?> _getCachedImageOrNull(String url) async {
     if (url.isEmpty) return null;
     try {
+      if (kIsWeb) {
+        final ByteData data = await NetworkAssetBundle(Uri.parse(url))
+            .load(url)
+            .timeout(const Duration(seconds: 4));
+        return pw.MemoryImage(data.buffer.asUint8List());
+      }
       final fileInfo =
           await SmartExerciseCacheManager.instance.getFileFromCache(url);
       if (fileInfo != null && await fileInfo.file.exists()) {
@@ -90,6 +97,20 @@ class PdfExportEngine {
       }
     } catch (_) {}
     return null;
+  }
+
+  /// حذف تکرار نام انگلیسی اگر از قبل داخل پرانتز نام فارسی وجود داشته باشد
+  static String _buildCleanBilingualName(
+      String fa, String en, PdfLanguageMode mode) {
+    final cleanFa = fa.trim();
+    final cleanEn = en.trim();
+    if (mode == PdfLanguageMode.persianOnly) return cleanFa;
+    if (mode == PdfLanguageMode.englishOnly) return cleanEn;
+    if (cleanEn.isEmpty) return cleanFa;
+    if (cleanFa.toLowerCase().contains(cleanEn.toLowerCase())) {
+      return cleanFa;
+    }
+    return '$cleanFa ($cleanEn)';
   }
 
   static Future<void> generateAndShareProgramPdf({
@@ -114,9 +135,17 @@ class PdfExportEngine {
       final fontBold = await _loadBoldFont();
 
       pw.ImageProvider? logoImage;
-      if (branding.logoPath != null && File(branding.logoPath!).existsSync()) {
+      if (!kIsWeb &&
+          branding.logoPath != null &&
+          File(branding.logoPath!).existsSync()) {
         final logoBytes = await File(branding.logoPath!).readAsBytes();
         logoImage = pw.MemoryImage(logoBytes);
+      } else {
+        try {
+          final bundledLogo =
+              await rootBundle.load('assets/images/maxgym_logo.jpeg');
+          logoImage = pw.MemoryImage(bundledLogo.buffer.asUint8List());
+        } catch (_) {}
       }
 
       final Map<String, pw.ImageProvider?> startImages = {};
@@ -144,7 +173,7 @@ class PdfExportEngine {
 
       final brandPdfColor =
           PdfColor.fromInt(branding.activePreset.primary.value);
-      final darkHeaderColor = PdfColor.fromHex('#181B22');
+      final darkHeaderColor = PdfColor.fromHex('#121614');
 
       final pdf = pw.Document(
         theme: pw.ThemeData.withFont(
@@ -159,7 +188,7 @@ class PdfExportEngine {
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(28),
+          margin: const pw.EdgeInsets.all(26),
           textDirection: isRtl ? pw.TextDirection.rtl : pw.TextDirection.ltr,
           header: (ctx) => _buildBrandHeader(
             branding: branding,
@@ -258,7 +287,6 @@ class PdfExportEngine {
       }
 
       if (kIsWeb) {
-        // در نسخه وب و آیفون (PWA) مستقیماً از بایت‌های حافظه دانلود/Share می‌شود
         await Share.shareXFiles(
           [XFile.fromData(bytes, name: fileName, mimeType: 'application/pdf')],
           text: caption,
@@ -296,7 +324,6 @@ class PdfExportEngine {
     }
   }
 
-  /// اصلاح کامل Border یکنواخت همراه با BorderRadius (رفع قطعی خطای box_border.dart line 266)
   static pw.Widget _buildBrandHeader({
     required BrandingConfig branding,
     required pw.ImageProvider? logoImage,
@@ -306,6 +333,11 @@ class PdfExportEngine {
     required String miladiDate,
     required bool isRtl,
   }) {
+    final cleanCoachName =
+        branding.coachName.replaceAll('حرفهای', 'حرفهای');
+    final cleanCreds =
+        branding.coachCredentials.replaceAll('حرفهای', 'حرفهای');
+
     return pw.Container(
       padding: const pw.EdgeInsets.all(14),
       decoration: pw.BoxDecoration(
@@ -323,7 +355,8 @@ class PdfExportEngine {
                   width: 44,
                   height: 44,
                   decoration: pw.BoxDecoration(
-                    shape: pw.BoxShape.circle,
+                    borderRadius: pw.BorderRadius.circular(10),
+                    border: pw.Border.all(color: brandColor, width: 1),
                     image: pw.DecorationImage(
                         image: logoImage, fit: pw.BoxFit.cover),
                   ),
@@ -341,8 +374,9 @@ class PdfExportEngine {
                       fontWeight: pw.FontWeight.bold,
                     ),
                   ),
+                  pw.SizedBox(height: 2),
                   pw.Text(
-                    '${branding.coachName} | ${branding.coachCredentials}',
+                    '$cleanCoachName | $cleanCreds',
                     style:
                         const pw.TextStyle(color: PdfColors.white, fontSize: 9),
                   ),
@@ -361,14 +395,20 @@ class PdfExportEngine {
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
-              pw.Text(
-                'Miladi: $miladiDate',
-                style:
-                    const pw.TextStyle(color: PdfColors.grey300, fontSize: 8),
+              pw.Directionality(
+                textDirection: pw.TextDirection.ltr,
+                child: pw.Text(
+                  'Miladi: $miladiDate',
+                  style: const pw.TextStyle(
+                      color: PdfColors.grey300, fontSize: 8),
+                ),
               ),
-              pw.Text(
-                branding.socialHandle,
-                style: pw.TextStyle(color: brandColor, fontSize: 8),
+              pw.Directionality(
+                textDirection: pw.TextDirection.ltr,
+                child: pw.Text(
+                  branding.socialHandle,
+                  style: pw.TextStyle(color: brandColor, fontSize: 8),
+                ),
               ),
             ],
           ),
@@ -398,12 +438,24 @@ class PdfExportEngine {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(
-                isRtl
-                    ? 'نام ورزشکار: ${athlete.fullName}  |  کد ورود اپ: ${athlete.accessCode}'
-                    : 'Athlete: ${athlete.fullName}  |  Portal Code: ${athlete.accessCode}',
-                style:
-                    const pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+              pw.Row(
+                children: [
+                  pw.Text(
+                    isRtl
+                        ? 'نام ورزشکار: ${athlete.fullName}  |  کد ورود اپ: '
+                        : 'Athlete: ${athlete.fullName}  |  Portal Code: ',
+                    style: const pw.TextStyle(
+                        fontSize: 11, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Directionality(
+                    textDirection: pw.TextDirection.ltr,
+                    child: pw.Text(
+                      athlete.accessCode,
+                      style: const pw.TextStyle(
+                          fontSize: 11, fontWeight: pw.FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
               pw.SizedBox(height: 4),
               pw.Text(
@@ -419,10 +471,10 @@ class PdfExportEngine {
             children: [
               pw.Text(
                 isRtl
-                    ? 'سن: ${athlete.age} | قد: ${athlete.heightCm.toStringAsFixed(0)}cm | وزن: ${athlete.weightKg.toStringAsFixed(1)}kg'
+                    ? 'سن: ${athlete.age} سال | قد: ${athlete.heightCm.toStringAsFixed(0)} سانتیمتر | وزن: ${athlete.weightKg.toStringAsFixed(1)} کیلوگرم'
                     : 'Age: ${athlete.age} | Height: ${athlete.heightCm.toStringAsFixed(0)}cm | Weight: ${athlete.weightKg.toStringAsFixed(1)}kg',
-                style:
-                    const pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+                style: const pw.TextStyle(
+                    fontSize: 10, fontWeight: pw.FontWeight.bold),
               ),
               if (athlete.injuryTags.isNotEmpty)
                 pw.Text(
@@ -440,8 +492,9 @@ class PdfExportEngine {
   }
 
   static pw.Widget _buildScientificBioTable(BioAnalysisResult bio, bool isRtl) {
+    final cleanWhtrFa = bio.whtrStatusFa.replaceAll('ایدهآل', 'ایدهآل');
     return pw.TableHelper.fromTextArray(
-      headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#222630')),
+      headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#1C221F')),
       headerStyle: const pw.TextStyle(
         color: PdfColors.white,
         fontSize: 9,
@@ -473,13 +526,13 @@ class PdfExportEngine {
       data: [
         isRtl
             ? [
-                '${bio.waterLiters} L',
-                '${bio.fiberGrams} g',
-                '${bio.fatGrams} g',
-                '${bio.carbsGrams} g',
-                '${bio.proteinGrams} g',
-                '${bio.targetCalories} kcal',
-                '${bio.whtr ?? "--"} (${bio.whtrStatusFa})',
+                '${bio.waterLiters} لیتر',
+                '${bio.fiberGrams} گرم',
+                '${bio.fatGrams} گرم',
+                '${bio.carbsGrams} گرم',
+                '${bio.proteinGrams} گرم',
+                '${bio.targetCalories} کالری',
+                '${bio.whtr ?? "--"} ($cleanWhtrFa)',
                 '${bio.bmi} (${bio.bmiCategoryFa})',
               ]
             : [
@@ -584,6 +637,7 @@ class PdfExportEngine {
     required PdfLanguageMode langMode,
     required bool isRtl,
   }) {
+    final cleanDayFa = day.dayNameFa.replaceAll('سهشنبه', 'سهشنبه');
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 14),
       decoration: pw.BoxDecoration(
@@ -595,51 +649,50 @@ class PdfExportEngine {
         children: [
           pw.Container(
             padding:
-                const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: pw.BoxDecoration(
-              color: PdfColor.fromHex('#181B22'),
+              color: PdfColor.fromHex('#141A17'),
             ),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 pw.Text(
-                  isRtl
-                      ? '${day.dayNameFa} (${day.dayNameEn})'
-                      : day.dayNameEn,
+                  isRtl ? '$cleanDayFa (${day.dayNameEn})' : day.dayNameEn,
                   style: pw.TextStyle(
                     color: brandColor,
                     fontSize: 11,
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),
-                pw.Text(
-                  day.targetMuscles.join(' + ').toUpperCase(),
-                  style:
-                      const pw.TextStyle(color: PdfColors.white, fontSize: 9),
+                pw.Directionality(
+                  textDirection: pw.TextDirection.ltr,
+                  child: pw.Text(
+                    day.targetMuscles.join(' + ').toUpperCase(),
+                    style: const pw.TextStyle(
+                        color: PdfColors.white, fontSize: 9),
+                  ),
                 ),
               ],
             ),
           ),
-          ...day.exercises.map((ex) {
+          ...List.generate(day.exercises.length, (idx) {
+            final ex = day.exercises[idx];
             final startImg = startImages[ex.id];
             final endImg = endImages[ex.id];
             final isSuperset = ex.supersetGroupId != null;
 
-            String displayMoveName;
-            if (langMode == PdfLanguageMode.persianOnly) {
-              displayMoveName = ex.exerciseNameFa;
-            } else if (langMode == PdfLanguageMode.englishOnly) {
-              displayMoveName = ex.exerciseNameEn;
-            } else {
-              displayMoveName = '${ex.exerciseNameFa} (${ex.exerciseNameEn})';
-            }
+            final displayMoveName = _buildCleanBilingualName(
+              ex.exerciseNameFa,
+              ex.exerciseNameEn,
+              langMode,
+            );
 
             final setsSummary = ex.sets
                 .map((s) =>
-                    'S${s.setNumber}: ${s.reps}${s.isDropSet ? "[Drop]" : ""}')
-                .join(' | ');
+                    'S${s.setNumber}: ${s.reps}${s.isDropSet ? " [Drop]" : ""}')
+                .join('   |   ');
             final tempoAndRest = ex.sets.isNotEmpty
-                ? 'Tempo: ${ex.sets.first.tempo} | Rest: ${ex.sets.first.restSeconds}s'
+                ? 'Tempo: ${ex.sets.first.tempo}   |   Rest: ${ex.sets.first.restSeconds}s'
                 : '';
 
             return pw.Container(
@@ -651,26 +704,27 @@ class PdfExportEngine {
                 border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
               ),
               child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
-                  pw.Row(
-                    children: [
-                      if (startImg != null)
-                        pw.Container(
-                          width: 48,
-                          height: 48,
-                          margin: const pw.EdgeInsets.only(right: 4),
-                          child: pw.Image(startImg, fit: pw.BoxFit.cover),
-                        ),
-                      if (endImg != null)
-                        pw.Container(
-                          width: 48,
-                          height: 48,
-                          margin: const pw.EdgeInsets.only(right: 6),
-                          child: pw.Image(endImg, fit: pw.BoxFit.cover),
-                        ),
-                    ],
+                  // شماره حرکت در یک کادر مجزا تا هرگز به خط دوم نپرد
+                  pw.Container(
+                    width: 22,
+                    height: 22,
+                    alignment: pw.Alignment.center,
+                    decoration: pw.BoxDecoration(
+                      color: PdfColor.fromHex('#141A17'),
+                      borderRadius: pw.BorderRadius.circular(5),
+                    ),
+                    child: pw.Text(
+                      '${idx + 1}',
+                      style: pw.TextStyle(
+                        color: brandColor,
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
                   ),
-                  pw.SizedBox(width: 10),
+                  pw.SizedBox(width: 8),
                   pw.Expanded(
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -680,7 +734,7 @@ class PdfExportEngine {
                           children: [
                             pw.Expanded(
                               child: pw.Text(
-                                '${ex.orderIndex}. $displayMoveName',
+                                displayMoveName,
                                 style: const pw.TextStyle(
                                   fontSize: 10,
                                   fontWeight: pw.FontWeight.bold,
@@ -695,27 +749,43 @@ class PdfExportEngine {
                                   color: PdfColors.amber200,
                                   borderRadius: pw.BorderRadius.circular(4),
                                 ),
-                                child: pw.Text(
-                                  'SUPERSET (${ex.supersetGroupId})',
-                                  style: const pw.TextStyle(
-                                    fontSize: 8,
-                                    fontWeight: pw.FontWeight.bold,
+                                child: pw.Directionality(
+                                  textDirection: pw.TextDirection.ltr,
+                                  child: pw.Text(
+                                    'SUPERSET (${ex.supersetGroupId})',
+                                    style: const pw.TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: pw.FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
                           ],
                         ),
-                        pw.SizedBox(height: 3),
-                        pw.Text(setsSummary,
-                            style: const pw.TextStyle(fontSize: 9)),
-                        pw.Text(
-                          tempoAndRest,
-                          style: const pw.TextStyle(
-                              fontSize: 8, color: PdfColors.grey700),
+                        pw.SizedBox(height: 4),
+                        pw.Directionality(
+                          textDirection: pw.TextDirection.ltr,
+                          child: pw.Text(
+                            setsSummary,
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColor.fromHex('#1B2420'),
+                            ),
+                          ),
+                        ),
+                        pw.SizedBox(height: 2),
+                        pw.Directionality(
+                          textDirection: pw.TextDirection.ltr,
+                          child: pw.Text(
+                            tempoAndRest,
+                            style: const pw.TextStyle(
+                                fontSize: 8, color: PdfColors.grey700),
+                          ),
                         ),
                         if (ex.coachNote.isNotEmpty)
                           pw.Padding(
-                            padding: const pw.EdgeInsets.only(top: 2),
+                            padding: const pw.EdgeInsets.only(top: 3),
                             child: pw.Text(
                               isRtl
                                   ? 'نکته مربی: ${ex.coachNote}'
@@ -730,6 +800,37 @@ class PdfExportEngine {
                       ],
                     ),
                   ),
+                  if (startImg != null || endImg != null) ...[
+                    pw.SizedBox(width: 8),
+                    pw.Row(
+                      children: [
+                        if (startImg != null)
+                          pw.Container(
+                            width: 48,
+                            height: 48,
+                            margin: const pw.EdgeInsets.symmetric(horizontal: 2),
+                            decoration: pw.BoxDecoration(
+                              border: pw.Border.all(
+                                  color: PdfColors.grey300, width: 0.5),
+                              borderRadius: pw.BorderRadius.circular(4),
+                            ),
+                            child: pw.Image(startImg, fit: pw.BoxFit.contain),
+                          ),
+                        if (endImg != null)
+                          pw.Container(
+                            width: 48,
+                            height: 48,
+                            margin: const pw.EdgeInsets.symmetric(horizontal: 2),
+                            decoration: pw.BoxDecoration(
+                              border: pw.Border.all(
+                                  color: PdfColors.grey300, width: 0.5),
+                              borderRadius: pw.BorderRadius.circular(4),
+                            ),
+                            child: pw.Image(endImg, fit: pw.BoxFit.contain),
+                          ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             );
@@ -758,15 +859,16 @@ class PdfExportEngine {
             : '• $mainFood [OR: ${alts.join(" / ")}]';
       }).join('\n');
 
+      final cleanMealTitle = m.titleFa.replaceAll('میانوعده', 'میانوعده');
       rows.add(
         isRtl
-            ? [content, m.timeRange, m.titleFa]
+            ? [content, m.timeRange, cleanMealTitle]
             : [m.titleEn, m.timeRange, content],
       );
     }
 
     return pw.TableHelper.fromTextArray(
-      headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#222630')),
+      headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#1C221F')),
       headerStyle: const pw.TextStyle(
           color: PdfColors.white, fontSize: 9, fontWeight: pw.FontWeight.bold),
       cellStyle: const pw.TextStyle(fontSize: 9),
@@ -783,7 +885,7 @@ class PdfExportEngine {
     bool isRtl,
   ) {
     return pw.TableHelper.fromTextArray(
-      headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#222630')),
+      headerDecoration: pw.BoxDecoration(color: PdfColor.fromHex('#1C221F')),
       headerStyle: const pw.TextStyle(
           color: PdfColors.white, fontSize: 9, fontWeight: pw.FontWeight.bold),
       cellStyle: const pw.TextStyle(fontSize: 9),
@@ -791,12 +893,14 @@ class PdfExportEngine {
           ? ['روز مصرف', 'زمان مصرف', 'دوز مصرفی', 'نام مکمل']
           : ['Supplement Name', 'Dosage', 'Timing', 'Condition'],
       data: list.map((s) {
+        final cleanSuppName =
+            _buildCleanBilingualName(s.nameFa, s.nameEn, langMode);
         return isRtl
             ? [
                 s.onlyTrainingDays ? 'فقط روزهای تمرین' : 'همه روزها',
-                s.timingFa,
+                s.timingFa.replaceAll('میانوعده', 'میانوعده'),
                 s.dosageFa,
-                '${s.nameFa} (${s.nameEn})',
+                cleanSuppName,
               ]
             : [
                 s.nameEn,
@@ -810,9 +914,9 @@ class PdfExportEngine {
 
   static pw.Widget _buildSectionTitle(String title, PdfColor brandColor) {
     return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: pw.BoxDecoration(
-        color: PdfColor.fromHex('#222630'),
+        color: PdfColor.fromHex('#141A17'),
         borderRadius: pw.BorderRadius.circular(6),
       ),
       child: pw.Text(
@@ -828,6 +932,8 @@ class PdfExportEngine {
 
   static pw.Widget _buildFooter(
       pw.Context ctx, BrandingConfig branding, bool isRtl) {
+    final cleanCoachName =
+        branding.coachName.replaceAll('حرفهای', 'حرفهای');
     return pw.Container(
       margin: const pw.EdgeInsets.only(top: 10),
       padding: const pw.EdgeInsets.only(top: 6),
@@ -837,13 +943,30 @@ class PdfExportEngine {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(
-            '${branding.gymName} | ${branding.coachName} (${branding.socialHandle})',
-            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+          pw.Row(
+            children: [
+              pw.Text(
+                '${branding.gymName} | $cleanCoachName | ',
+                style:
+                    const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+              ),
+              pw.Directionality(
+                textDirection: pw.TextDirection.ltr,
+                child: pw.Text(
+                  branding.socialHandle,
+                  style: const pw.TextStyle(
+                      fontSize: 8, color: PdfColors.grey700),
+                ),
+              ),
+            ],
           ),
-          pw.Text(
-            'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
-            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+          pw.Directionality(
+            textDirection: pw.TextDirection.ltr,
+            child: pw.Text(
+              'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+              style:
+                  const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+            ),
           ),
         ],
       ),
