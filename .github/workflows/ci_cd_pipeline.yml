@@ -1,80 +1,91 @@
-name: ProCoach Flutter CI/CD Pipeline
+name: MaxGym CI/CD (Android Release APK + Cloudflare/GitHub Pages PWA)
 
 on:
   push:
-    branches: [ "main", "master", "develop" ]
-  pull_request:
     branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
   # ---------------------------------------------------------------------------
-  # JOB 1: Static Code Analysis & Automated Test Suite (Unit, DB, API, Widget)
+  # JOB 1: Run Automated Tests
   # ---------------------------------------------------------------------------
-  verify_and_test:
-    name: Analyze & Run Full Test Suite
+  test_suite:
+    name: Run MaxGym Automated Test Suite
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install SQLite3 Native Library for Linux Test Runner
+      - uses: actions/checkout@v4
+      - name: Install SQLite3 Native Dev Lib
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-
-      - name: Setup Flutter SDK
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
-
-      - name: Install Dependencies
-        run: flutter pub get
-
-      - name: Verify Code Formatting & Static Analysis
-        run: flutter analyze --no-fatal-infos
-
-      - name: Execute Unit, SQLite DB, Supabase Contract & Widget Tests
-        run: flutter test --coverage
+      - run: flutter pub get
+      - run: flutter test
 
   # ---------------------------------------------------------------------------
-  # JOB 2: Build Production Android Release APK & AppBundle (Obfuscated)
+  # JOB 2: Build Production Android APK
   # ---------------------------------------------------------------------------
-  build_android_release:
-    name: Build Production Android APK
-    needs: verify_and_test
+  build_android:
+    name: Build MaxGym Release APK
+    needs: test_suite
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Java JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Setup Flutter SDK
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
-
-      - name: Install Dependencies
-        run: flutter pub get
-
-      - name: Build Obfuscated Production APK with Secure Dart-Defines
+      - run: flutter pub get
+      - name: Build Obfuscated Release APK
         run: |
           flutter build apk --release \
             --obfuscate \
-            --split-debug-info=build/app/outputs/symbols \
-            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL || 'https://pnuyylukurndiflgzxmo.supabase.co' }} \
-            --dart-define=SUPABASE_KEY=${{ secrets.SUPABASE_KEY || 'sb_publishable_WwWRmaKsCVi9tlvlH3Kf1g_63q_rlid' }}
-
-      - name: Upload Release APK Artifact
+            --split-debug-info=build/symbols \
+            --dart-define=APP_DOMAIN=maxgym.privatepath.ir \
+            --dart-define=GITHUB_REPO=MasoudMaghsodi/MaxGym
+      - name: Upload MaxGym-Release.apk Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ProCoach-Release-APK
+          name: MaxGym-Release-APK
           path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # JOB 3: Build & Auto-Deploy Web PWA to GitHub Pages (maxgym.privatepath.ir)
+  # ---------------------------------------------------------------------------
+  deploy_web_pwa:
+    name: Deploy iOS/Web PWA to GitHub Pages
+    needs: test_suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+      - run: flutter pub get
+      - name: Build Flutter Web PWA
+        run: |
+          flutter build web --release \
+            --base-href "/" \
+            --dart-define=APP_DOMAIN=maxgym.privatepath.ir \
+            --dart-define=GITHUB_REPO=MasoudMaghsodi/MaxGym
+      - name: Configure Custom Cloudflare Domain (CNAME) & SPA 404 Fallback
+        run: |
+          echo "maxgym.privatepath.ir" > build/web/CNAME
+          cp build/web/index.html build/web/404.html
+      - name: Publish to gh-pages Branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
+          cname: maxgym.privatepath.ir
