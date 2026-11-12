@@ -77,3 +77,8 @@ Full_Project_Blueprint.md
 docs/BLUEPRINT.md
 screenshots/
 scratch/
+
+# Local internal instructions and agent configs
+.agents/
+.agent/
+AGENTS.md
