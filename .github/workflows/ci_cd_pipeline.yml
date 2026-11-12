@@ -46,6 +46,36 @@ jobs:
           channel: 'stable'
           cache: true
       - run: flutter pub get
+
+      - name: Configure Production Release Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+            cat <<EOF > android/key.properties
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+          else
+            keytool -genkey -v -keystore android/app/upload-keystore.jks \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -alias maxgym_release \
+              -storepass MaxGymReleaseKey2026 -keypass MaxGymReleaseKey2026 \
+              -dname "CN=MaxGym, OU=Fitness, O=MaxGym, L=Tehran, S=Tehran, C=IR"
+            cat <<EOF > android/key.properties
+          storePassword=MaxGymReleaseKey2026
+          keyPassword=MaxGymReleaseKey2026
+          keyAlias=maxgym_release
+          storeFile=upload-keystore.jks
+          EOF
+          fi
+
       - name: Build Obfuscated Release APK
         run: |
           flutter build apk --release \
@@ -53,14 +83,17 @@ jobs:
             --split-debug-info=build/symbols \
             --dart-define=APP_DOMAIN=maxgym.privatepath.ir \
             --dart-define=GITHUB_REPO=MasoudMaghsodi/MaxGym
+
       - name: Prepare MaxGym-Release.apk
         run: |
           cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/MaxGym-Release.apk
+
       - name: Upload MaxGym-Release.apk Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MaxGym-Release-APK
           path: build/app/outputs/flutter-apk/MaxGym-Release.apk
+
       - name: Create or Update Official GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
@@ -69,7 +102,7 @@ jobs:
           name: "MAX GYM Official Release v1.2.0"
           make_latest: true
           body: |
-            ## 🏋️♂️ MAX GYM Official Production Release (Android APK)
+            ## 🏋️‍♂️ MAX GYM Official Production Release (Android APK)
             ### **NO PAIN NO GAIN • EST. 2019**
             
             * **Version:** 1.2.0
@@ -77,10 +110,11 @@ jobs:
             * **Direct APK Download:** [MaxGym-Release.apk](https://github.com/MasoudMaghsodi/MaxGym/releases/download/v1.2.0/MaxGym-Release.apk)
             
             ### 📱 Highlights:
+            - OWASP Zero-Trust Hardened Security & RLS
             - Cyber-Athletic Bento & Glass UI 2.0
             - Self-hosted CanvasKit WebAssembly (Loads in Iran without VPN)
             - Dual-role Coach management & Athlete online portal (`PC-XXXXXX`).
-            - Offline-first SQLite database with automatic two-way Supabase sync.
+            - Offline-first SQLite database with automatic two-way Delta Supabase sync.
           files: build/app/outputs/flutter-apk/MaxGym-Release.apk
           token: ${{ secrets.GITHUB_TOKEN }}
 
