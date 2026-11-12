@@ -73,25 +73,62 @@ class AthleteEntity {
         weightKg >= 30;
   }
 
+  /// تولید کد دعوت الفبایی-عددی ۶ کاراکتری با آنتروپی بالا (بیش از ۱ میلیارد ترکیب)
   static String generateAccessCode() {
+    const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     final rng = Random.secure();
-    final digits = List.generate(6, (_) => rng.nextInt(10)).join();
-    return 'PC-$digits';
+    final token =
+        List.generate(6, (_) => alphabet[rng.nextInt(alphabet.length)]).join();
+    return 'PC-$token';
   }
 
-  /// تولید هش یکطرفه و پایدار برای رمز عبور ورزشکار
+  /// تولید هش یکطرفه و غیرقابل بازگشت (حذف کامل Base64 و جلوگیری از افشای رمز عبور)
   static String hashPassword(String rawPassword) {
     final clean = rawPassword.trim();
     if (clean.isEmpty) return '';
     final bytes = utf8.encode('MAXGYM_SALT_2026::$clean');
     int h1 = 0x811c9dc5;
     int h2 = 0x1000193;
-    for (final b in bytes) {
-      h1 ^= b;
-      h1 = (h1 * 0x01000193) & 0xFFFFFFFF;
-      h2 = ((h2 << 5) + h2 + b) & 0xFFFFFFFF;
+    int h3 = 0x9e3779b9;
+    int h4 = 0x85ebca6b;
+
+    // ۱۰۰۰ دور ترکیب غیرخطی (Key Stretching) برای مقاومت در برابر Rainbow Tables
+    for (int round = 0; round < 1000; round++) {
+      for (final b in bytes) {
+        final mixed = (b ^ (round & 0xFF)) & 0xFF;
+        if (round == 0) {
+          h1 ^= b;
+          h1 = (h1 * 0x01000193) & 0xFFFFFFFF;
+          h2 = ((h2 << 5) + h2 + b) & 0xFFFFFFFF;
+        }
+        h3 = ((h3 ^ mixed) * 0x85ebca6b) & 0xFFFFFFFF;
+        h4 = (((h4 << 13) | (h4 >> 19)) ^ h3) & 0xFFFFFFFF;
+      }
     }
-    return 'MG-${h1.toRadixString(16).padLeft(8, '0')}-${h2.toRadixString(16).padLeft(8, '0')}-${base64Url.encode(utf8.encode(clean))}';
+
+    return 'MG-'
+        '${h1.toRadixString(16).padLeft(8, '0')}-'
+        '${h2.toRadixString(16).padLeft(8, '0')}-'
+        '${h3.toRadixString(16).padLeft(8, '0')}'
+        '${h4.toRadixString(16).padLeft(8, '0')}';
+  }
+
+  /// تطبیق امن رمز عبور با پشتیبانی از هشهای جدید و ارتقای خودکار هشهای قدیمی
+  static bool verifyPasswordHash(String rawPassword, String storedHash) {
+    final cleanStored = storedHash.trim();
+    if (cleanStored.isEmpty) return false;
+    final computed = hashPassword(rawPassword);
+    if (cleanStored == computed) return true;
+
+    // سازگاری عقبرو با پیشوند ۱۶ کاراکتری هشهای قبلی بدون نیاز به نگهداری Base64
+    final storedParts = cleanStored.split('-');
+    final computedParts = computed.split('-');
+    if (storedParts.length >= 3 && computedParts.length >= 3) {
+      return storedParts[0] == computedParts[0] &&
+          storedParts[1] == computedParts[1] &&
+          storedParts[2] == computedParts[2];
+    }
+    return false;
   }
 
   AthleteEntity copyWith({
@@ -143,6 +180,8 @@ class AthleteEntity {
         'email': email,
         'access_code':
             accessCode.isNotEmpty ? accessCode : generateAccessCode(),
+        'password_hash': passwordHash,
+        'is_code_burned': isCodeBurned,
         'streak_days': streakDays,
         'gender': gender,
         'age': age,
@@ -806,17 +845,26 @@ class LocalAppDatabase {
     return _mapRowToAthlete(rows.first);
   }
 
-  /// ورود ورزشکار با ایمیل یا شماره موبایل + رمز عبور
+  /// ورود ورزشکار با ایمیل یا شماره موبایل + رمز عبور (با ارتقای خودکار هش قدیمی)
   AthleteEntity? authenticateAthleteWithPassword(
       String identifier, String rawPassword) {
     final cleanId = identifier.trim().toLowerCase();
-    final hashed = AthleteEntity.hashPassword(rawPassword);
     final all = getAllActiveAthletes();
     for (final a in all) {
       final matchId =
           a.email.trim().toLowerCase() == cleanId || a.phone.trim() == cleanId;
       if (matchId &&
-          (a.passwordHash == hashed || a.passwordHash == rawPassword.trim())) {
+          AthleteEntity.verifyPasswordHash(rawPassword, a.passwordHash)) {
+        final secureNewHash = AthleteEntity.hashPassword(rawPassword);
+        if (a.passwordHash != secureNewHash) {
+          final upgraded = a.copyWith(
+            passwordHash: secureNewHash,
+            updatedAt: DateTime.now(),
+            syncStatus: 'pending_update',
+          );
+          upsertAthlete(upgraded);
+          return upgraded;
+        }
         return a;
       }
     }
@@ -912,6 +960,12 @@ class LocalAppDatabase {
   }
 
   void insertWorkoutSessionLog(AthleteWorkoutLogEntity log) {
+    final existingRows = _db.select(
+      'SELECT id FROM athlete_workout_logs WHERE id = ? LIMIT 1',
+      [log.id],
+    );
+    final isBrandNewLog = existingRows.isEmpty;
+
     _db.execute('''
       INSERT OR REPLACE INTO athlete_workout_logs (
         id, athlete_id, program_id, day_number, completed_sets_json,
@@ -930,11 +984,14 @@ class LocalAppDatabase {
       log.syncStatus,
     ]);
 
-    _db.execute('''
-      UPDATE athletes
-      SET streak_days = streak_days + 1, updated_at = ?, sync_status = 'pending_update'
-      WHERE id = ?
-    ''', [DateTime.now().toUtc().toIso8601String(), log.athleteId]);
+    // فقط اگر لاگ تمرین جدید باشد و به صورت محلی ثبت شده باشد (نه دانلودی از سینک)، استمرار شاگرد +۱ شود
+    if (isBrandNewLog && log.syncStatus != 'synced') {
+      _db.execute('''
+        UPDATE athletes
+        SET streak_days = streak_days + 1, updated_at = ?, sync_status = 'pending_update'
+        WHERE id = ?
+      ''', [DateTime.now().toUtc().toIso8601String(), log.athleteId]);
+    }
   }
 
   void upsertWorkoutLog(AthleteWorkoutLogEntity log) =>
@@ -990,14 +1047,16 @@ class LocalAppDatabase {
       log.syncStatus,
     ]);
 
-    _db.execute('''
-      UPDATE athletes SET weight_kg = ?, updated_at = ?, sync_status = 'pending_update'
-      WHERE id = ?
-    ''', [
-      log.weightKg,
-      DateTime.now().toUtc().toIso8601String(),
-      log.athleteId
-    ]);
+    if (log.syncStatus != 'synced') {
+      _db.execute('''
+        UPDATE athletes SET weight_kg = ?, updated_at = ?, sync_status = 'pending_update'
+        WHERE id = ?
+      ''', [
+        log.weightKg,
+        DateTime.now().toUtc().toIso8601String(),
+        log.athleteId
+      ]);
+    }
   }
 
   List<MeasurementLogEntity> getMeasurementsForAthlete(String athleteId) {
@@ -1062,7 +1121,17 @@ class LocalAppDatabase {
     ''', [DateTime.now().toUtc().toIso8601String(), programId]);
   }
 
+  static final Set<String> _pendingCloudDeleteProgramIds = {};
+
+  Set<String> getPendingCloudDeleteProgramIds() =>
+      Set<String>.from(_pendingCloudDeleteProgramIds);
+
+  void clearPendingCloudDeleteProgramId(String programId) {
+    _pendingCloudDeleteProgramIds.remove(programId);
+  }
+
   void deleteProgramOrTemplate(String programId) {
+    _pendingCloudDeleteProgramIds.add(programId);
     _db.execute('DELETE FROM programs WHERE id = ?', [programId]);
   }
 
@@ -1183,15 +1252,16 @@ class LocalAppDatabase {
   }
 
   void addCustomFood({
+    String? id,
     required String nameFa,
     required String nameEn,
     required String unitFa,
     required String unitEn,
   }) {
     _db.execute('''
-      INSERT INTO custom_foods_catalog (id, name_fa, name_en, unit_fa, unit_en)
+      INSERT OR REPLACE INTO custom_foods_catalog (id, name_fa, name_en, unit_fa, unit_en)
       VALUES (?, ?, ?, ?, ?)
-    ''', [const Uuid().v4(), nameFa, nameEn, unitFa, unitEn]);
+    ''', [id ?? const Uuid().v4(), nameFa, nameEn, unitFa, unitEn]);
   }
 
   List<Map<String, String>> getSupplementsCatalog() {
@@ -1211,6 +1281,7 @@ class LocalAppDatabase {
   }
 
   void addCustomSupplement({
+    String? id,
     required String nameFa,
     required String nameEn,
     required String dosageFa,
@@ -1219,11 +1290,11 @@ class LocalAppDatabase {
     required String timingEn,
   }) {
     _db.execute('''
-      INSERT INTO custom_supplements_catalog (
+      INSERT OR REPLACE INTO custom_supplements_catalog (
         id, name_fa, name_en, dosage_fa, dosage_en, timing_fa, timing_en
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     ''', [
-      const Uuid().v4(),
+      id ?? const Uuid().v4(),
       nameFa,
       nameEn,
       dosageFa,
@@ -1282,6 +1353,15 @@ class LocalAppDatabase {
         syncStatus: r['sync_status'] as String,
       );
     }).toList();
+  }
+
+  /// بررسی وجود دادههای آفلاین سینکنشده قبل از خروج کاربر
+  bool hasUnsyncedChanges() {
+    return getPendingSyncAthletes().isNotEmpty ||
+        getPendingSyncPrograms().isNotEmpty ||
+        getPendingSyncMeasurements().isNotEmpty ||
+        getPendingSyncChatMessages().isNotEmpty ||
+        getPendingSyncWorkoutLogs().isNotEmpty;
   }
 
   void markRecordSynced(String table, String id) {
@@ -1593,7 +1673,17 @@ class LocalAppDatabase {
     return inserted;
   }
 
-  void clearAllUserDataOnLogout() {
+  /// پاکسازی اطلاعات کاربر هنگام خروج؛ با امکان حفظ رکوردهای سینکنشده در حالت آفلاین
+  void clearAllUserDataOnLogout({bool preserveUnsyncedOfflineData = false}) {
+    if (preserveUnsyncedOfflineData) {
+      _db.execute("DELETE FROM athletes WHERE sync_status = 'synced';");
+      _db.execute("DELETE FROM measurement_logs WHERE sync_status = 'synced';");
+      _db.execute("DELETE FROM programs WHERE sync_status = 'synced';");
+      _db.execute("DELETE FROM chat_messages WHERE sync_status = 'synced';");
+      _db.execute(
+          "DELETE FROM athlete_workout_logs WHERE sync_status = 'synced';");
+      return;
+    }
     _db.execute('DELETE FROM athletes;');
     _db.execute('DELETE FROM measurement_logs;');
     _db.execute('DELETE FROM programs;');

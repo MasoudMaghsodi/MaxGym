@@ -15,6 +15,7 @@ import '../../core/utils/number_parser.dart';
 import '../../core/widgets/maxgym_3d_widgets.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/database_models.dart';
+import '../../data/remote/supabase_sync_service.dart';
 import '../admin_and_download/maxgym_hub_and_admin_screen.dart';
 import '../athlete_portal/athlete_portal_screen.dart';
 
@@ -290,6 +291,8 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         ? List<String>.from(jsonDecode(rawTags))
         : List<String>.from(rawTags ?? []);
 
+    final existingLocal = db.getAthleteById(athMap['id'] as String);
+
     final athlete = AthleteEntity(
       id: athMap['id'] as String,
       firstName: athMap['first_name'] as String? ?? '',
@@ -298,7 +301,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
       email: athMap['email'] as String? ?? '',
       accessCode:
           athMap['access_code'] as String? ?? fallbackCode.toUpperCase(),
-      passwordHash: athMap['password_hash'] as String? ?? '',
+      passwordHash: existingLocal?.passwordHash ?? '',
       isCodeBurned: athMap['is_code_burned'] as bool? ?? false,
       streakDays: (athMap['streak_days'] as num?)?.toInt() ?? 1,
       gender: athMap['gender'] as String? ?? 'male',
@@ -369,7 +372,6 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     final code = rawCode.trim();
     if (code.isEmpty) return;
 
-    // اگر کاربر رمز عبور را هم وارد کرده باشد، با متد ایمیل/موبایل + رمز عبور بررسی میکنیم
     if (password != null && password.trim().isNotEmpty) {
       await signInAthleteWithPassword(code, password.trim());
       return;
@@ -390,11 +392,11 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         ).timeout(const Duration(seconds: 8));
 
         if (res != null && res is Map<String, dynamic>) {
-          if (res['error'] == 'CODE_BURNED') {
+          if (res['error'] == 'RATE_LIMITED' || res['error'] == 'CODE_BURNED') {
             state = SecurityGateState(
               status: SecurityGateStatus.unauthenticated,
               errorMessage: res['message'] as String? ??
-                  'این کد دعوت یکبارمصرف قبلاً استفاده و باطل شده است. لطفاً با ایمیل/موبایل و رمز عبور خود وارد شوید.',
+                  'دسترسی با این کد امکانپذیر نیست. لطفاً با ایمیل و رمز عبور خود وارد شوید.',
             );
             return;
           }
@@ -460,10 +462,16 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
         if (res != null && res is Map<String, dynamic>) {
           final athlete =
               await _hydrateAthleteBundleFromServer(res, identifier);
-          await _secureStore.write(key: _kCachedAthleteId, value: athlete.id);
+          final withLocalHash = athlete.copyWith(
+            passwordHash: hashed,
+            isCodeBurned: true,
+          );
+          db.upsertAthlete(withLocalHash);
+          await _secureStore.write(
+              key: _kCachedAthleteId, value: withLocalHash.id);
           state = SecurityGateState(
             status: SecurityGateStatus.athletePortalActive,
-            loggedInAthlete: athlete,
+            loggedInAthlete: withLocalHash,
           );
           return;
         }
@@ -531,7 +539,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     return updatedRemote || updatedLocal;
   }
 
-  /// ۴. ارسال ایمیل بازیابی رمز عبور برای مربی (Supabase Auth Password Recovery)
+  /// ۴. ارسال ایمیل بازیابی رمز عبور برای مربی
   Future<bool> sendCoachPasswordResetEmail(String email) async {
     try {
       final client = SupabaseConfig.clientOrNull;
@@ -624,14 +632,33 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     }
   }
 
+  /// خروج امن با محافظت از دادههای آفلاین سینکنشده
   Future<void> signOut() async {
+    final db = _ref.read(appDatabaseProvider);
+
+    // اگر داده سینکنشدهای وجود دارد، ابتدا قبل از بستن نشست تلاش میکنیم سینک شود
+    if (db.hasUnsyncedChanges()) {
+      try {
+        await _ref
+            .read(supabaseSyncServiceProvider)
+            .syncAllPendingData()
+            .timeout(const Duration(seconds: 6));
+      } catch (_) {}
+    }
+
     try {
       await SupabaseConfig.clientOrNull?.auth.signOut();
     } catch (_) {}
+
     await _secureStore.deleteAll();
+
     try {
-      _ref.read(appDatabaseProvider).clearAllUserDataOnLogout();
+      // اگر به دلیل قطع بودن اینترنت هنوز رکورد سینکنشدهای باقی مانده، آن را حفظ میکنیم
+      final stillHasUnsynced = db.hasUnsyncedChanges();
+      db.clearAllUserDataOnLogout(
+          preserveUnsyncedOfflineData: stillHasUnsynced);
     } catch (_) {}
+
     state = const SecurityGateState(status: SecurityGateStatus.unauthenticated);
   }
 }
@@ -733,7 +760,7 @@ class CoachAuthScreen extends ConsumerStatefulWidget {
 
 class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
   bool _isAthleteMode = false;
-  bool _athleteHasPasswordMode = false; // false = کد یکبارمصرف، true = ایمیل/موبایل + رمز
+  bool _athleteHasPasswordMode = false;
   bool _isLogin = true;
   bool _obscurePass = true;
 
@@ -800,12 +827,13 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
   }
 
   void _verifyPinAndOpenAdmin(BuildContext dialogCtx, String enteredPin) {
-    if (enteredPin.trim() == MaxGymBrandConfig.superAdminMasterPin) {
+    if (MaxGymBrandConfig.verifySuperAdminPin(enteredPin)) {
       Navigator.pop(dialogCtx);
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => const MaxGymSuperAdminScreen(),
+          builder: (_) =>
+              MaxGymSuperAdminScreen(verifiedMasterPin: enteredPin.trim()),
         ),
       );
     } else {
@@ -818,7 +846,6 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
     }
   }
 
-  /// پنجره فراموشی و بازیابی رمز عبور (هم برای مربی و هم برای ورزشکار)
   void _showForgotPasswordModal(bool isFa) {
     final emailCtrl = TextEditingController(
       text: _isAthleteMode ? _athleteCodeCtrl.text : _emailCtrl.text,
@@ -1417,7 +1444,6 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
             const SizedBox(height: 14),
           ],
           if (_isAthleteMode) ...[
-            // سوییچ بین «ورود با ایمیل/رمز عبور» و «اولین ورود با کد یکبارمصرف مربی»
             Wrap(
               alignment: WrapAlignment.center,
               spacing: 8,
