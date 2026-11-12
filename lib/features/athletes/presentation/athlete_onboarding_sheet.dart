@@ -44,8 +44,8 @@ class _AthleteOnboardingSheetState
   final _calfCtrl = TextEditingController();
 
   static const List<Map<String, String>> _goals = [
-    {'id': 'weight_loss', 'fa': 'چربیسوزی و کات', 'en': 'Fat Loss & Cut'},
-    {'id': 'lean_bulk', 'fa': 'عضلهسازی خشک', 'en': 'Lean Muscle Bulk'},
+    {'id': 'weight_loss', 'fa': 'چربی‌سوزی و کات', 'en': 'Fat Loss & Cut'},
+    {'id': 'lean_bulk', 'fa': 'عضله‌سازی خشک', 'en': 'Lean Muscle Bulk'},
     {'id': 'muscle_gain', 'fa': 'افزایش حجم و وزن', 'en': 'Mass & Strength'},
     {'id': 'maintenance', 'fa': 'تثبیت و تناسب اندام', 'en': 'Maintenance'},
   ];
@@ -372,7 +372,7 @@ class _AthleteOnboardingSheetState
           Expanded(
             child: Text(
               isFa
-                  ? 'آسیبدیدگیها و محدودیتهای مفصلی (هشدار هوشمند در تمرین):'
+                  ? 'آسیب‌دیدگی‌ها و محدودیت‌های مفصلی (هشدار هوشمند در تمرین):'
                   : 'Injuries & Joint Limitations:',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),

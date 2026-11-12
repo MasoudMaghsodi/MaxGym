@@ -63,7 +63,7 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(isFa
-                        ? 'ماشینحساب رکورد ۱ تکرار (1RM)'
+                        ? 'ماشین‌حساب رکورد ۱ تکرار (1RM)'
                         : '1-Rep Max (1RM) Calculator'),
                   ),
                 ],
@@ -198,7 +198,7 @@ class _AthletesListScreenState extends ConsumerState<AthletesListScreen> {
             onPressed: () => _exportJsonBackup(context, isFa),
           ),
           IconButton(
-            tooltip: isFa ? 'ماشینحساب 1RM' : '1RM Calculator',
+            tooltip: isFa ? 'ماشین‌حساب 1RM' : '1RM Calculator',
             icon: const Icon(LucideIcons.calculator),
             onPressed: () => _show1RMCalculatorDialog(context, isFa),
           ),

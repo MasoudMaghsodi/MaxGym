@@ -21,7 +21,7 @@ import '../../athletes/domain/scientific_bio_calculator.dart';
 class MasterProgramBuilderScreen extends ConsumerStatefulWidget {
   final AthleteEntity athlete;
   final FullProgramEntity? initialProgramOrTemplate;
-  final bool isEditingExisting; // اگر true باشد همان برنامه قبلی را آپدیت میکند
+  final bool isEditingExisting;
   final void Function(AthleteEntity athlete, FullProgramEntity savedProgram)?
       onSavedAndExportPdf;
 
@@ -53,7 +53,7 @@ class _MasterProgramBuilderScreenState
   double _waterLiters = 3.5;
   final List<String> _dietGuidelines = [
     'مصرف نمک صورتی و آب کافی قبل و حین تمرین الزامی است.',
-    'وزنکشی مواد غذایی به صورت پخته و بدون روغن اضافه محاسبه شود.',
+    'وزن‌کشی مواد غذایی به صورت پخته و بدون روغن اضافه محاسبه شود.',
   ];
   late List<SupplementPrescriptionItem> _supplements;
 
@@ -70,7 +70,7 @@ class _MasterProgramBuilderScreenState
     {'id': 'back', 'fa': 'زیربغل و پشت', 'en': 'Back & Lats'},
     {'id': 'shoulders', 'fa': 'سرشانه', 'en': 'Shoulders'},
     {'id': 'biceps', 'fa': 'جلوبازو', 'en': 'Biceps'},
-    {'id': 'triceps', 'fa': 'پشتبازو', 'en': 'Triceps'},
+    {'id': 'triceps', 'fa': 'پشت‌بازو', 'en': 'Triceps'},
     {'id': 'legs', 'fa': 'پا و سرینی', 'en': 'Legs & Glutes'},
     {'id': 'abs', 'fa': 'شکم و پهلو', 'en': 'Abs & Core'},
     {'id': 'calves', 'fa': 'ساق پا', 'en': 'Calves'},
@@ -139,12 +139,22 @@ class _MasterProgramBuilderScreenState
     }
   }
 
+  /// آزادسازی کامل حافظه کنترلرها و تب‌کنترلر (رفع کامل Memory Leak)
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _programTitleCtrl.dispose();
+    _totalFeeCtrl.dispose();
+    _paidAmountCtrl.dispose();
+    super.dispose();
+  }
+
   List<WorkoutDayPlan> _buildDefault7Days() {
     const namesFa = [
       'شنبه',
       'یکشنبه',
       'دوشنبه',
-      'سهشنبه',
+      'سه‌شنبه',
       'چهارشنبه',
       'پنجشنبه',
       'جمعه'
@@ -180,7 +190,7 @@ class _MasterProgramBuilderScreenState
       ),
       const DietMealSlot(
         slotId: 'snack1',
-        titleFa: 'وعده دوم: میانوعده صبح',
+        titleFa: 'وعده دوم: میان‌وعده صبح',
         titleEn: 'Meal 2: Morning Snack',
         timeRange: '11:00',
       ),
@@ -220,7 +230,9 @@ class _MasterProgramBuilderScreenState
     if (_incSupplement) sum += b.defaultSupplementFee;
     setState(() {
       _totalFeeCtrl.text = sum.toStringAsFixed(0);
-      _paidAmountCtrl.text = sum.toStringAsFixed(0);
+      if (!widget.isEditingExisting) {
+        _paidAmountCtrl.text = sum.toStringAsFixed(0);
+      }
     });
   }
 
@@ -236,7 +248,7 @@ class _MasterProgramBuilderScreenState
             height: 220,
             child: Center(
               child: Text(isFa
-                  ? 'هنوز قالبی ذخیره نکردهاید. در تب آخر گزینه «ذخیره به عنوان قالب» را بزنید.'
+                  ? 'هنوز قالبی ذخیره نکرده‌اید. در تب آخر گزینه «ذخیره به عنوان قالب» را بزنید.'
                   : 'No saved templates yet.'),
             ),
           );
@@ -249,7 +261,7 @@ class _MasterProgramBuilderScreenState
             return Card(
               child: ListTile(
                 leading: const Icon(LucideIcons.copy),
-                title: Text(t.title,
+                title: Text(t.title.toCleanPersian(),
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text('${t.durationWeeks} Weeks'),
                 onTap: () {
@@ -306,7 +318,6 @@ class _MasterProgramBuilderScreenState
     db.upsertProgram(program);
     db.clearProgramDraft(widget.athlete.id);
 
-    // Auto-sync immediately to Supabase
     unawaited(ref.read(supabaseSyncServiceProvider).syncAllPendingData());
 
     if (_saveAsTemplate) {
@@ -380,7 +391,7 @@ class _MasterProgramBuilderScreenState
             ),
             Tab(
               icon: const Icon(LucideIcons.pill, size: 18),
-              text: isFa ? '۳. مکملها' : '3. Supplements',
+              text: isFa ? '۳. مکمل‌ها' : '3. Supplements',
             ),
             Tab(
               icon: const Icon(LucideIcons.wallet, size: 18),
@@ -401,9 +412,6 @@ class _MasterProgramBuilderScreenState
     );
   }
 
-  // ===========================================================================
-  // تب ۱: تمرین با قابلیت Drag & Drop، سوپرست، تمپو، یادداشت مربی و افزودن حرکت سفارشی
-  // ===========================================================================
   Widget _buildWorkoutTab(bool isFa, ThemeData theme) {
     final activeDay = _days[_selectedDayIndex];
 
@@ -443,7 +451,7 @@ class _MasterProgramBuilderScreenState
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        isFa ? d.dayNameFa : d.dayNameEn,
+                        isFa ? d.dayNameFa.toCleanPersian() : d.dayNameEn,
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 13),
                       ),
@@ -477,7 +485,7 @@ class _MasterProgramBuilderScreenState
                 children: [
                   Text(
                     isFa
-                        ? 'وضعیت ${activeDay.dayNameFa}:'
+                        ? 'وضعیت ${activeDay.dayNameFa.toCleanPersian()}:'
                         : '${activeDay.dayNameEn} Status:',
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 16),
@@ -581,7 +589,7 @@ class _MasterProgramBuilderScreenState
                             _showExercisePickerSheet(activeDay, isFa, theme),
                         icon: const Icon(LucideIcons.plus, size: 18),
                         label: Text(isFa
-                            ? 'افزودن حرکت به ${activeDay.dayNameFa}'
+                            ? 'افزودن حرکت به ${activeDay.dayNameFa.toCleanPersian()}'
                             : 'Add Exercise'),
                       ),
                     ),
@@ -603,13 +611,11 @@ class _MasterProgramBuilderScreenState
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
                       isFa
-                          ? '💡 نکته: با نگه داشتن دستگیره (☰) میتوانید ترتیب حرکات را جابجا (Drag & Drop) کنید.'
+                          ? '💡 نکته: با نگه داشتن دستگیره (☰) می‌توانید ترتیب حرکات را جابجا (Drag & Drop) کنید.'
                           : '💡 Tip: Drag handle (☰) to reorder exercises.',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ),
-
-                // لیست حرکات با قابلیت Drag & Drop Reordering
                 ReorderableListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -712,7 +718,7 @@ class _MasterProgramBuilderScreenState
                                               ),
                                             ),
                                           Text(
-                                            '${exIdx + 1}. ${isFa ? item.exerciseNameFa : item.exerciseNameEn}',
+                                            '${exIdx + 1}. ${isFa ? item.exerciseNameFa.toCleanPersian() : item.exerciseNameEn}',
                                             style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 14),
@@ -857,7 +863,6 @@ class _MasterProgramBuilderScreenState
         exercises: updated,
       );
     });
-    // ذخیره خودکار پیش‌نویس (Auto-Draft - رفع عیب ۱ گزارش ممیزی)
     ref.read(appDatabaseProvider).saveProgramDraft(
           widget.athlete.id,
           FullProgramEntity(
@@ -876,7 +881,6 @@ class _MasterProgramBuilderScreenState
         );
   }
 
-  /// کپی کردن تمام حرکات و سوپرستهای یک روز روی روز دیگر هفته (Duplicate Day)
   void _showDuplicateDayDialog(WorkoutDayPlan sourceDay, bool isFa) {
     showModalBottomSheet(
       context: context,
@@ -891,7 +895,7 @@ class _MasterProgramBuilderScreenState
             return ListTile(
               leading: const Icon(LucideIcons.copyPlus),
               title: Text(isFa
-                  ? 'کپی حرکات ${sourceDay.dayNameFa} روی ${targetDay.dayNameFa}'
+                  ? 'کپی حرکات ${sourceDay.dayNameFa.toCleanPersian()} روی ${targetDay.dayNameFa.toCleanPersian()}'
                   : 'Copy ${sourceDay.dayNameEn} to ${targetDay.dayNameEn}'),
               onTap: () {
                 setState(() {
@@ -953,7 +957,6 @@ class _MasterProgramBuilderScreenState
     _updateActiveDayExercises(list);
   }
 
-  /// پنجره انتخاب حرکت با نوار جستجو + دکمه ساخت حرکت سفارشی مربی
   void _showExercisePickerSheet(
       WorkoutDayPlan activeDay, bool isFa, ThemeData theme) {
     final db = ref.read(appDatabaseProvider);
@@ -1065,7 +1068,7 @@ class _MasterProgramBuilderScreenState
                               ),
                             ),
                             title: Text(
-                              isFa ? ex.nameFa : ex.nameEn,
+                              isFa ? ex.nameFa.toCleanPersian() : ex.nameEn,
                               style:
                                   const TextStyle(fontWeight: FontWeight.bold),
                             ),
@@ -1086,7 +1089,7 @@ class _MasterProgramBuilderScreenState
                                     ),
                                     child: Text(
                                       isFa
-                                          ? '⚠️ هشدار آسیبدیدگی شاگرد: ${conflictingInjuries.join(", ")}'
+                                          ? '⚠️ هشدار آسیب‌دیدگی شاگرد: ${conflictingInjuries.join(", ")}'
                                           : '⚠️ Injury Warning: ${conflictingInjuries.join(", ")}',
                                       style: const TextStyle(
                                         fontSize: 11,
@@ -1140,7 +1143,6 @@ class _MasterProgramBuilderScreenState
     );
   }
 
-  /// دیالوگ افزودن حرکت ورزشی سفارشی توسط مربی به بانک دائمی
   Future<void> _showCreateCustomExerciseDialog(
       BuildContext ctx, bool isFa, String initialMuscle) async {
     final nameFaCtrl = TextEditingController();
@@ -1231,7 +1233,6 @@ class _MasterProgramBuilderScreenState
     );
   }
 
-  /// تنظیم ست، تکرار، تمپو، دراپست و یادداشت اختصاصی مربی (Coach Note)
   void _showFastSetTempoConfigurator(
       WorkoutDayPlan activeDay, int exIdx, bool isFa, ThemeData theme) {
     final item = activeDay.exercises[exIdx];
@@ -1279,7 +1280,7 @@ class _MasterProgramBuilderScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isFa ? item.exerciseNameFa : item.exerciseNameEn,
+                      isFa ? item.exerciseNameFa.toCleanPersian() : item.exerciseNameEn,
                       style: const TextStyle(
                           fontSize: 17, fontWeight: FontWeight.bold),
                     ),
@@ -1287,7 +1288,7 @@ class _MasterProgramBuilderScreenState
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(isFa ? 'تعداد ستها:' : 'Number of Sets:',
+                        Text(isFa ? 'تعداد ست‌ها:' : 'Number of Sets:',
                             style:
                                 const TextStyle(fontWeight: FontWeight.bold)),
                         Wrap(
@@ -1365,7 +1366,7 @@ class _MasterProgramBuilderScreenState
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(isFa
-                          ? 'ست آخر دراپست (Drop Set) باشد؟'
+                          ? 'ست آخر دراپ‌ست (Drop Set) باشد؟'
                           : 'Make Final Set a Drop-Set?'),
                       value: lastSetDrop,
                       onChanged: (v) => setModalState(() => lastSetDrop = v),
@@ -1419,9 +1420,6 @@ class _MasterProgramBuilderScreenState
     );
   }
 
-  // ===========================================================================
-  // تب ۲: رژیم غذایی + دکمه افزودن غذای سفارشی مربی
-  // ===========================================================================
   Widget _buildDietTab(bool isFa, ThemeData theme) {
     final bio = ScientificBioCalculator.analyze(
       gender: widget.athlete.gender,
@@ -1493,7 +1491,7 @@ class _MasterProgramBuilderScreenState
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        isFa ? slot.titleFa : slot.titleEn,
+                        isFa ? slot.titleFa.toCleanPersian() : slot.titleEn,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
@@ -1523,14 +1521,14 @@ class _MasterProgramBuilderScreenState
                         contentPadding: EdgeInsets.zero,
                         title: Text(
                           isFa
-                              ? '• ${f.foodNameFa} (${f.amountFa})'
+                              ? '• ${f.foodNameFa.toCleanPersian()} (${f.amountFa.toCleanPersian()})'
                               : '• ${f.foodNameEn} (${f.amountEn})',
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         subtitle: alts.isNotEmpty
                             ? Text(
                                 isFa
-                                    ? '   [یا جایگزین]: ${alts.join(" / یا ")}'
+                                    ? '   [یا جایگزین]: ${alts.join(" / یا ").toCleanPersian()}'
                                     : '   [OR]: ${alts.join(" / OR ")}',
                                 style: const TextStyle(
                                     color: Colors.orangeAccent, fontSize: 12),
@@ -1614,9 +1612,12 @@ class _MasterProgramBuilderScreenState
                       final food = foods[i];
                       return ListTile(
                         leading: const Icon(LucideIcons.utensilsCrossed),
-                        title: Text(isFa ? food['nameFa']! : food['nameEn']!),
-                        subtitle:
-                            Text(isFa ? food['unitFa']! : food['unitEn']!),
+                        title: Text(isFa
+                            ? food['nameFa']!.toCleanPersian()
+                            : food['nameEn']!),
+                        subtitle: Text(isFa
+                            ? food['unitFa']!.toCleanPersian()
+                            : food['unitEn']!),
                         onTap: () {
                           final slot = _dietMeals[slotIdx];
                           final newRow = MealFoodRow(
@@ -1708,7 +1709,7 @@ class _MasterProgramBuilderScreenState
             final alt = foods[i];
             return ListTile(
               title: Text(isFa
-                  ? '[یا] ${alt['nameFa']} (${alt['unitFa']})'
+                  ? '[یا] ${alt['nameFa']!.toCleanPersian()} (${alt['unitFa']!.toCleanPersian()})'
                   : '[OR] ${alt['nameEn']} (${alt['unitEn']})'),
               onTap: () {
                 final slot = _dietMeals[slotIdx];
@@ -1747,9 +1748,6 @@ class _MasterProgramBuilderScreenState
     );
   }
 
-  // ===========================================================================
-  // تب ۳: مکملها + دکمه ساخت مکمل سفارشی
-  // ===========================================================================
   Widget _buildSupplementTab(bool isFa, ThemeData theme) {
     final suppCatalog = ref.read(appDatabaseProvider).getSupplementsCatalog();
 
@@ -1761,7 +1759,7 @@ class _MasterProgramBuilderScreenState
           children: [
             Text(
               isFa
-                  ? 'انتخاب سریع از بانک مکملها:'
+                  ? 'انتخاب سریع از بانک مکمل‌ها:'
                   : 'Quick-Add from Catalog:',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
@@ -1779,7 +1777,9 @@ class _MasterProgramBuilderScreenState
           children: suppCatalog.map((sup) {
             return ActionChip(
               avatar: const Icon(LucideIcons.plus, size: 16),
-              label: Text(isFa ? sup['nameFa']! : sup['nameEn']!),
+              label: Text(isFa
+                  ? sup['nameFa']!.toCleanPersian()
+                  : sup['nameEn']!),
               onPressed: () {
                 setState(() {
                   _supplements.add(
@@ -1818,12 +1818,12 @@ class _MasterProgramBuilderScreenState
               child: ListTile(
                 leading: const Icon(LucideIcons.pill),
                 title: Text(
-                  isFa ? s.nameFa : s.nameEn,
+                  isFa ? s.nameFa.toCleanPersian() : s.nameEn,
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 subtitle: Text(
                   isFa
-                      ? 'دوز: ${s.dosageFa} | زمان: ${s.timingFa}\n${s.onlyTrainingDays ? "⚡ فقط روزهای تمرین" : "📅 مصرف روزانه"}'
+                      ? 'دوز: ${s.dosageFa.toCleanPersian()} | زمان: ${s.timingFa.toCleanPersian()}\n${s.onlyTrainingDays ? "⚡ فقط روزهای تمرین" : "📅 مصرف روزانه"}'
                       : 'Dose: ${s.dosageEn} | Timing: ${s.timingEn}',
                 ),
                 isThreeLine: true,
@@ -1897,9 +1897,6 @@ class _MasterProgramBuilderScreenState
     );
   }
 
-  // ===========================================================================
-  // تب ۴: مدیریت مالی، پکیجها، تاریخ انقضا و ذخیره قالب آماده
-  // ===========================================================================
   Widget _buildBillingAndSaveTab(bool isFa, ThemeData theme) {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -1967,7 +1964,7 @@ class _MasterProgramBuilderScreenState
         ),
         CheckboxListTile(
           value: _incSupplement,
-          title: Text(isFa ? 'پروتکل مکملهای ورزشی' : 'Supplement Stack'),
+          title: Text(isFa ? 'پروتکل مکمل‌های ورزشی' : 'Supplement Stack'),
           onChanged: (v) {
             _incSupplement = v ?? false;
             _recalcPackageFee();
@@ -1993,7 +1990,7 @@ class _MasterProgramBuilderScreenState
                 controller: _paidAmountCtrl,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: isFa ? 'مبلغ پرداختشده' : 'Amount Paid',
+                  labelText: isFa ? 'مبلغ پرداخت‌شده' : 'Amount Paid',
                   prefixIcon: const Icon(LucideIcons.checkCircle),
                 ),
               ),
@@ -2005,7 +2002,7 @@ class _MasterProgramBuilderScreenState
           value: _saveAsTemplate,
           title: Text(
             isFa
-                ? 'ذخیره یک نسخه در «قالبهای آماده» برای شاگردان بعدی'
+                ? 'ذخیره یک نسخه در «قالب‌های آماده» برای شاگردان بعدی'
                 : 'Also save as Reusable Smart Template',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),

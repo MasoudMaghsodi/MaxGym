@@ -33,27 +33,47 @@ extension PersianNumberSanitizer on String {
     if (isEmpty) return this;
     return replaceAll('سهشنبه', 'سه‌شنبه')
         .replaceAll('پشتبازو', 'پشت‌بازو')
-        .replaceAll('جلوبازو', 'جلو‌بازو')
+        .replaceAll('جلوبازو', 'جلوبازو')
         .replaceAll('میانوعده', 'میان‌وعده')
         .replaceAll('میانتنه', 'میان‌تنه')
         .replaceAll('حرفهای', 'حرفه‌ای')
         .replaceAll('برنامهها', 'برنامه‌ها')
+        .replaceAll('برنامههای', 'برنامه‌های')
         .replaceAll('قالبهای', 'قالب‌های')
         .replaceAll('مکملها', 'مکمل‌ها')
+        .replaceAll('مکملهای', 'مکمل‌های')
         .replaceAll('جایگزینها', 'جایگزین‌ها')
         .replaceAll('سایزگیریها', 'سایزگیری‌ها')
         .replaceAll('درشتمغذیها', 'درشت‌مغذی‌ها')
         .replaceAll('ریزمغذیها', 'ریز‌مغذی‌ها')
         .replaceAll('ثبتشده', 'ثبت‌شده')
+        .replaceAll('دریافتشده', 'دریافت‌شده')
+        .replaceAll('پرداختشده', 'پرداخت‌شده')
+        .replaceAll('تاییدشده', 'تأیید‌شده')
         .replaceAll('نکردهاند', 'نکرده‌اند')
         .replaceAll('سهبعدی', 'سه‌بعدی')
         .replaceAll('هیتمپ', 'هیت‌مپ')
+        .replaceAll('ماشینحساب', 'ماشین‌حساب')
+        .replaceAll('عضلهسازی', 'عضله‌سازی')
+        .replaceAll('چربیسوزی', 'چربی‌سوزی')
+        .replaceAll('آسیبدیدگیها', 'آسیب‌دیدگی‌ها')
+        .replaceAll('آسیبدیدگی', 'آسیب‌دیدگی')
+        .replaceAll('محدودیتهای', 'محدودیت‌های')
+        .replaceAll('منظمترین', 'منظم‌ترین')
+        .replaceAll('پکیجها', 'پکیج‌ها')
+        .replaceAll('مکسجیم', 'مکس‌جیم')
         .replaceAll('تکدست', 'تک‌دست')
         .replaceAll('تکپا', 'تک‌پا')
-        .replaceAll('پروتئین وی', 'پروتئین وی')
+        .replaceAll('دستجمع', 'دست‌جمع')
+        .replaceAll('دستباز', 'دست‌باز')
+        .replaceAll('سیمکش', 'سیم‌کش')
+        .replaceAll('تخممرغ', 'تخم‌مرغ')
         .replaceAll('گوجهفرنگی', 'گوجه‌فرنگی')
         .replaceAll('سیبزمینی', 'سیب‌زمینی')
+        .replaceAll('بادامزمینی', 'بادام‌زمینی')
         .replaceAll('کمچرب', 'کم‌چرب')
+        .replaceAll('کمنمک', 'کم‌نمک')
+        .replaceAll('سبوسدار', 'سبوس‌دار')
         .replaceAll('آبپز', 'آب‌پز');
   }
 
@@ -62,18 +82,15 @@ extension PersianNumberSanitizer on String {
     var s = trim();
     if (s.isEmpty) return '';
 
-    // ۱. حذف کاراکترهای کنترلی نامرئی، Null-byte و کاراکترهای مخرب تغییر جهت متن (Bidi Override)
     s = s.replaceAll(
         RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u202A-\u202E\u2066-\u2069]'),
         '');
 
-    // ۲. خنثی‌سازی تگ‌های HTML/Script و دستورات خطرناک
     s = s
         .replaceAll(RegExp(r'<\s*script[^>]*>', caseSensitive: false), '')
         .replaceAll(RegExp(r'<\s*/\s*script\s*>', caseSensitive: false), '')
         .replaceAll(RegExp(r'javascript\s*:', caseSensitive: false), '');
 
-    // ۳. خنثی‌سازی الگوهای رایج Prompt Injection
     s = s.replaceAll(
       RegExp(
         r'(ignore\s+all\s+previous\s+instructions|system\s+prompt\s*:|you\s+are\s+now\s+in\s+developer\s+mode)',

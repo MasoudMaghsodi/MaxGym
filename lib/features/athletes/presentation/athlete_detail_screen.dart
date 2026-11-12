@@ -427,18 +427,86 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
                   color: theme.colorScheme.primary.withOpacity(0.45)),
             ),
             child: TextButton.icon(
-              onPressed: () async {
-                await Clipboard.setData(
-                    ClipboardData(text: athlete.accessCode));
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(isFa
-                          ? 'کد ورود اختصاصی شاگرد کپی شد: ${athlete.accessCode}'
-                          : 'Athlete Access Code copied: ${athlete.accessCode}'),
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  builder: (sheetCtx) => Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          isFa
+                              ? '🔑 مدیریت کد دعوت و دسترسی شاگرد (${athlete.fullName})'
+                              : '🔑 Athlete Portal Access Code',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, fontSize: 16),
+                        ),
+                        const SizedBox(height: 12),
+                        ListTile(
+                          leading: Icon(LucideIcons.copy,
+                              color: theme.colorScheme.primary),
+                          title: Text(isFa
+                              ? 'کپی کد دعوت فعلی (${athlete.accessCode})'
+                              : 'Copy Current Code (${athlete.accessCode})'),
+                          subtitle: Text(athlete.isCodeBurned
+                              ? (isFa
+                                  ? 'وضعیت: استفاده شده (شاگرد رمز عبور شخصی دارد)'
+                                  : 'Status: Burned (Password active)')
+                              : (isFa
+                                  ? 'وضعیت: آماده اولین ورود شاگرد'
+                                  : 'Status: Ready for first login')),
+                          onTap: () async {
+                            await Clipboard.setData(
+                                ClipboardData(text: athlete.accessCode));
+                            if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(isFa
+                                      ? 'کد ورود اختصاصی شاگرد کپی شد: ${athlete.accessCode}'
+                                      : 'Athlete Access Code copied: ${athlete.accessCode}'),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(LucideIcons.refreshCw,
+                              color: AppColors.warning),
+                          title: Text(isFa
+                              ? 'صدور کد یکبارمصرف جدید (ریست رمز عبور شاگرد)'
+                              : 'Generate New One-Time Code (Reset Password)'),
+                          subtitle: Text(isFa
+                              ? 'اگر شاگرد رمز عبور و ایمیل خود را فراموش کرده، کد جدید صادر کنید'
+                              : 'Use if athlete forgot both email and password'),
+                          onTap: () async {
+                            final regenerated = db
+                                .regenerateOneTimeCodeForAthlete(athlete.id);
+                            ref.read(athletesProvider.notifier).refresh();
+                            if (regenerated != null) {
+                              await Clipboard.setData(ClipboardData(
+                                  text: regenerated.accessCode));
+                            }
+                            if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                            setState(() {});
+                            if (context.mounted && regenerated != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(isFa
+                                      ? '✅ کد یکبارمصرف جدید صادر و کپی شد: ${regenerated.accessCode}'
+                                      : '✅ New code generated & copied: ${regenerated.accessCode}'),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ],
                     ),
-                  );
-                }
+                  ),
+                );
               },
               icon: const Icon(LucideIcons.keyRound, size: 15),
               label: Directionality(
@@ -526,7 +594,7 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
             ),
             Tab(
               icon: const Icon(LucideIcons.clipboardList, size: 18),
-              text: isFa ? 'برنامهها (${programs.length})' : 'Programs',
+              text: isFa ? 'برنامه‌ها (${programs.length})' : 'Programs',
             ),
           ],
         ),
@@ -1037,7 +1105,7 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
         ],
         const SizedBox(height: 20),
         Text(
-          isFa ? 'تاریخچه کامل سایزگیریها:' : 'Measurement History Logs:',
+          isFa ? 'تاریخچه کامل سایزگیری‌ها:' : 'Measurement History Logs:',
           style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
         ),
         const SizedBox(height: 10),
@@ -1102,7 +1170,7 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
               const SizedBox(height: 12),
               Text(
                 isFa
-                    ? 'هنوز برنامهای برای این شاگرد ثبت نشده است.'
+                    ? 'هنوز برنامه‌ای برای این شاگرد ثبت نشده است.'
                     : 'No programs assigned yet.',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),

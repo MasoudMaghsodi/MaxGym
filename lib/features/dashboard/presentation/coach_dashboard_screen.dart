@@ -49,6 +49,10 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktopBento = screenWidth >= 960;
 
+    final athleteById = <String, AthleteEntity>{
+      for (final a in athletes) a.id: a,
+    };
+
     double totalRevenue = 0;
     double totalPendingDebt = 0;
     final List<FullProgramEntity> expiringPrograms = [];
@@ -67,6 +71,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
 
     final List<Map<String, dynamic>> leaderboard = [];
     final List<AthleteEntity> inactiveAthletesAlert = [];
+    final now = DateTime.now();
 
     for (final a in athletes) {
       final logs = db.getWorkoutLogsForAthlete(a.id);
@@ -79,8 +84,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
         'score': (logs.length * 10) + totalWater,
       });
 
-      if (logs.isEmpty ||
-          DateTime.now().difference(logs.first.loggedAt).inDays >= 4) {
+      if (logs.isEmpty || now.difference(logs.first.loggedAt).inDays >= 4) {
         inactiveAthletesAlert.add(a);
       }
     }
@@ -155,7 +159,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                 setState(() => _hideFinancialFigures = !_hideFinancialFigures),
           ),
           IconButton(
-            tooltip: isFa ? 'همگامسازی ابری با Supabase' : 'Sync with Cloud',
+            tooltip: isFa ? 'همگام‌سازی ابری با Supabase' : 'Sync with Cloud',
             icon: Icon(LucideIcons.cloudUpload, color: primary),
             onPressed: widget.onTriggerCloudSync,
           ),
@@ -164,7 +168,6 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // ۱. گرید ۴ تایی کارتهای سهبعدی با موج نئونی (Sparkline Wave)
           if (isDesktopBento)
             Row(
               children: [
@@ -178,18 +181,18 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                 ),
                 const SizedBox(width: 14),
                 _stat3DWaveCard(
-                  title: isFa ? 'درآمد دریافتشده' : 'Collected Revenue',
+                  title: isFa ? 'درآمد دریافت‌شده' : 'Collected Revenue',
                   value: _hideFinancialFigures
                       ? '••••••'
                       : totalRevenue.toPriceFormat(),
-                  subtitle: isFa ? 'تومان (تسویهشده)' : 'Paid Tuition',
+                  subtitle: isFa ? 'تومان (تسویه‌شده)' : 'Paid Tuition',
                   icon: LucideIcons.wallet,
                   color: AppColors.success,
                   seed: 2.2,
                 ),
                 const SizedBox(width: 14),
                 _stat3DWaveCard(
-                  title: isFa ? 'برنامههای رو به اتمام' : 'Expiring Soon',
+                  title: isFa ? 'برنامه‌های رو به اتمام' : 'Expiring Soon',
                   value: '${expiringPrograms.length}',
                   subtitle: isFa ? 'کمتر از ۵ روز اعتبار' : '< 5 Days Left',
                   icon: LucideIcons.clock,
@@ -222,7 +225,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                 ),
                 const SizedBox(width: 12),
                 _stat3DWaveCard(
-                  title: isFa ? 'درآمد دریافتشده' : 'Collected Revenue',
+                  title: isFa ? 'درآمد دریافت‌شده' : 'Collected Revenue',
                   value: _hideFinancialFigures
                       ? '••••••'
                       : totalRevenue.toPriceFormat(),
@@ -237,7 +240,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
             Row(
               children: [
                 _stat3DWaveCard(
-                  title: isFa ? 'برنامههای رو به اتمام' : 'Expiring Soon',
+                  title: isFa ? 'برنامه‌های رو به اتمام' : 'Expiring Soon',
                   value: '${expiringPrograms.length}',
                   subtitle: isFa ? 'نیازمند تمدید' : 'Renew Soon',
                   icon: LucideIcons.clock,
@@ -259,8 +262,6 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
             ),
           ],
           const SizedBox(height: 24),
-
-          // ۲. چیدمان بنتو گرید دو ستونه در دسکتاپ (و تک ستونه در موبایل)
           if (isDesktopBento)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,10 +272,10 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _buildExpiringBentoSection(
-                          expiringPrograms, db, s, isFa, primary),
+                          expiringPrograms, athleteById, db, s, isFa),
                       const SizedBox(height: 20),
                       _buildUnpaidBentoSection(
-                          unpaidPrograms, db, s, isFa, primary),
+                          unpaidPrograms, athleteById, db, s, isFa),
                     ],
                   ),
                 ),
@@ -285,8 +286,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (leaderboard.isNotEmpty) ...[
-                        _buildLeaderboardBentoSection(
-                            leaderboard, isFa, primary),
+                        _buildLeaderboardBentoSection(leaderboard, isFa),
                         const SizedBox(height: 20),
                       ],
                       if (inactiveAthletesAlert.isNotEmpty)
@@ -299,7 +299,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
             )
           else ...[
             if (leaderboard.isNotEmpty) ...[
-              _buildLeaderboardBentoSection(leaderboard, isFa, primary),
+              _buildLeaderboardBentoSection(leaderboard, isFa),
               const SizedBox(height: 18),
             ],
             if (inactiveAthletesAlert.isNotEmpty) ...[
@@ -307,11 +307,11 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                   inactiveAthletesAlert, isFa, primary),
               const SizedBox(height: 18),
             ],
-            _buildExpiringBentoSection(expiringPrograms, db, s, isFa, primary),
+            _buildExpiringBentoSection(
+                expiringPrograms, athleteById, db, s, isFa),
             const SizedBox(height: 18),
-            _buildUnpaidBentoSection(unpaidPrograms, db, s, isFa, primary),
+            _buildUnpaidBentoSection(unpaidPrograms, athleteById, db, s, isFa),
           ],
-
           const SizedBox(height: 90),
         ],
       ),
@@ -332,7 +332,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
   }
 
   Widget _buildLeaderboardBentoSection(
-      List<Map<String, dynamic>> leaderboard, bool isFa, Color primary) {
+      List<Map<String, dynamic>> leaderboard, bool isFa) {
     return MaxGymGlassCard(
       accentColor: const Color(0xFFFFD700),
       child: Column(
@@ -346,7 +346,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
               Expanded(
                 child: Text(
                   isFa
-                      ? 'لیدربرد منظمترین قهرمانان باشگاه MAX GYM'
+                      ? 'لیدربرد منظم‌ترین قهرمانان باشگاه MAX GYM'
                       : 'MAX GYM Champions Leaderboard',
                   style: const TextStyle(
                       fontWeight: FontWeight.w900, fontSize: 15),
@@ -376,12 +376,12 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
                 ),
                 child: ListTile(
                   dense: true,
-                  leading: Text(medals[idx],
-                      style: const TextStyle(fontSize: 24)),
+                  leading:
+                      Text(medals[idx], style: const TextStyle(fontSize: 24)),
                   title: Text(ath.fullName,
                       style: const TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: Text(isFa
-                      ? '${entry['sessions']} جلسه ثبتشده • ${entry['water']} لیوان آبرسانی'
+                      ? '${entry['sessions']} جلسه ثبت‌شده • ${entry['water']} لیوان آبرسانی'
                       : '${entry['sessions']} Sessions • ${entry['water']} Glasses Water'),
                   trailing: Chip(
                     backgroundColor: medalColors[idx].withOpacity(0.22),
@@ -438,7 +438,7 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
             ),
             title: Text(
               isFa
-                  ? '${inactiveAthletesAlert.length} ورزشکار بیش از ۴ روز است گزارش تمرین ثبت نکردهاند'
+                  ? '${inactiveAthletesAlert.length} ورزشکار بیش از ۴ روز است گزارش تمرین ثبت نکرده‌اند'
                   : '${inactiveAthletesAlert.length} athletes haven\'t logged workouts in 4+ days',
               style:
                   const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
@@ -459,8 +459,12 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
     );
   }
 
-  Widget _buildExpiringBentoSection(List<FullProgramEntity> expiringPrograms,
-      LocalAppDatabase db, AppStrings s, bool isFa, Color primary) {
+  Widget _buildExpiringBentoSection(
+      List<FullProgramEntity> expiringPrograms,
+      Map<String, AthleteEntity> athleteById,
+      LocalAppDatabase db,
+      AppStrings s,
+      bool isFa) {
     return MaxGymGlassCard(
       accentColor:
           expiringPrograms.isEmpty ? AppColors.success : AppColors.warning,
@@ -483,13 +487,14 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
           if (expiringPrograms.isEmpty)
             Text(
               isFa
-                  ? '✅ تمام برنامههای ورزشکاران دارای اعتبار زمانی کافی هستند.'
+                  ? '✅ تمام برنامه‌های ورزشکاران دارای اعتبار زمانی کافی هستند.'
                   : '✅ All athlete programs are up to date.',
               style: const TextStyle(color: Colors.white70, fontSize: 13),
             )
           else
             ...expiringPrograms.map((p) {
-              final athlete = db.getAthleteById(p.athleteId);
+              final athlete =
+                  athleteById[p.athleteId] ?? db.getAthleteById(p.athleteId);
               if (athlete == null) return const SizedBox.shrink();
               final daysLeft = p.remainingDays;
 
@@ -532,8 +537,12 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
     );
   }
 
-  Widget _buildUnpaidBentoSection(List<FullProgramEntity> unpaidPrograms,
-      LocalAppDatabase db, AppStrings s, bool isFa, Color primary) {
+  Widget _buildUnpaidBentoSection(
+      List<FullProgramEntity> unpaidPrograms,
+      Map<String, AthleteEntity> athleteById,
+      LocalAppDatabase db,
+      AppStrings s,
+      bool isFa) {
     return MaxGymGlassCard(
       accentColor:
           unpaidPrograms.isEmpty ? AppColors.success : AppColors.danger,
@@ -561,7 +570,8 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
             )
           else
             ...unpaidPrograms.map((p) {
-              final athlete = db.getAthleteById(p.athleteId);
+              final athlete =
+                  athleteById[p.athleteId] ?? db.getAthleteById(p.athleteId);
               if (athlete == null) return const SizedBox.shrink();
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -646,7 +656,6 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
             ),
             child: Stack(
               children: [
-                // موج نئونی پسزمینه کارت (Sparkline Wave)
                 Positioned.fill(
                   child: CustomPaint(
                     painter: _SparklineWavePainter(color: color, seed: seed),
@@ -789,7 +798,7 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-            isFa ? 'بانک قالبهای آماده (Smart Templates)' : 'Smart Templates'),
+            isFa ? 'بانک قالب‌های آماده (Smart Templates)' : 'Smart Templates'),
       ),
       body: templates.isEmpty
           ? Center(
@@ -812,7 +821,7 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                       const SizedBox(height: 16),
                       Text(
                         isFa
-                            ? 'بانک قالبهای هوشمند شما خالی است'
+                            ? 'بانک قالب‌های هوشمند شما خالی است'
                             : 'No Smart Templates Yet',
                         style: const TextStyle(
                             fontSize: 17, fontWeight: FontWeight.w900),
@@ -845,7 +854,7 @@ class _TemplatesScreenState extends ConsumerState<TemplatesScreen> {
                       backgroundColor: primary.withOpacity(0.2),
                       child: Icon(LucideIcons.copyCheck, color: primary),
                     ),
-                    title: Text(t.title,
+                    title: Text(t.title.toCleanPersian(),
                         style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text(
                       isFa

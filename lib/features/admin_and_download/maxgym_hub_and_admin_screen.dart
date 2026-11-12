@@ -9,7 +9,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/localization/app_localizations.dart';
 
 // =============================================================================
-// ۱. مرکز دانلود آخرین نسخه‌های MaxGym و راهنمای نصب وباپ آیفون (iOS PWA Hub)
+// ۱. مرکز دانلود آخرین نسخههای MaxGym و راهنمای نصب وباپ آیفون (iOS PWA Hub)
 // =============================================================================
 class MaxGymDownloadAndPwaHubScreen extends StatefulWidget {
   const MaxGymDownloadAndPwaHubScreen({super.key});
@@ -24,7 +24,7 @@ class _MaxGymDownloadAndPwaHubScreenState
   String _latestVersion = MaxGymBrandConfig.currentAppVersion;
   String _apkUrl = MaxGymBrandConfig.latestAndroidApkUrl;
   String _releaseNotes =
-      'نسخه اختصاصی باشگاه MAX GYM با هیت‌مپ سه‌بعدی عضلات، چت زنده و موتور PDF';
+      'نسخه اختصاصی باشگاه MAX GYM با هیتمپ سهبعدی عضلات، چت زنده و موتور PDF';
 
   @override
   void initState() {
@@ -70,7 +70,7 @@ class _MaxGymDownloadAndPwaHubScreenState
           obscureText: true,
           decoration: InputDecoration(
             labelText:
-                isFa ? 'رمز مستر توسعه‌دهنده (Master PIN)' : 'Master PIN',
+                isFa ? 'رمز مستر توسعهدهنده (Master PIN)' : 'Master PIN',
             prefixIcon: const Icon(LucideIcons.keyRound),
           ),
         ),
@@ -81,13 +81,14 @@ class _MaxGymDownloadAndPwaHubScreenState
           ),
           ElevatedButton(
             onPressed: () {
-              if (pinCtrl.text.trim() ==
-                  MaxGymBrandConfig.superAdminMasterPin) {
+              final entered = pinCtrl.text.trim();
+              if (MaxGymBrandConfig.verifySuperAdminPin(entered)) {
                 Navigator.pop(ctx);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const MaxGymSuperAdminScreen(),
+                    builder: (_) =>
+                        MaxGymSuperAdminScreen(verifiedMasterPin: entered),
                   ),
                 );
               } else {
@@ -115,7 +116,7 @@ class _MaxGymDownloadAndPwaHubScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(isFa
-            ? 'مرکز دانلود و نسخه‌های MAX GYM'
+            ? 'مرکز دانلود و نسخههای MAX GYM'
             : 'MAX GYM Download & PWA Hub'),
         actions: [
           IconButton(
@@ -128,7 +129,6 @@ class _MaxGymDownloadAndPwaHubScreenState
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // هدر برندینگ باشگاه مکس
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -173,8 +173,6 @@ class _MaxGymDownloadAndPwaHubScreenState
             ),
           ),
           const SizedBox(height: 20),
-
-          // ۱. کارت دانلود مستقیم نسخه اندروید (APK)
           Card(
             child: Padding(
               padding: const EdgeInsets.all(18),
@@ -237,8 +235,6 @@ class _MaxGymDownloadAndPwaHubScreenState
             ),
           ),
           const SizedBox(height: 16),
-
-          // ۲. کارت وباپلیکیشن آیفون (iOS PWA روی دامنه کلادفلر شما)
           Card(
             child: Padding(
               padding: const EdgeInsets.all(18),
@@ -253,7 +249,7 @@ class _MaxGymDownloadAndPwaHubScreenState
                       Expanded(
                         child: Text(
                           isFa
-                              ? 'نسخه ویژه آیفون (iOS PWA) و وب (بدون نیاز به اپ‌استور)'
+                              ? 'نسخه ویژه آیفون (iOS PWA) و وب (بدون نیاز به اپاستور)'
                               : 'iOS (iPhone) Web-App (PWA)',
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 16),
@@ -326,10 +322,13 @@ class _MaxGymDownloadAndPwaHubScreenState
 
 // =============================================================================
 // ۲. پنل فرماندهی سوپر-ادمین داخلی (MaxGym Super-Admin Console)
-// شامل کنترل آنی Kill-Switch، تایید/تعلیق مربیان، ریست Device ID و مشاهده کرش‌لاگ‌ها
 // =============================================================================
 class MaxGymSuperAdminScreen extends StatefulWidget {
-  const MaxGymSuperAdminScreen({super.key});
+  final String verifiedMasterPin;
+  const MaxGymSuperAdminScreen({
+    super.key,
+    this.verifiedMasterPin = '',
+  });
 
   @override
   State<MaxGymSuperAdminScreen> createState() => _MaxGymSuperAdminScreenState();
@@ -345,6 +344,10 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
 
   List<Map<String, dynamic>> _coaches = [];
   List<Map<String, dynamic>> _crashLogs = [];
+
+  String get _effectivePin => widget.verifiedMasterPin.isNotEmpty
+      ? widget.verifiedMasterPin
+      : MaxGymBrandConfig.superAdminMasterPin;
 
   @override
   void initState() {
@@ -384,11 +387,24 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
             MaxGymBrandConfig.latestAndroidApkUrl;
       }
 
-      final coachesRes = await client
-          .from('coach_profiles')
-          .select()
-          .order('created_at', ascending: false);
-      _coaches = List<Map<String, dynamic>>.from(coachesRes);
+      // دریافت امن لیست مربیان از طریق RPC محافظتشده (بهجای SELECT باز روی جدول)
+      try {
+        final rpcCoaches = await client.rpc(
+          'super_admin_list_coaches',
+          params: {'p_master_pin': _effectivePin},
+        );
+        if (rpcCoaches is List) {
+          _coaches = rpcCoaches
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        }
+      } catch (_) {
+        final coachesRes = await client
+            .from('coach_profiles')
+            .select()
+            .order('created_at', ascending: false);
+        _coaches = List<Map<String, dynamic>>.from(coachesRes);
+      }
 
       final logsRes = await client
           .from('app_logs')
@@ -405,7 +421,7 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
       await SupabaseConfig.clientOrNull?.rpc(
         'super_admin_update_control',
         params: {
-          'p_master_pin': MaxGymBrandConfig.superAdminMasterPin,
+          'p_master_pin': _effectivePin,
           'p_is_disabled': _isAppDisabled,
           'p_lock_message': _lockReasonCtrl.text.trim(),
           'p_dev_contact': _devContactCtrl.text.trim(),
@@ -417,7 +433,7 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-                '✅ تنظیمات سراسری و وضعیت Kill-Switch به صورت زنده روی تمام گوشی‌ها اعمال شد!'),
+                '✅ تنظیمات سراسری و وضعیت Kill-Switch به صورت زنده روی تمام گوشیها اعمال شد!'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -436,7 +452,7 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
     await SupabaseConfig.clientOrNull?.rpc(
       'super_admin_set_coach_status',
       params: {
-        'p_master_pin': MaxGymBrandConfig.superAdminMasterPin,
+        'p_master_pin': _effectivePin,
         'p_coach_id': coachId,
         'p_approve': approve,
         'p_suspend': suspend,
@@ -462,7 +478,6 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // ۱. سوییچ مرگ سراسری (Global Kill-Switch) برای قطع فوری اپ در صورت عدم تسویه حساب
                 Card(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
@@ -480,7 +495,7 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text(
-                            '🚨 غیرفعال‌سازی و قفل فوری کل اپلیکیشن (Global Kill-Switch)',
+                            '🚨 غیرفعالسازی و قفل فوری کل اپلیکیشن (Global Kill-Switch)',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(_isAppDisabled
@@ -504,7 +519,7 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
                         TextField(
                           controller: _devContactCtrl,
                           decoration: const InputDecoration(
-                            labelText: 'اطلاعات تماس شما (توسعه‌دهنده)',
+                            labelText: 'اطلاعات تماس شما (توسعهدهنده)',
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -535,7 +550,7 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
                             onPressed: _saveGlobalKillSwitchAndVersion,
                             icon: const Icon(LucideIcons.zap),
                             label: const Text(
-                                'اعمال آنی (Realtime) روی تمام دستگاه‌ها'),
+                                'اعمال آنی (Realtime) روی تمام دستگاهها'),
                           ),
                         ),
                       ],
@@ -543,10 +558,8 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // ۲. مدیریت و تایید مربیان ثبت‌نام‌شده
                 Text(
-                  '👥 مربیان ثبت‌نام‌شده (${_coaches.length}):',
+                  '👥 مربیان ثبتنامشده (${_coaches.length}):',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 16),
                 ),
@@ -593,12 +606,9 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
                     ),
                   );
                 }),
-
                 const SizedBox(height: 20),
-
-                // ۳. مانیتورینگ لاگ خطاها (Supabase Telemetry / app_logs)
                 Text(
-                  '🛠 آخرین لاگ‌های فنی و تلمتری سیستم (${_crashLogs.length}):',
+                  '🛠 آخرین لاگهای فنی و تلمتری سیستم (${_crashLogs.length}):',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 16),
                 ),
