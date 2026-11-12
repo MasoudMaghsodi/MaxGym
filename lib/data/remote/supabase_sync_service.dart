@@ -108,12 +108,60 @@ class SupabaseSyncService {
         'last_ping': DateTime.now().toUtc().toIso8601String(),
       });
 
-      // ۱. ارسال دستهای (Batch Upsert) ورزشکاران
+      // ۰. حذف برنامهها یا قالبهایی که مربی در حالت محلی پاک کرده است (رفع باگ Zombie Programs)
+      final deletedProgIds = _db.getPendingCloudDeleteProgramIds();
+      for (final delId in deletedProgIds) {
+        try {
+          await client
+              .from('programs')
+              .delete()
+              .eq('id', delId)
+              .eq('coach_id', currentUser.id);
+          _db.clearPendingCloudDeleteProgramId(delId);
+        } catch (_) {}
+      }
+
+      // ۱. ارسال هوشمند ورزشکاران (با حفظ ایمیل، رمز عبور و وزن جدیدی که شاگرد در پرتال ثبت کرده)
       final pendingAthletes = _db.getPendingSyncAthletes();
       if (pendingAthletes.isNotEmpty) {
-        final batch = pendingAthletes
-            .map((a) => a.toSupabaseJson()..['coach_id'] = currentUser.id)
-            .toList();
+        final pendingIds = pendingAthletes.map((a) => a.id).toList();
+        final remoteSnapshots = await client
+            .from('athletes')
+            .select()
+            .inFilter('id', pendingIds);
+        final remoteMap = <String, Map<String, dynamic>>{
+          for (final r in remoteSnapshots) r['id'] as String: r,
+        };
+
+        final List<Map<String, dynamic>> batch = [];
+        for (final localAth in pendingAthletes) {
+          final payload = localAth.toSupabaseJson()
+            ..['coach_id'] = currentUser.id;
+          final remoteRow = remoteMap[localAth.id];
+
+          // اگر شاگرد در پرتال خود پروفایلش را فعال کرده و مربی صرفاً ویرایش دیگری انجام داده، رمز و ایمیل شاگرد پاک نشود
+          if (remoteRow != null) {
+            final remoteBurned = remoteRow['is_code_burned'] as bool? ?? false;
+            final remoteEmail = (remoteRow['email'] as String?) ?? '';
+            final remotePass = (remoteRow['password_hash'] as String?) ?? '';
+            final remoteStreak = (remoteRow['streak_days'] as num?)?.toInt() ?? 1;
+
+            if (remoteBurned &&
+                localAth.passwordHash.isEmpty &&
+                remotePass.isNotEmpty) {
+              payload['password_hash'] = remotePass;
+              payload['is_code_burned'] = true;
+            }
+            if (localAth.email.isEmpty && remoteEmail.isNotEmpty) {
+              payload['email'] = remoteEmail;
+            }
+            if (remoteStreak > localAth.streakDays) {
+              payload['streak_days'] = remoteStreak;
+            }
+          }
+          batch.add(payload);
+        }
+
         await client.from('athletes').upsert(batch);
         for (final athlete in pendingAthletes) {
           _db.markRecordSynced('athletes', athlete.id);
@@ -132,7 +180,7 @@ class SupabaseSyncService {
         }
       }
 
-      // ۳. ارسال دستهای برنامهها
+      // ۳. ارسال دستهای برنامهها و قالبها
       final pendingPrograms = _db.getPendingSyncPrograms();
       if (pendingPrograms.isNotEmpty) {
         final batch = pendingPrograms
@@ -156,18 +204,19 @@ class SupabaseSyncService {
         }
       }
 
-      // ۵. ارسال لاگهای تمرین
+      // ۵. ارسال لاگهای تمرین همراه با coach_id صریح
       final pendingWorkoutLogs = _db.getPendingSyncWorkoutLogs();
       if (pendingWorkoutLogs.isNotEmpty) {
-        final batch =
-            pendingWorkoutLogs.map((wl) => wl.toSupabaseJson()).toList();
+        final batch = pendingWorkoutLogs
+            .map((wl) => wl.toSupabaseJson()..['coach_id'] = currentUser.id)
+            .toList();
         await client.from('athlete_workout_logs').upsert(batch);
         for (final wl in pendingWorkoutLogs) {
           _db.markRecordSynced('athlete_workout_logs', wl.id);
         }
       }
 
-      // ۶. سینک بانکهای سفارشی مربی
+      // ۶. ارسال بانکهای سفارشی مربی
       final customMoves = _db.getCustomExercisesOnly();
       for (final m in customMoves) {
         await client.from('exercises_catalog').upsert({
@@ -218,32 +267,8 @@ class SupabaseSyncService {
         });
       }
 
-      final remoteWorkoutLogs = await client
-          .from('athlete_workout_logs')
-          .select()
-          .order('logged_at', ascending: false)
-          .limit(100);
-      for (final r in remoteWorkoutLogs) {
-        final rawSets = r['completed_sets_json'];
-        final Map<String, String> setsMap = rawSets is String
-            ? Map<String, String>.from(jsonDecode(rawSets))
-            : Map<String, String>.from(rawSets ?? {});
-        _db.upsertWorkoutLog(AthleteWorkoutLogEntity(
-          id: r['id'] as String,
-          athleteId: r['athlete_id'] as String,
-          programId: r['program_id'] as String,
-          dayNumber: (r['day_number'] as num?)?.toInt() ?? 1,
-          exerciseWeightsKg: setsMap,
-          waterGlasses: (r['water_glasses'] as num?)?.toInt() ?? 0,
-          sessionRpe: (r['session_rpe'] as num?)?.toInt() ?? 8,
-          athleteFeedback: r['athlete_feedback'] as String? ?? '',
-          loggedAt: DateTime.parse(r['logged_at'] as String).toLocal(),
-        ));
-      }
-
-      if (_db.getAllActiveAthletes().isEmpty) {
-        await _pullFromCloudWithPagination(currentUser.id);
-      }
+      // ۷. دریافت دوطرفه تغییرات ابری (Delta Pull)
+      await _pullFromCloudWithPagination(currentUser.id);
 
       _isSyncing = false;
       return SyncSummary(
@@ -268,6 +293,7 @@ class SupabaseSyncService {
     final client = SupabaseConfig.clientOrNull;
     if (client == null) return;
 
+    // ۱. دریافت حرکات، غذاها و مکملهای سفارشی مربی (رفع باگ ۷ و ۱۴)
     final remoteMoves = await client
         .from('exercises_catalog')
         .select()
@@ -284,27 +310,90 @@ class SupabaseSyncService {
       ));
     }
 
+    final remoteFoods = await client
+        .from('custom_foods_catalog')
+        .select()
+        .eq('coach_id', coachId);
+    for (final f in remoteFoods) {
+      _db.addCustomFood(
+        id: f['id'] as String,
+        nameFa: f['name_fa'] as String? ?? '',
+        nameEn: f['name_en'] as String? ?? '',
+        unitFa: f['unit_fa'] as String? ?? '',
+        unitEn: f['unit_en'] as String? ?? '',
+      );
+    }
+
+    final remoteSupps = await client
+        .from('custom_supplements_catalog')
+        .select()
+        .eq('coach_id', coachId);
+    for (final s in remoteSupps) {
+      _db.addCustomSupplement(
+        id: s['id'] as String,
+        nameFa: s['name_fa'] as String? ?? '',
+        nameEn: s['name_en'] as String? ?? '',
+        dosageFa: s['dosage_fa'] as String? ?? '',
+        dosageEn: s['dosage_en'] as String? ?? '',
+        timingFa: s['timing_fa'] as String? ?? '',
+        timingEn: s['timing_en'] as String? ?? '',
+      );
+    }
+
+    // ۲. دریافت و ادغام هوشمند شاگردان مربی
+    final pendingLocalAthleteIds =
+        _db.getPendingSyncAthletes().map((a) => a.id).toSet();
+
     final remoteAthletes = await client
         .from('athletes')
         .select()
         .eq('coach_id', coachId)
-        .eq('is_deleted', false)
         .order('updated_at', ascending: false)
         .range(0, 999);
 
+    final Set<String> coachOwnedAthleteIds = {};
+
     for (final row in remoteAthletes) {
+      final athId = row['id'] as String;
+      coachOwnedAthleteIds.add(athId);
+
+      if (pendingLocalAthleteIds.contains(athId)) continue;
+
+      final isDeletedRemote = row['is_deleted'] as bool? ?? false;
+      final existingLocal = _db.getAthleteById(athId);
+
+      if (isDeletedRemote) {
+        if (existingLocal != null) {
+          _db.softDeleteAthlete(athId);
+          _db.markRecordSynced('athletes', athId);
+        }
+        continue;
+      }
+
+      final remoteUpdatedAt =
+          DateTime.parse(row['updated_at'] as String).toLocal();
+      if (existingLocal != null &&
+          existingLocal.updatedAt.isAfter(remoteUpdatedAt)) {
+        continue;
+      }
+
       final rawTags = row['injury_tags'];
       final List<String> parsedTags = rawTags is String
           ? List<String>.from(jsonDecode(rawTags))
           : List<String>.from(rawTags ?? []);
 
       final athlete = AthleteEntity(
-        id: row['id'] as String,
+        id: athId,
         firstName: row['first_name'] as String? ?? '',
         lastName: row['last_name'] as String? ?? '',
         phone: row['phone'] as String? ?? '',
         email: row['email'] as String? ?? '',
         accessCode: row['access_code'] as String? ?? '',
+        passwordHash:
+            row['password_hash'] as String? ?? existingLocal?.passwordHash ?? '',
+        isCodeBurned: row['is_code_burned'] as bool? ??
+            existingLocal?.isCodeBurned ??
+            false,
         streakDays: (row['streak_days'] as num?)?.toInt() ?? 1,
         gender: row['gender'] as String? ?? 'male',
         age: (row['age'] as num?)?.toInt() ?? 25,
@@ -313,13 +402,18 @@ class SupabaseSyncService {
         fitnessGoal: row['fitness_goal'] as String? ?? 'lean_bulk',
         injuryTags: parsedTags,
         createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
-        updatedAt: DateTime.parse(row['updated_at'] as String).toLocal(),
+        updatedAt: remoteUpdatedAt,
         isDeleted: false,
         syncStatus: 'synced',
       );
       _db.upsertAthlete(athlete);
     }
 
+    for (final localAth in _db.getAllActiveAthletes()) {
+      coachOwnedAthleteIds.add(localAth.id);
+    }
+
+    // ۳. دریافت تاریخچه سایزگیریها (شامل وزنهایی که شاگرد از پرتال ثبت کرده)
     int offset = 0;
     const pageSize = 1000;
     while (true) {
@@ -355,12 +449,24 @@ class SupabaseSyncService {
       offset += pageSize;
     }
 
+    // ۴. دریافت برنامهها و قالبها (با نادیده گرفتن مواردی که در صف حذف هستند)
+    final pendingLocalProgramIds =
+        _db.getPendingSyncPrograms().map((p) => p.id).toSet();
+    final pendingDeletedIds = _db.getPendingCloudDeleteProgramIds();
+
     final remotePrograms = await client
         .from('programs')
         .select()
         .eq('coach_id', coachId)
         .range(0, 999);
+
     for (final row in remotePrograms) {
+      final progId = row['id'] as String;
+      if (pendingLocalProgramIds.contains(progId) ||
+          pendingDeletedIds.contains(progId)) {
+        continue;
+      }
+
       final rawDays = row['days_json'];
       final decodedDays =
           (rawDays is String ? jsonDecode(rawDays) : rawDays) as List<dynamic>;
@@ -377,7 +483,7 @@ class SupabaseSyncService {
           : List<String>.from(rawGuides ?? []);
 
       final prog = FullProgramEntity(
-        id: row['id'] as String,
+        id: progId,
         athleteId: row['athlete_id'] as String,
         title: row['title'] as String? ?? '',
         startDate: DateTime.parse(row['start_date'] as String).toLocal(),
@@ -399,11 +505,14 @@ class SupabaseSyncService {
       _db.upsertProgram(prog);
     }
 
+    // ۵. دریافت پیامهای چت مختص همین مربی
     final remoteChats = await client
         .from('chat_messages')
         .select()
         .eq('coach_id', coachId)
-        .order('created_at', ascending: true);
+        .order('created_at', ascending: true)
+        .limit(500);
+
     for (final row in remoteChats) {
       _db.insertChatMessage(ChatMessageEntity(
         id: row['id'] as String,
@@ -411,6 +520,38 @@ class SupabaseSyncService {
         senderRole: row['sender_role'] as String? ?? 'coach',
         messageText: row['message_text'] as String? ?? '',
         createdAt: DateTime.parse(row['created_at'] as String).toLocal(),
+        syncStatus: 'synced',
+      ));
+    }
+
+    // ۶. دریافت ایزوله لاگهای تمرین شاگردان همین مربی
+    final remoteWorkoutLogs = await client
+        .from('athlete_workout_logs')
+        .select()
+        .eq('coach_id', coachId)
+        .order('logged_at', ascending: false)
+        .limit(200);
+
+    for (final r in remoteWorkoutLogs) {
+      final athId = r['athlete_id'] as String? ?? '';
+      if (!coachOwnedAthleteIds.contains(athId)) continue;
+
+      final rawSets = r['completed_sets_json'];
+      final Map<String, dynamic> setsMap = rawSets is String
+          ? Map<String, dynamic>.from(jsonDecode(rawSets))
+          : Map<String, dynamic>.from(rawSets ?? {});
+
+      final logId = r['id'] as String;
+      _db.upsertWorkoutLog(AthleteWorkoutLogEntity(
+        id: logId,
+        athleteId: athId,
+        programId: r['program_id'] as String,
+        dayNumber: (r['day_number'] as num?)?.toInt() ?? 1,
+        exerciseWeightsKg: setsMap,
+        waterGlasses: (r['water_glasses'] as num?)?.toInt() ?? 0,
+        sessionRpe: (r['session_rpe'] as num?)?.toInt() ?? 8,
+        athleteFeedback: r['athlete_feedback'] as String? ?? '',
+        loggedAt: DateTime.parse(r['logged_at'] as String).toLocal(),
         syncStatus: 'synced',
       ));
     }
