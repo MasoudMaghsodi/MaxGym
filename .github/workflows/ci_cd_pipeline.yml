@@ -3,6 +3,7 @@ name: MaxGym CI/CD (Android Release APK + Cloudflare/GitHub Pages PWA)
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ "v*" ]
   workflow_dispatch:
 
 permissions:
@@ -108,25 +109,40 @@ jobs:
           name: MaxGym-Release-APK
           path: build/app/outputs/flutter-apk/MaxGym-Release.apk
 
+      - name: Extract Dynamic Version from pubspec.yaml
+        id: app_version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            VER="${TAG#v}"
+          else
+            VER=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1 | tr -d '[:space:]')
+            TAG="v$VER"
+          fi
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Target Release: $TAG (App Version: $VER)"
+
       - name: Create or Update Official GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref_type == 'tag'
         with:
-          tag_name: v1.2.0
-          name: "MAX GYM Official Release v1.2.0"
+          tag_name: ${{ steps.app_version.outputs.tag }}
+          name: "MAX GYM Official Release ${{ steps.app_version.outputs.tag }}"
           make_latest: true
           body: |
             ## 🏋️‍♂️ MAX GYM Official Production Release (Android APK)
             ### **NO PAIN NO GAIN • EST. 2019**
             
-            * **Version:** 1.2.0
+            * **Version:** ${{ steps.app_version.outputs.version }}
             * **Web & iOS PWA Portal:** [https://maxgym.privatepath.ir](https://maxgym.privatepath.ir)
-            * **Direct APK Download:** [MaxGym-Release.apk](https://github.com/MasoudMaghsodi/MaxGym/releases/download/v1.2.0/MaxGym-Release.apk)
+            * **Direct APK Download:** [MaxGym-Release.apk](https://github.com/MasoudMaghsodi/MaxGym/releases/download/${{ steps.app_version.outputs.tag }}/MaxGym-Release.apk)
             
             ### 📱 Highlights:
-            - OWASP Zero-Trust Hardened Security & RLS
-            - Cyber-Athletic Bento & Glass UI 2.0
-            - Self-hosted CanvasKit WebAssembly (Loads in Iran without VPN)
+            - OWASP Zero-Trust Hardened Security & PostgreSQL RLS
+            - High-Concurrency Multi-Device Delta Sync Engine
+            - Web/PWA Persistent Storage Partitioning (Zero 5MB Quota Exceeded)
+            - Complete Controller Memory Leak Elimination & Persian Typography Polish
             - Dual-role Coach management & Athlete online portal (`PC-XXXXXX`).
             - Offline-first SQLite database with automatic two-way Delta Supabase sync.
           files: build/app/outputs/flutter-apk/MaxGym-Release.apk
