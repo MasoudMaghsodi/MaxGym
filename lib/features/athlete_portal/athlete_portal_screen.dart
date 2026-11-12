@@ -43,6 +43,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
 
   StreamSubscription<List<Map<String, dynamic>>>? _programsRealtimeSub;
   StreamSubscription<List<Map<String, dynamic>>>? _athleteRealtimeSub;
+  Timer? _rpcPortalSyncTimer;
 
   @override
   void initState() {
@@ -58,12 +59,21 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     _restTimer?.cancel();
     _programsRealtimeSub?.cancel();
     _athleteRealtimeSub?.cancel();
+    _rpcPortalSyncTimer?.cancel();
     super.dispose();
   }
 
   void _startRealtimeProgramAndProfileSync() {
     final client = SupabaseConfig.clientOrNull;
     if (client == null) return;
+
+    // همگامسازی دورهای از طریق RPC امن (کارکرد ۱۰۰٪ حتی با بسته بودن RLS برای نقش anon)
+    _refreshPortalBundleViaRpc();
+    _rpcPortalSyncTimer?.cancel();
+    _rpcPortalSyncTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      _refreshPortalBundleViaRpc();
+    });
+
     final db = ref.read(appDatabaseProvider);
 
     _programsRealtimeSub = client
@@ -113,9 +123,9 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
           phone: r['phone'] as String? ?? _athlete.phone,
           email: r['email'] as String? ?? _athlete.email,
           accessCode: r['access_code'] as String? ?? _athlete.accessCode,
-          passwordHash: r['password_hash'] as String? ?? _athlete.passwordHash,
           isCodeBurned: r['is_code_burned'] as bool? ?? _athlete.isCodeBurned,
-          streakDays: (r['streak_days'] as num?)?.toInt() ?? _athlete.streakDays,
+          streakDays:
+              (r['streak_days'] as num?)?.toInt() ?? _athlete.streakDays,
           gender: r['gender'] as String? ?? _athlete.gender,
           age: (r['age'] as num?)?.toInt() ?? _athlete.age,
           heightCm: (r['height_cm'] as num?)?.toDouble() ?? _athlete.heightCm,
@@ -128,6 +138,66 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         setState(() => _athlete = updated);
       }
     }, onError: (_) {});
+  }
+
+  /// واکشی امن برنامهها و سایزگیریهای جدید ورزشکار از طریق RPC بدون نیاز به باز بودن RLS
+  Future<void> _refreshPortalBundleViaRpc() async {
+    try {
+      final client = SupabaseConfig.clientOrNull;
+      if (client == null || !mounted) return;
+      final db = ref.read(appDatabaseProvider);
+
+      Map<String, dynamic>? bundle;
+      if (_athlete.passwordHash.isNotEmpty && _athlete.email.isNotEmpty) {
+        final res = await client.rpc(
+          'athlete_login_with_password',
+          params: {
+            'p_identifier': _athlete.email,
+            'p_password_hash': _athlete.passwordHash,
+          },
+        );
+        if (res is Map<String, dynamic>) bundle = res;
+      } else if (_athlete.accessCode.isNotEmpty) {
+        final res = await client.rpc(
+          'athlete_login_by_code',
+          params: {'p_access_code': _athlete.accessCode},
+        );
+        if (res is Map<String, dynamic> && res['error'] == null) {
+          bundle = res;
+        }
+      }
+
+      if (bundle == null || !mounted) return;
+
+      final progsList = bundle['programs'] as List<dynamic>? ?? [];
+      for (final pRow in progsList) {
+        if (pRow is! Map<String, dynamic>) continue;
+        final rawDays = pRow['days_json'];
+        final decodedDays =
+            (rawDays is String ? jsonDecode(rawDays) : rawDays) as List<dynamic>;
+        final rawMeals = pRow['diet_meals_json'];
+        final mealsStr = rawMeals is String ? rawMeals : jsonEncode(rawMeals);
+        final rawSupps = pRow['supplements_json'];
+        final suppsStr = rawSupps is String ? rawSupps : jsonEncode(rawSupps);
+
+        db.upsertProgram(FullProgramEntity(
+          id: pRow['id'] as String,
+          athleteId: _athlete.id,
+          title: pRow['title'] as String? ?? '',
+          startDate: DateTime.parse(pRow['start_date'] as String).toLocal(),
+          durationWeeks: (pRow['duration_weeks'] as num?)?.toInt() ?? 4,
+          days: decodedDays
+              .map((e) => WorkoutDayPlan.fromJson(e as Map<String, dynamic>))
+              .toList(),
+          dietMeals: DietMealSlot.decodeList(mealsStr),
+          waterLiters: (pRow['water_liters'] as num?)?.toDouble() ?? 3.5,
+          supplements: SupplementPrescriptionItem.decodeList(suppsStr),
+          updatedAt: DateTime.now(),
+          syncStatus: 'synced',
+        ));
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   void _startRestTimer(int seconds) {
@@ -152,7 +222,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     );
   }
 
-  /// استیج سینمایی حرکت (به سبک گوشی وسط در عکس ۲ - Concentration Curl)
   void _showCinematicExerciseStageModal(
       BuildContext context, WorkoutItemEntity ex, bool isFa) {
     final cleanFa = SeedCatalogData.extractCleanPersianTitle(
@@ -192,7 +261,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                // قاب تصویر دوتایی بزرگ شروع و پایان حرکت
                 Container(
                   height: 220,
                   decoration: BoxDecoration(
@@ -444,12 +512,22 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
   Future<void> _submitDailyWorkoutLog(FullProgramEntity program) async {
     final db = ref.read(appDatabaseProvider);
     final isFa = AppStrings.of(context).isFa;
+
+    // فیلتر کردن وزنههای ثبتشده فقط برای حرکات روز انتخابی فعلی (رفع باگ ۱۱)
+    final safeIdx = _selectedDayIdx.clamp(0, program.days.length - 1);
+    final activeDayExerciseIds =
+        program.days[safeIdx].exercises.map((e) => e.id).toSet();
+    final filteredWeightsForToday = Map<String, String>.fromEntries(
+      _loggedWeights.entries
+          .where((e) => activeDayExerciseIds.contains(e.key)),
+    );
+
     final log = AthleteWorkoutLogEntity(
       id: const Uuid().v4(),
       athleteId: _athlete.id,
       programId: program.id,
-      dayNumber: _selectedDayIdx + 1,
-      exerciseWeightsKg: _loggedWeights,
+      dayNumber: safeIdx + 1,
+      exerciseWeightsKg: filteredWeightsForToday,
       waterGlasses: _waterGlassesToday,
       sessionRpe: 8,
       athleteFeedback: 'Completed via Athlete Portal',
@@ -458,26 +536,27 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
 
     db.upsertWorkoutLog(log);
 
+    // بروزرسانی streak_days در استیت محلی
+    final updatedAth = db.getAthleteById(_athlete.id);
+    if (updatedAth != null) {
+      setState(() => _athlete = updatedAth);
+    }
+
     try {
       final client = SupabaseConfig.clientOrNull;
       if (client != null) {
-        try {
-          await client.rpc('athlete_submit_workout_log', params: {
-            'p_id': log.id,
-            'p_athlete_id': _athlete.id,
-            'p_access_code': _athlete.accessCode,
-            'p_program_id': program.id,
-            'p_day_number': log.dayNumber,
-            'p_completed_sets_json': log.exerciseMaxWeights,
-            'p_water_glasses': log.waterGlasses,
-            'p_session_rpe': log.sessionRpe,
-            'p_athlete_feedback': log.athleteFeedback,
-          });
-        } catch (_) {
-          await client
-              .from('athlete_workout_logs')
-              .upsert(log.toSupabaseJson());
-        }
+        await client.rpc('athlete_submit_workout_log', params: {
+          'p_id': log.id,
+          'p_athlete_id': _athlete.id,
+          'p_access_code': _athlete.accessCode,
+          'p_program_id': program.id,
+          'p_day_number': log.dayNumber,
+          'p_completed_sets_json': log.exerciseMaxWeights,
+          'p_water_glasses': log.waterGlasses,
+          'p_session_rpe': log.sessionRpe,
+          'p_athlete_feedback': log.athleteFeedback,
+        });
+        db.markRecordSynced('athlete_workout_logs', log.id);
       }
     } catch (_) {}
 
@@ -527,7 +606,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         toolbarHeight: 68,
         title: Row(
           children: [
-            // آواتار دایرهای با حلقه نئونی دقیقاً به سبک عکس ۲ (Hello Emma 👋)
             GestureDetector(
               onTap: () => setState(() => _selectedTabIndex = 3),
               child: Container(
@@ -699,6 +777,13 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70, height: 1.6),
                 ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: _refreshPortalBundleViaRpc,
+                  icon: const Icon(LucideIcons.refreshCw, size: 16),
+                  label: Text(
+                      isFa ? 'بررسی دریافت برنامه جدید' : 'Refresh Program'),
+                ),
               ],
             ),
           ),
@@ -719,7 +804,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     return ListView(
       padding: const EdgeInsets.all(18),
       children: [
-        // ۱. بنر کپسولی گرادینت نئونی (دقیقاً به سبک بنر سبز بالای عکس ۲ - New Challenge / START)
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           decoration: BoxDecoration(
@@ -802,8 +886,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
           ),
         ),
         const SizedBox(height: 18),
-
-        // ۲. نوار تقویم کپسولی عمودی (دقیقاً به سبک عکس ۲ چپ - Sun Mon Tue Wed 16)
         SizedBox(
           height: 76,
           child: ListView.separated(
@@ -869,7 +951,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
           ),
         ),
         const SizedBox(height: 18),
-
         if (activeDay.isRestDay)
           MaxGymGlassCard(
             padding: const EdgeInsets.all(38),
@@ -890,7 +971,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
             ),
           )
         else ...[
-          // ۳. کارت گیج نیمدایره مدرج (به سبک عکس ۱ راست - Track Record 50% Progress)
           MaxGymGlassCard(
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
             child: Column(
@@ -995,8 +1075,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
             ),
           ),
           const SizedBox(height: 18),
-
-          // ۴. لیست حرکات به سبک ردیفهای افقی ژورنالی و فشرده (دقیقاً مثل عکس ۴ راست - WEEK 1 - DAY 1)
           ...List.generate(activeDay.exercises.length, (idx) {
             final ex = activeDay.exercises[idx];
             final isDone = _completedExerciseIds.contains(ex.id);
@@ -1020,7 +1098,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                         _showCinematicExerciseStageModal(context, ex, isFa),
                     child: Row(
                       children: [
-                        // تامبنیل مربعی گوشهگرد با نشانگر شماره حرکت (مثل عکس ۴ راست)
                         Stack(
                           children: [
                             ClipRRect(
@@ -1066,7 +1143,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                           ],
                         ),
                         const SizedBox(width: 14),
-                        // مشخصات حرکت در ۳ خط تمیز و تفکیکشده
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1126,7 +1202,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                             ],
                           ),
                         ),
-                        // چکباکس تکمیل حرکت و شروع خودکار تایمر استراحت
                         Transform.scale(
                           scale: 1.15,
                           child: Checkbox(
@@ -1151,13 +1226,13 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  // نوار پایینی ثبت سریع وزنه و دکمه تایمر
                   Row(
                     children: [
                       Expanded(
                         child: SizedBox(
                           height: 42,
                           child: TextField(
+                            key: ValueKey('weight_input_${ex.id}'),
                             onChanged: (val) {
                               _loggedWeights[ex.id] = val.toEnglishDigits();
                             },
@@ -1218,7 +1293,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        // ۱. ستونهای عمودی ماکروها دقیقاً به سبک عکس ۲ راست (`Your Daily Nutrition`)
         Text(
           isFa ? 'نیاز تغذیهای روزانه شما' : 'Your Daily Nutrition',
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
@@ -1232,8 +1306,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
           isFa: isFa,
         ),
         const SizedBox(height: 16),
-
-        // ۲. ردیاب آبرسانی بدن
         MaxGymGlassCard(
           accentColor: Colors.lightBlueAccent,
           padding: const EdgeInsets.all(18),
@@ -1337,7 +1409,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     );
   }
 
-  /// تب چهارم: پروفایل اختصاصی ورزشکار، کارت عضویت VIP، دستاوردها (به سبک عکس ۳ چپ) و تغییر رمز عبور
   Widget _buildAthleteProfileAndAchievementsTab(
       FullProgramEntity? program,
       List<MeasurementLogEntity> measurements,
@@ -1351,7 +1422,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        // ۱. کارت دیجیتال عضویت باشگاه (MAX GYM VIP Digital Pass)
         Container(
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
@@ -1442,8 +1512,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
           ),
         ),
         const SizedBox(height: 18),
-
-        // ۲. کارت دستاوردها و رکوردهای شخصی (Achievements - به سبک عکس ۳ چپ fitonist)
         MaxGymGlassCard(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -1509,8 +1577,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
           ),
         ),
         const SizedBox(height: 18),
-
-        // ۳. تغییر رمز عبور شخصی و بروزرسانی وزن هفتگی
         MaxGymGlassCard(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -1555,9 +1621,11 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     );
   }
 
+  /// ثبت همزمان وزن جدید در نمودار پیشرفت (measurement_logs) + تغییر رمز عبور شخصی (رفع باگ ۳)
   void _showUpdateWeightAndPasswordDialog(bool isFa) {
     final weightCtrl =
         TextEditingController(text: _athlete.weightKg.toStringAsFixed(1));
+    final waistCtrl = TextEditingController();
     final newPassCtrl = TextEditingController();
 
     showDialog(
@@ -1580,7 +1648,21 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: TextField(
+                controller: waistCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: isFa
+                      ? 'دور کمر فعلی - cm (اختیاری)'
+                      : 'Waist - cm (optional)',
+                  prefixIcon: const Icon(LucideIcons.ruler),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
             Directionality(
               textDirection: TextDirection.ltr,
               child: TextField(
@@ -1603,38 +1685,70 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
+              final db = ref.read(appDatabaseProvider);
               final newW =
                   weightCtrl.text.toSafeDouble() ?? _athlete.weightKg;
+              final newWaist = waistCtrl.text.toSafeDouble();
               final newP = newPassCtrl.text.trim();
               final newHash = newP.length >= 6
                   ? AthleteEntity.hashPassword(newP)
                   : _athlete.passwordHash;
 
+              final now = DateTime.now();
               final updated = _athlete.copyWith(
                 weightKg: newW,
                 passwordHash: newHash,
                 isCodeBurned: true,
-                updatedAt: DateTime.now(),
+                updatedAt: now,
               );
-              ref.read(appDatabaseProvider).upsertAthlete(updated);
+              db.upsertAthlete(updated);
+
+              // ثبت رکورد جدید در جدول measurement_logs برای نمایش در نمودار پیشرفت مربی
+              final checkInLog = MeasurementLogEntity(
+                id: const Uuid().v4(),
+                athleteId: updated.id,
+                recordedAt: now,
+                weightKg: newW,
+                waistCm: newWaist,
+                updatedAt: now,
+              );
+              db.insertMeasurementLog(checkInLog);
+
               setState(() => _athlete = updated);
 
               try {
-                await SupabaseConfig.clientOrNull?.rpc(
-                  'athlete_activate_and_burn_code',
-                  params: {
-                    'p_athlete_id': updated.id,
-                    'p_access_code': updated.accessCode,
-                    'p_first_name': updated.firstName,
-                    'p_last_name': updated.lastName,
-                    'p_phone': updated.phone,
-                    'p_email': updated.email,
-                    'p_password_hash': updated.passwordHash,
-                    'p_age': updated.age,
-                    'p_height_cm': updated.heightCm,
-                    'p_weight_kg': updated.weightKg,
-                  },
-                );
+                final client = SupabaseConfig.clientOrNull;
+                if (client != null) {
+                  await client.rpc(
+                    'athlete_submit_weight_checkin',
+                    params: {
+                      'p_id': checkInLog.id,
+                      'p_athlete_id': updated.id,
+                      'p_access_code': updated.accessCode,
+                      'p_weight_kg': newW,
+                      'p_waist_cm': newWaist,
+                    },
+                  );
+                  db.markRecordSynced('measurement_logs', checkInLog.id);
+
+                  if (newP.length >= 6) {
+                    await client.rpc(
+                      'athlete_activate_and_burn_code',
+                      params: {
+                        'p_athlete_id': updated.id,
+                        'p_access_code': updated.accessCode,
+                        'p_first_name': updated.firstName,
+                        'p_last_name': updated.lastName,
+                        'p_phone': updated.phone,
+                        'p_email': updated.email,
+                        'p_password_hash': updated.passwordHash,
+                        'p_age': updated.age,
+                        'p_height_cm': updated.heightCm,
+                        'p_weight_kg': updated.weightKg,
+                      },
+                    );
+                  }
+                }
               } catch (_) {}
 
               if (ctx.mounted) Navigator.pop(ctx);
@@ -1642,8 +1756,8 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(isFa
-                        ? '✅ پروفایل و رمز عبور شما با موفقیت بروزرسانی شد!'
-                        : '✅ Profile updated!'),
+                        ? '✅ وزن جدید در نمودار پیشرفت ثبت شد و پروفایل بروزرسانی گردید!'
+                        : '✅ Weight check-in & profile updated!'),
                     backgroundColor: AppColors.success,
                   ),
                 );
@@ -1657,7 +1771,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
   }
 }
 
-/// گیت اجباری تکمیل پروفایل اولیه ورزشکار + تعیین رمز عبور شخصی و ابطال کد یکبارمصرف (PC-XXXXXX)
+/// گیت اجباری تکمیل پروفایل اولیه ورزشکار (مجهز به دکمه خروج در AppBar برای رفع باگ ۸)
 class _MandatoryAthleteProfileCompletionGate extends ConsumerStatefulWidget {
   final AthleteEntity athlete;
   final void Function(AthleteEntity updated) onCompleted;
@@ -1749,7 +1863,7 @@ class _MandatoryAthleteProfileCompletionGateState
       email: email,
       accessCode: widget.athlete.accessCode,
       passwordHash: hashedPassword,
-      isCodeBurned: true, // ابطال کد یکبارمصرف پس از تعیین رمز عبور
+      isCodeBurned: true,
       gender: widget.athlete.gender,
       age: age,
       heightCm: height,
@@ -1766,33 +1880,18 @@ class _MandatoryAthleteProfileCompletionGateState
     try {
       final client = SupabaseConfig.clientOrNull;
       if (client != null) {
-        try {
-          await client.rpc('athlete_activate_and_burn_code', params: {
-            'p_athlete_id': updated.id,
-            'p_access_code': updated.accessCode,
-            'p_first_name': updated.firstName,
-            'p_last_name': updated.lastName,
-            'p_phone': updated.phone,
-            'p_email': updated.email,
-            'p_password_hash': updated.passwordHash,
-            'p_age': updated.age,
-            'p_height_cm': updated.heightCm,
-            'p_weight_kg': updated.weightKg,
-          });
-        } catch (_) {
-          await client.from('athletes').update({
-            'first_name': updated.firstName,
-            'last_name': updated.lastName,
-            'phone': updated.phone,
-            'email': updated.email,
-            'password_hash': updated.passwordHash,
-            'is_code_burned': true,
-            'age': updated.age,
-            'height_cm': updated.heightCm,
-            'weight_kg': updated.weightKg,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          }).eq('id', updated.id);
-        }
+        await client.rpc('athlete_activate_and_burn_code', params: {
+          'p_athlete_id': updated.id,
+          'p_access_code': updated.accessCode,
+          'p_first_name': updated.firstName,
+          'p_last_name': updated.lastName,
+          'p_phone': updated.phone,
+          'p_email': updated.email,
+          'p_password_hash': updated.passwordHash,
+          'p_age': updated.age,
+          'p_height_cm': updated.heightCm,
+          'p_weight_kg': updated.weightKg,
+        });
       }
     } catch (_) {}
 
@@ -1811,6 +1910,17 @@ class _MandatoryAthleteProfileCompletionGateState
         title: Text(isFa
             ? 'تکمیل یکباره پرونده ورزشی شما'
             : 'Complete Your Athlete Profile'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => ref.read(securityGateProvider.notifier).signOut(),
+            icon: const Icon(LucideIcons.logOut,
+                size: 16, color: AppColors.danger),
+            label: Text(
+              isFa ? 'خروج / بازگشت' : 'Sign Out',
+              style: const TextStyle(color: AppColors.danger, fontSize: 12),
+            ),
+          ),
+        ],
       ),
       body: Center(
         child: ConstrainedBox(
@@ -1941,6 +2051,7 @@ class _MandatoryAthleteProfileCompletionGateState
   }
 }
 
+/// ویجت چت دوطرفه هوشمند (پشتیبانی همزمان از RPC برای ورزشکار و دسترسی مستقیم برای مربی - رفع باگ ۱)
 class PureTextChatView extends ConsumerStatefulWidget {
   final AthleteEntity athlete;
   final String currentSenderRole; // 'coach' | 'athlete'
@@ -1960,6 +2071,7 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
   final _scrollCtrl = ScrollController();
   List<ChatMessageEntity> _messages = [];
   StreamSubscription<List<Map<String, dynamic>>>? _realtimeChatSub;
+  Timer? _rpcChatPollTimer;
 
   @override
   void initState() {
@@ -1967,18 +2079,75 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
     _messages = ref
         .read(appDatabaseProvider)
         .getChatMessagesForAthlete(widget.athlete.id);
-    _subscribeToRealtimeChatStream();
+    _subscribeToRealtimeAndRpcChat();
   }
 
   @override
   void dispose() {
     _realtimeChatSub?.cancel();
+    _rpcChatPollTimer?.cancel();
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
-  void _subscribeToRealtimeChatStream() {
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _fetchChatViaRpc() async {
+    try {
+      final client = SupabaseConfig.clientOrNull;
+      if (client == null || !mounted) return;
+      final db = ref.read(appDatabaseProvider);
+
+      final res = await client.rpc(
+        'athlete_fetch_chat',
+        params: {
+          'p_athlete_id': widget.athlete.id,
+          'p_access_code': widget.athlete.accessCode,
+        },
+      );
+
+      if (res is List && mounted) {
+        final prevLen = _messages.length;
+        for (final r in res) {
+          if (r is! Map) continue;
+          db.insertChatMessage(ChatMessageEntity(
+            id: r['id'] as String,
+            athleteId: r['athlete_id'] as String,
+            senderRole: r['sender_role'] as String,
+            messageText: r['message_text'] as String,
+            createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
+            syncStatus: 'synced',
+          ));
+        }
+        final updatedList = db.getChatMessagesForAthlete(widget.athlete.id);
+        setState(() => _messages = updatedList);
+        if (updatedList.length > prevLen) {
+          _scrollToBottom();
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _subscribeToRealtimeAndRpcChat() {
+    // ۱. واکشی اولیه و دورهای از طریق RPC (تضمین کارکرد برای ورزشکار بدون نیاز به RLS باز)
+    _fetchChatViaRpc();
+    _rpcChatPollTimer?.cancel();
+    _rpcChatPollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _fetchChatViaRpc();
+    });
+
+    // ۲. استریم Realtime برای مربی لاگینشده
     final client = SupabaseConfig.clientOrNull;
     if (client == null) return;
     final db = ref.read(appDatabaseProvider);
@@ -2003,15 +2172,7 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
         setState(() {
           _messages = db.getChatMessagesForAthlete(widget.athlete.id);
         });
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (_scrollCtrl.hasClients) {
-            _scrollCtrl.animateTo(
-              _scrollCtrl.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-            );
-          }
-        });
+        _scrollToBottom();
       }
     }, onError: (_) {});
   }
@@ -2034,12 +2195,35 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
     setState(() {
       _messages = db.getChatMessagesForAthlete(widget.athlete.id);
     });
+    _scrollToBottom();
 
     try {
       final client = SupabaseConfig.clientOrNull;
       if (client != null) {
-        await client.from('chat_messages').upsert(msg.toSupabaseJson());
-        db.markRecordSynced('chat_messages', msg.id);
+        if (widget.currentSenderRole == 'athlete') {
+          // ارسال پیام ورزشکار از طریق تونل امن RPC (ثبت خودکار coach_id و عبور مجاز از RLS)
+          final ok = await client.rpc(
+            'athlete_send_chat',
+            params: {
+              'p_id': msg.id,
+              'p_athlete_id': widget.athlete.id,
+              'p_access_code': widget.athlete.accessCode,
+              'p_message_text': msg.messageText,
+            },
+          );
+          if (ok == true) {
+            db.markRecordSynced('chat_messages', msg.id);
+          }
+        } else {
+          // ارسال پیام توسط مربی با درج صریح coach_id
+          final coachUid = client.auth.currentUser?.id;
+          final payload = msg.toSupabaseJson();
+          if (coachUid != null) {
+            payload['coach_id'] = coachUid;
+          }
+          await client.from('chat_messages').upsert(payload);
+          db.markRecordSynced('chat_messages', msg.id);
+        }
       }
     } catch (_) {}
   }
@@ -2088,6 +2272,11 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
                       style: const TextStyle(
                           fontSize: 13, fontWeight: FontWeight.w800),
                     ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(LucideIcons.refreshCw, size: 15),
+                    onPressed: _fetchChatViaRpc,
                   ),
                 ],
               ),
