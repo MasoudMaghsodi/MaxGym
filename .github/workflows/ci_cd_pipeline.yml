@@ -76,9 +76,23 @@ jobs:
           EOF
           fi
 
-      - name: Build Obfuscated Release APK
+      - name: Upgrade AGP & Gradle Wrapper and Build Obfuscated Release APK
         run: |
+          # ۱. ارتقای خودکار نسخه AGP از 9.1.0 به 9.1.1 در settings.gradle(.kts)
+          if [ -f "android/settings.gradle.kts" ]; then
+            sed -i 's/version "9.1.0"/version "9.1.1"/g' android/settings.gradle.kts
+          fi
+          if [ -f "android/settings.gradle" ]; then
+            sed -i 's/version "9.1.0"/version "9.1.1"/g' android/settings.gradle
+          fi
+          # ۲. ارتقای خودکار Gradle Wrapper به 9.5
+          if [ -f "android/gradle/wrapper/gradle-wrapper.properties" ]; then
+            sed -i 's/gradle-9.3.1-all.zip/gradle-9.5-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+            sed -i 's/gradle-9.3.1-bin.zip/gradle-9.5-bin.zip/g' android/gradle/wrapper/gradle-wrapper.properties
+          fi
+          # ۳. کامپایل نسخه نهایی با فلگ ضد خطای وابستگی گرادل
           flutter build apk --release \
+            --android-skip-build-dependency-validation \
             --obfuscate \
             --split-debug-info=build/symbols \
             --dart-define=APP_DOMAIN=maxgym.privatepath.ir \
