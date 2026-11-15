@@ -47,7 +47,7 @@ class MaxGymBrandConfig {
 
   static const String appName = 'MAX GYM';
   static const String appSlogan = 'NO PAIN NO GAIN • EST. 2019';
-  static const String currentAppVersion = '1.2.0';
+  static const String currentAppVersion = '2.0.0';
   static const String bundledLogoAsset = 'assets/images/maxgym_logo.jpeg';
 
   /// لینک وباپلیکیشن (PWA مخصوص آیفون و مرورگرها روی سابدامین کلادفلر شما)

@@ -162,13 +162,6 @@ jobs:
           channel: 'stable'
           cache: true
       - run: flutter pub get
-      - name: Replace Default Flutter Web Icons with Official MAX GYM Logo
-        run: |
-          cp assets/images/maxgym_logo.jpeg web/favicon.png
-          cp assets/images/maxgym_logo.jpeg web/icons/Icon-192.png
-          cp assets/images/maxgym_logo.jpeg web/icons/Icon-512.png
-          cp assets/images/maxgym_logo.jpeg web/icons/Icon-maskable-192.png
-          cp assets/images/maxgym_logo.jpeg web/icons/Icon-maskable-512.png
       - name: Build Flutter Web PWA (No Service-Worker Cache + Self-Hosted CanvasKit)
         run: |
           flutter build web --release \
@@ -181,7 +174,9 @@ jobs:
           if [ -d "$FLUTTER_ROOT/bin/cache/flutter_web_sdk/canvaskit" ]; then
             cp -r $FLUTTER_ROOT/bin/cache/flutter_web_sdk/canvaskit/* build/web/canvaskit/ 2>/dev/null || true
           fi
-          rm -f build/web/flutter_service_worker.js
+      - name: Deploy Self-Destroying Anti-Cache Service Worker
+        run: |
+          cp web/flutter_service_worker.js build/web/flutter_service_worker.js
       - name: Configure Custom Domain (CNAME), Cache-Buster & SPA 404 Fallback
         run: |
           echo "maxgym.privatepath.ir" > build/web/CNAME
