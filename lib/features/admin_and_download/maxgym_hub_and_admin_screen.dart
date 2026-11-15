@@ -40,9 +40,13 @@ class _MaxGymDownloadAndPwaHubScreenState
           .eq('id', 1)
           .maybeSingle();
       if (row != null && mounted) {
+        final dbVer = row['latest_version'] as String?;
+        const localVer = MaxGymBrandConfig.currentAppVersion;
+        final effectiveVer = (dbVer != null && dbVer.compareTo(localVer) > 0)
+            ? dbVer
+            : localVer;
         setState(() {
-          _latestVersion =
-              row['latest_version'] as String? ?? _latestVersion;
+          _latestVersion = effectiveVer;
           _apkUrl = row['apk_download_url'] as String? ?? _apkUrl;
           _releaseNotes =
               row['release_notes_fa'] as String? ?? _releaseNotes;
@@ -382,7 +386,8 @@ class _MaxGymSuperAdminScreenState extends State<MaxGymSuperAdminScreen> {
         _isAppDisabled = ctrl['is_app_disabled'] as bool? ?? false;
         _lockReasonCtrl.text = ctrl['lock_message_fa'] as String? ?? '';
         _devContactCtrl.text = ctrl['developer_contact'] as String? ?? '';
-        _versionCtrl.text = ctrl['latest_version'] as String? ?? '1.2.0';
+        _versionCtrl.text = ctrl['latest_version'] as String? ??
+            MaxGymBrandConfig.currentAppVersion;
         _apkUrlCtrl.text = ctrl['apk_download_url'] as String? ??
             MaxGymBrandConfig.latestAndroidApkUrl;
       }

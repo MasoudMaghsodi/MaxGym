@@ -1713,6 +1713,17 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          const Text(
+            '${MaxGymBrandConfig.appName} • v${MaxGymBrandConfig.currentAppVersion}',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 10.5,
+              color: Colors.white30,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );

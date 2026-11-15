@@ -77,6 +77,20 @@ jobs:
           EOF
           fi
 
+      - name: Extract Dynamic Version from pubspec.yaml
+        id: app_version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            VER="${TAG#v}"
+          else
+            VER=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1 | tr -d '[:space:]')
+            TAG="v$VER"
+          fi
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Target Release: $TAG (App Version: $VER)"
+
       - name: Build Obfuscated Release APK
         run: |
           # ۱. اطمینان از معتبر بودن آدرس دانلود Gradle Wrapper (رفع خطای FileNotFound gradle-9.5)
@@ -97,7 +111,8 @@ jobs:
             --obfuscate \
             --split-debug-info=build/symbols \
             --dart-define=APP_DOMAIN=maxgym.privatepath.ir \
-            --dart-define=GITHUB_REPO=MasoudMaghsodi/MaxGym
+            --dart-define=GITHUB_REPO=MasoudMaghsodi/MaxGym \
+            --dart-define=APP_VERSION=${{ steps.app_version.outputs.version }}
 
       - name: Prepare MaxGym-Release.apk
         run: |
@@ -108,20 +123,6 @@ jobs:
         with:
           name: MaxGym-Release-APK
           path: build/app/outputs/flutter-apk/MaxGym-Release.apk
-
-      - name: Extract Dynamic Version from pubspec.yaml
-        id: app_version
-        run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG="${{ github.ref_name }}"
-            VER="${TAG#v}"
-          else
-            VER=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1 | tr -d '[:space:]')
-            TAG="v$VER"
-          fi
-          echo "version=$VER" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "Target Release: $TAG (App Version: $VER)"
 
       - name: Create or Update Official GitHub Release
         uses: softprops/action-gh-release@v2
@@ -164,12 +165,14 @@ jobs:
       - run: flutter pub get
       - name: Build Flutter Web PWA (No Service-Worker Cache + Self-Hosted CanvasKit)
         run: |
+          VER=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1 | tr -d '[:space:]')
           flutter build web --release \
             --pwa-strategy=none \
             --base-href "/" \
             --dart-define=FLUTTER_WEB_CANVASKIT_URL=/canvaskit/ \
             --dart-define=APP_DOMAIN=maxgym.privatepath.ir \
-            --dart-define=GITHUB_REPO=MasoudMaghsodi/MaxGym
+            --dart-define=GITHUB_REPO=MasoudMaghsodi/MaxGym \
+            --dart-define=APP_VERSION=${VER}
           mkdir -p build/web/canvaskit
           if [ -d "$FLUTTER_ROOT/bin/cache/flutter_web_sdk/canvaskit" ]; then
             cp -r $FLUTTER_ROOT/bin/cache/flutter_web_sdk/canvaskit/* build/web/canvaskit/ 2>/dev/null || true
