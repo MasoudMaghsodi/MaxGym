@@ -149,7 +149,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # JOB 3: Build & Auto-Deploy Web PWA to GitHub Pages (maxgym.privatepath.ir)
+  # JOB 3: Build & Auto-Deploy Web PWA to GitHub Pages (Zero-Cache Strategy)
   # ---------------------------------------------------------------------------
   deploy_web_pwa:
     name: Deploy iOS/Web PWA to GitHub Pages
@@ -169,9 +169,10 @@ jobs:
           cp assets/images/maxgym_logo.jpeg web/icons/Icon-512.png
           cp assets/images/maxgym_logo.jpeg web/icons/Icon-maskable-192.png
           cp assets/images/maxgym_logo.jpeg web/icons/Icon-maskable-512.png
-      - name: Build Flutter Web PWA (Self-Hosted CanvasKit for No-VPN Access)
+      - name: Build Flutter Web PWA (No Service-Worker Cache + Self-Hosted CanvasKit)
         run: |
           flutter build web --release \
+            --pwa-strategy=none \
             --base-href "/" \
             --dart-define=FLUTTER_WEB_CANVASKIT_URL=/canvaskit/ \
             --dart-define=APP_DOMAIN=maxgym.privatepath.ir \
@@ -180,13 +181,15 @@ jobs:
           if [ -d "$FLUTTER_ROOT/bin/cache/flutter_web_sdk/canvaskit" ]; then
             cp -r $FLUTTER_ROOT/bin/cache/flutter_web_sdk/canvaskit/* build/web/canvaskit/ 2>/dev/null || true
           fi
+          rm -f build/web/flutter_service_worker.js
       - name: Configure Custom Domain (CNAME), Cache-Buster & SPA 404 Fallback
         run: |
           echo "maxgym.privatepath.ir" > build/web/CNAME
-          cp build/web/index.html build/web/404.html
           BUILD_TS=$(date +%s)
+          sed -i "s/MAXGYM_BUILD_TS_PLACEHOLDER/${BUILD_TS}/g" build/web/index.html
           sed -i "s/flutter_bootstrap.js/flutter_bootstrap.js?v=${BUILD_TS}/g" build/web/index.html
-          sed -i "s/flutter_bootstrap.js/flutter_bootstrap.js?v=${BUILD_TS}/g" build/web/404.html
+          sed -i "s/main.dart.js/main.dart.js?v=${BUILD_TS}/g" build/web/flutter_bootstrap.js
+          cp build/web/index.html build/web/404.html
       - name: Publish to gh-pages Branch
         uses: peaceiris/actions-gh-pages@v4
         with:

@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<html>
+<html lang="fa" dir="rtl">
 <head>
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="پلتفرم رسمی مدیریت تمرین، تغذیه و پرتال آنلاین ورزشکاران باشگاه MAX GYM">
-  <meta name="theme-color" content="#070A08">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="پلتفرم رسمی مدیریت تمرین، تغذیه، دستیار هوش مصنوعی و پرتال آنلاین ورزشکاران باشگاه MAX GYM">
+  <meta name="theme-color" content="#050706">
 
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <!-- سیاست سخت‌گیرانه عدم کش فایل HTML در مرورگر و کلادفلر -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
@@ -16,14 +18,13 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="MAX GYM">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>MAX GYM | پلتفرم هوشمند باشگاه مکس</title>
   <link rel="manifest" href="manifest.json">
   <style>
     body {
-      background-color: #070A08;
+      background-color: #050706;
       margin: 0;
       padding: 0;
       overflow: hidden;
@@ -36,25 +37,34 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: radial-gradient(circle at center, rgba(114, 200, 50, 0.18) 0%, #070A08 70%);
+      background: radial-gradient(circle at center, rgba(114, 200, 50, 0.20) 0%, #050706 72%);
       z-index: 9999;
-      transition: opacity 0.4s ease;
+      transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
     }
-    .loader-ring {
-      width: 64px;
-      height: 64px;
-      border: 3px solid rgba(114, 200, 50, 0.2);
+    .loader-orb {
+      width: 72px;
+      height: 72px;
+      border: 3px solid rgba(114, 200, 50, 0.18);
       border-top-color: #72C832;
+      border-right-color: #A3E635;
       border-radius: 50%;
-      animation: spin 0.9s linear infinite;
-      box-shadow: 0 0 24px rgba(114, 200, 50, 0.35);
+      animation: spin 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      box-shadow: 0 0 32px rgba(114, 200, 50, 0.40);
     }
     .loader-title {
-      margin-top: 18px;
+      margin-top: 22px;
       color: #72C832;
       font-weight: 900;
-      font-size: 22px;
-      letter-spacing: 4px;
+      font-size: 24px;
+      letter-spacing: 5px;
+      text-shadow: 0 0 18px rgba(114, 200, 50, 0.45);
+    }
+    .loader-sub {
+      margin-top: 6px;
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 11px;
+      letter-spacing: 2.5px;
+      font-weight: 700;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
@@ -63,26 +73,46 @@
 </head>
 <body>
   <div id="maxgym-preloader">
-    <div class="loader-ring"></div>
+    <div class="loader-orb"></div>
     <div class="loader-title">MAX GYM</div>
+    <div class="loader-sub">NO PAIN NO GAIN • AI ECOSYSTEM</div>
   </div>
   <script>
-    window.addEventListener('flutter-first-frame', function () {
-      var loader = document.getElementById('maxgym-preloader');
+    // ۱. ثبت نسخه بیلد و پاکسازی خودکار Service Worker و Cacheهای قدیمی مرورگر
+    (async function purgeStaleBrowserCache() {
+      const CURRENT_BUILD_SIGNATURE = "MAXGYM_BUILD_TS_PLACEHOLDER";
+      const savedSig = localStorage.getItem("MAXGYM_ACTIVE_BUILD_SIG");
+
+      if ("serviceWorker" in navigator) {
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (const reg of registrations) {
+            await reg.unregister();
+          }
+        } catch (_) {}
+      }
+
+      if (savedSig && savedSig !== CURRENT_BUILD_SIGNATURE && "caches" in window) {
+        try {
+          const cacheNames = await caches.keys();
+          for (const name of cacheNames) {
+            await caches.delete(name);
+          }
+          localStorage.setItem("MAXGYM_ACTIVE_BUILD_SIG", CURRENT_BUILD_SIGNATURE);
+          window.location.reload();
+          return;
+        } catch (_) {}
+      }
+      localStorage.setItem("MAXGYM_ACTIVE_BUILD_SIG", CURRENT_BUILD_SIGNATURE);
+    })();
+
+    window.addEventListener("flutter-first-frame", function () {
+      var loader = document.getElementById("maxgym-preloader");
       if (loader) {
-        loader.style.opacity = '0';
-        setTimeout(function () { loader.remove(); }, 400);
+        loader.style.opacity = "0";
+        setTimeout(function () { loader.remove(); }, 450);
       }
     });
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.getRegistrations().then(function (registrations) {
-          for (var r of registrations) {
-            r.update();
-          }
-        });
-      });
-    }
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
