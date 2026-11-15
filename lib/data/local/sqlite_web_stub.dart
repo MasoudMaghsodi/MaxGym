@@ -143,7 +143,13 @@ class Database {
         Map<String, Map<String, dynamic>> filteredToPersist = sourceMap;
 
         // در جداول کاتالوگ، فقط آیتم‌های سفارشی مربی ذخیره می‌شوند (آیتم‌های پیش‌فرض در زمان بوت Seed می‌شوند)
-        if (table == 'exercises_catalog') {
+        if (table == 'athletes') {
+          filteredToPersist = sourceMap.map((k, row) {
+            final sanitizedRow = Map<String, dynamic>.from(row);
+            sanitizedRow.remove('password_hash'); // عدم ذخیره هش رمز در localStorage مرورگر
+            return MapEntry(k, sanitizedRow);
+          });
+        } else if (table == 'exercises_catalog') {
           filteredToPersist = Map.fromEntries(
             sourceMap.entries.where((e) =>
                 e.key.startsWith('custom_') ||

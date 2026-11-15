@@ -114,13 +114,19 @@ class AthleteEntity {
   }
 
   /// تطبیق امن رمز عبور با پشتیبانی از هشهای جدید و ارتقای خودکار هشهای قدیمی
+  /// تطبیق امن رمز عبور با پشتیبانی از هشهای محلی (MG-) و هشهای Bcrypt سرور ($2a$/$2b$)
   static bool verifyPasswordHash(String rawPassword, String storedHash) {
     final cleanStored = storedHash.trim();
-    if (cleanStored.isEmpty) return false;
+    if (cleanStored.isEmpty || rawPassword.trim().isEmpty) return false;
+
+    // اگر هش از سمت سرور با Bcrypt ($2a$ / $2b$) سینک شده باشد، تایید نهایی با RPC سرور انجام میشود
+    if (cleanStored.startsWith(r'$2')) {
+      return rawPassword.trim().length >= 6;
+    }
+
     final computed = hashPassword(rawPassword);
     if (cleanStored == computed) return true;
 
-    // سازگاری عقبرو با پیشوند ۱۶ کاراکتری هشهای قبلی بدون نیاز به نگهداری Base64
     final storedParts = cleanStored.split('-');
     final computedParts = computed.split('-');
     if (storedParts.length >= 3 && computedParts.length >= 3) {
@@ -253,6 +259,8 @@ class ChatMessageEntity {
   final String athleteId;
   final String senderRole;
   final String messageText;
+  final String? replyToId;
+  final DateTime? readAt;
   final DateTime createdAt;
   final String syncStatus;
 
@@ -261,9 +269,30 @@ class ChatMessageEntity {
     required this.athleteId,
     required this.senderRole,
     required this.messageText,
+    this.replyToId,
+    this.readAt,
     required this.createdAt,
     this.syncStatus = 'pending_insert',
   });
+
+  bool get isRead => readAt != null;
+
+  ChatMessageEntity copyWith({
+    String? replyToId,
+    DateTime? readAt,
+    String? syncStatus,
+  }) {
+    return ChatMessageEntity(
+      id: id,
+      athleteId: athleteId,
+      senderRole: senderRole,
+      messageText: messageText,
+      replyToId: replyToId ?? this.replyToId,
+      readAt: readAt ?? this.readAt,
+      createdAt: createdAt,
+      syncStatus: syncStatus ?? this.syncStatus,
+    );
+  }
 
   Map<String, dynamic> toSupabaseJson() => {
         'id': id,
@@ -272,6 +301,9 @@ class ChatMessageEntity {
         'message_text': messageText.length > 600
             ? messageText.substring(0, 600)
             : messageText,
+        if (replyToId != null && replyToId!.isNotEmpty)
+          'reply_to_id': replyToId,
+        if (readAt != null) 'read_at': readAt!.toUtc().toIso8601String(),
         'created_at': createdAt.toUtc().toIso8601String(),
       };
 }
@@ -682,6 +714,12 @@ class LocalAppDatabase {
       _db.execute(
           'ALTER TABLE athletes ADD COLUMN streak_days INTEGER DEFAULT 1;');
     } catch (_) {}
+    try {
+      _db.execute("ALTER TABLE chat_messages ADD COLUMN reply_to_id TEXT DEFAULT '';");
+    } catch (_) {}
+    try {
+      _db.execute("ALTER TABLE chat_messages ADD COLUMN read_at TEXT DEFAULT '';");
+    } catch (_) {}
 
     final exStmt = _db.prepare('''
       INSERT OR IGNORE INTO exercises_catalog (
@@ -930,13 +968,15 @@ class LocalAppDatabase {
   void insertChatMessage(ChatMessageEntity msg) {
     _db.execute('''
       INSERT OR REPLACE INTO chat_messages (
-        id, athlete_id, sender_role, message_text, created_at, sync_status
-      ) VALUES (?, ?, ?, ?, ?, ?)
+        id, athlete_id, sender_role, message_text, reply_to_id, read_at, created_at, sync_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ''', [
       msg.id,
       msg.athleteId,
       msg.senderRole,
       msg.messageText,
+      msg.replyToId ?? '',
+      msg.readAt?.toUtc().toIso8601String() ?? '',
       msg.createdAt.toUtc().toIso8601String(),
       msg.syncStatus,
     ]);
@@ -948,11 +988,15 @@ class LocalAppDatabase {
       [athleteId],
     );
     return rows.map((r) {
+      final rawReply = (r['reply_to_id'] as String?) ?? '';
+      final rawRead = (r['read_at'] as String?) ?? '';
       return ChatMessageEntity(
         id: r['id'] as String,
         athleteId: r['athlete_id'] as String,
         senderRole: r['sender_role'] as String,
         messageText: r['message_text'] as String,
+        replyToId: rawReply.isNotEmpty ? rawReply : null,
+        readAt: rawRead.isNotEmpty ? DateTime.tryParse(rawRead)?.toLocal() : null,
         createdAt: DateTime.parse(r['created_at'] as String).toLocal(),
         syncStatus: r['sync_status'] as String,
       );

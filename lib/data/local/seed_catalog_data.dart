@@ -39,7 +39,7 @@ class SeedCatalogData {
       'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises';
 
   static const String global873ExercisesJsonUrl =
-      'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/dist/exercises.json';
+      'https://pnuyylukurndiflgzxmo.supabase.co/functions/v1/maxgym-media-proxy?mode=catalog';
   static const String global800ExercisesJsonUrl = global873ExercisesJsonUrl;
 
   static String translateEnglishExerciseToPersian(String enName) =>
