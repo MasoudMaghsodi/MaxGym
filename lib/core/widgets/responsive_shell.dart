@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../config/maxgym_brand_config.dart';
 import '../constants/app_colors.dart';
 
@@ -25,14 +27,50 @@ class MaxGymResponsiveScaffold extends StatelessWidget {
 
     if (!isWideScreen) {
       return Scaffold(
+        extendBody: true,
         body: IndexedStack(
           index: selectedIndex,
           children: pages,
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: selectedIndex,
-          onDestinationSelected: onDestinationSelected,
-          destinations: destinations,
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0C100E).withOpacity(0.88),
+                    borderRadius: BorderRadius.circular(32),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.10),
+                      width: 1.1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.55),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: NavigationBar(
+                    height: 68,
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    selectedIndex: selectedIndex,
+                    onDestinationSelected: (idx) {
+                      HapticFeedback.selectionClick();
+                      onDestinationSelected(idx);
+                    },
+                    destinations: destinations,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       );
     }
@@ -42,7 +80,6 @@ class MaxGymResponsiveScaffold extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-          // هاله نوری سایبرنتیک در پسزمینه دسکتاپ برای حذف حس تخت بودن صفحه
           Positioned(
             top: -120,
             left: -100,
@@ -104,7 +141,10 @@ class MaxGymResponsiveScaffold extends StatelessWidget {
                       ? NavigationRailLabelType.none
                       : NavigationRailLabelType.all,
                   selectedIndex: selectedIndex,
-                  onDestinationSelected: onDestinationSelected,
+                  onDestinationSelected: (idx) {
+                    HapticFeedback.selectionClick();
+                    onDestinationSelected(idx);
+                  },
                   leading: Padding(
                     padding: const EdgeInsets.symmetric(
                         vertical: 20, horizontal: 12),

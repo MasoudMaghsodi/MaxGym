@@ -4,10 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/number_parser.dart';
 import 'branding_model.dart';
 
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError(
-      'SharedPreferences must be initialized in main.dart');
-});
+final sharedPreferencesProvider = Provider<SharedPreferences?>((ref) => null);
 
 final brandingProvider =
     StateNotifierProvider<BrandingNotifier, BrandingConfig>((ref) {
@@ -16,13 +13,14 @@ final brandingProvider =
 });
 
 class BrandingNotifier extends StateNotifier<BrandingConfig> {
-  final SharedPreferences _prefs;
+  final SharedPreferences? _prefs;
 
   BrandingNotifier(this._prefs) : super(const BrandingConfig()) {
     _loadFromPrefs();
   }
 
   void _loadFromPrefs() {
+    if (_prefs == null) return;
     final isDark = _prefs.getBool('is_dark') ?? true;
     final langCode = _prefs.getString('lang_code') ?? 'fa';
 
@@ -61,6 +59,7 @@ class BrandingNotifier extends StateNotifier<BrandingConfig> {
 
   Future<void> updateBranding(BrandingConfig newConfig) async {
     state = newConfig;
+    if (_prefs == null) return;
     await _prefs.setString('coach_name', newConfig.coachName.toCleanPersian());
     await _prefs.setString(
         'coach_credentials', newConfig.coachCredentials.toCleanPersian());

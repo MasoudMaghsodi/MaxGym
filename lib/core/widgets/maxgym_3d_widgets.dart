@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// ۱. کارت سهبعدی تعاملی با پرسپکتیو نرم و سایه عمیق استودیویی
+/// ۱. کارت سه‌بعدی تعاملی با پرسپکتیو نرم، شیدر هولوگرافیک و بازخورد لمسی (Shneiderman Visceral Feedback)
 class MaxGym3DTiltCard extends StatefulWidget {
   final Widget child;
   final Color? glowColor;
@@ -61,7 +63,10 @@ class _MaxGym3DTiltCardState extends State<MaxGym3DTiltCard> {
             _resetTilt();
           },
           child: GestureDetector(
-            onTapDown: (_) => setState(() => _isPressed = true),
+            onTapDown: (_) {
+              HapticFeedback.selectionClick();
+              setState(() => _isPressed = true);
+            },
             onTapUp: (_) {
               _resetTilt();
               widget.onTap?.call();
@@ -78,15 +83,15 @@ class _MaxGym3DTiltCardState extends State<MaxGym3DTiltCard> {
                 ..setEntry(3, 2, 0.0014)
                 ..rotateX(_rotateX)
                 ..rotateY(_rotateY)
-                ..scale(_isPressed ? 0.97 : (_isHovered ? 1.012 : 1.0)),
+                ..scale(_isPressed ? 0.97 : (_isHovered ? 1.015 : 1.0)),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(26),
                 boxShadow: [
                   BoxShadow(
                     color: _isHovered
-                        ? accent.withOpacity(0.22)
-                        : Colors.black.withOpacity(0.45),
-                    blurRadius: _isHovered ? 28 : 20,
+                        ? accent.withOpacity(0.26)
+                        : Colors.black.withOpacity(0.50),
+                    blurRadius: _isHovered ? 30 : 20,
                     offset: Offset(-_rotateY * 18, _rotateX * 18 + 10),
                   ),
                 ],
@@ -100,13 +105,14 @@ class _MaxGym3DTiltCardState extends State<MaxGym3DTiltCard> {
   }
 }
 
-/// ۲. کارت مات مخملی (Matte Obsidian Card - به سبک عکس ۲ و ۳ بدون کادرهای سبز شلوغ)
+/// ۲. کارت شیشه مات ابسیدین (Smoked Obsidian Glass - منطبق بر اثر Von Restorff برای عدم خستگی چشم)
 class MaxGymGlassCard extends StatelessWidget {
   final Widget child;
   final Color? accentColor;
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry? margin;
   final double borderRadius;
+  final bool isHighlighted;
 
   const MaxGymGlassCard({
     super.key,
@@ -115,6 +121,7 @@ class MaxGymGlassCard extends StatelessWidget {
     this.padding = const EdgeInsets.all(18),
     this.margin,
     this.borderRadius = 26,
+    this.isHighlighted = false,
   });
 
   @override
@@ -127,17 +134,21 @@ class MaxGymGlassCard extends StatelessWidget {
       margin: margin,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(borderRadius),
-        color: isDark ? const Color(0xFF141715) : Colors.white,
+        color: isDark ? const Color(0xFF111513) : Colors.white,
         border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.065)
-              : Colors.black.withOpacity(0.06),
-          width: 1.0,
+          color: isHighlighted
+              ? glow.withOpacity(0.65)
+              : (isDark
+                  ? Colors.white.withOpacity(0.07)
+                  : Colors.black.withOpacity(0.06)),
+          width: isHighlighted ? 1.6 : 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark ? Colors.black.withOpacity(0.45) : Colors.black12,
-            blurRadius: 22,
+            color: isHighlighted
+                ? glow.withOpacity(0.18)
+                : (isDark ? Colors.black.withOpacity(0.48) : Colors.black12),
+            blurRadius: isHighlighted ? 26 : 20,
             offset: const Offset(0, 10),
           ),
         ],
@@ -146,20 +157,19 @@ class MaxGymGlassCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
         child: Stack(
           children: [
-            // هاله بسیار ظریف نقطهای در گوشه بالا-راست (فقط ۸٪ شفافیت برای حفظ سادگی مات)
             if (isDark)
               Positioned(
                 top: -45,
                 right: -45,
                 child: IgnorePointer(
                   child: Container(
-                    width: 130,
-                    height: 130,
+                    width: 135,
+                    height: 135,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
                         colors: [
-                          glow.withOpacity(0.11),
+                          glow.withOpacity(isHighlighted ? 0.20 : 0.10),
                           Colors.transparent,
                         ],
                       ),
@@ -167,7 +177,6 @@ class MaxGymGlassCard extends StatelessWidget {
                   ),
                 ),
               ),
-            // خط بازتاب نور استودیویی بسیار ظریف در سقف کارت
             Positioned(
               top: 0,
               left: 32,
@@ -178,7 +187,7 @@ class MaxGymGlassCard extends StatelessWidget {
                   gradient: LinearGradient(
                     colors: [
                       Colors.transparent,
-                      Colors.white.withOpacity(isDark ? 0.16 : 0.5),
+                      Colors.white.withOpacity(isDark ? 0.18 : 0.5),
                       Colors.transparent,
                     ],
                   ),
@@ -196,9 +205,422 @@ class MaxGymGlassCard extends StatelessWidget {
   }
 }
 
-/// ۳. گیج نیمدایره مدرج خطچین (Dashed Semi-Circle Progress Arc - دقیقاً مثل عکس ۱ راست)
+/// ۳. جزیره پویای تایمر استراحت با رنگ روانشناختی کرایو (Cryo Dynamic Rest Island)
+class MaxGymDynamicRestIsland extends StatelessWidget {
+  final int remainingSeconds;
+  final VoidCallback onAdd15Seconds;
+  final VoidCallback onSkipRest;
+  final bool isFa;
+
+  const MaxGymDynamicRestIsland({
+    super.key,
+    required this.remainingSeconds,
+    required this.onAdd15Seconds,
+    required this.onSkipRest,
+    this.isFa = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (remainingSeconds <= 0) return const SizedBox.shrink();
+
+    const cryoCyan = Color(0xFF00F0FF);
+    const urgentAmber = Color(0xFFFF8A00);
+    final isFinalCountdown = remainingSeconds <= 5;
+    final activeTone = isFinalCountdown ? urgentAmber : cryoCyan;
+
+    // راهنمای ریتم تنفس ۴ ثانیه‌ای برای کاهش ضربان قلب بین ست‌ها
+    final inhalePhase = (remainingSeconds ~/ 4) % 2 == 0;
+    final breathText = isFinalCountdown
+        ? (isFa ? '🔥 آماده شروع ست بعدی باش!' : '🔥 GET READY FOR NEXT SET!')
+        : (inhalePhase
+            ? (isFa ? '❄️ دم عمیق از بینی (۴ ثانیه)...' : '❄️ Inhale deeply...')
+            : (isFa ? '💨 بازدم آرام از دهان...' : '💨 Exhale slowly...'));
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 280),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF090E10),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: activeTone.withOpacity(0.75), width: 1.6),
+        boxShadow: [
+          BoxShadow(
+            color: activeTone.withOpacity(0.28),
+            blurRadius: 24,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: activeTone.withOpacity(0.16),
+              border: Border.all(color: activeTone, width: 1.5),
+            ),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                '${remainingSeconds}s',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  color: activeTone,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isFa
+                      ? 'ریکاوری فعال بین ست‌ها'
+                      : 'Active Inter-Set Recovery',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12.5,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  breathText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: activeTone,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              onAdd15Seconds();
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: Colors.white.withOpacity(0.08),
+              minimumSize: const Size(48, 34),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+            ),
+            child: const Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text('+15s',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: isFa ? 'رد کردن استراحت' : 'Skip Rest',
+            onPressed: () {
+              HapticFeedback.mediumImpact();
+              onSkipRest();
+            },
+            icon: const Icon(LucideIcons.fastForward,
+                size: 18, color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// ۴. نمایشگر بصری سه‌بعدی صفحه‌های هالتر المپیکی (3D Visual Barbell Plate Calculator)
+class MaxGym3DBarbellPlateModal extends StatefulWidget {
+  final double initialTotalWeightKg;
+  final bool isFa;
+
+  const MaxGym3DBarbellPlateModal({
+    super.key,
+    required this.initialTotalWeightKg,
+    this.isFa = true,
+  });
+
+  static void show(BuildContext context,
+      {required double weightKg, required bool isFa}) {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0D110F),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      builder: (_) => MaxGym3DBarbellPlateModal(
+        initialTotalWeightKg: weightKg > 20 ? weightKg : 60,
+        isFa: isFa,
+      ),
+    );
+  }
+
+  @override
+  State<MaxGym3DBarbellPlateModal> createState() =>
+      _MaxGym3DBarbellPlateModalState();
+}
+
+class _MaxGym3DBarbellPlateModalState extends State<MaxGym3DBarbellPlateModal> {
+  late double _totalWeight;
+  double _barWeight = 20.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _totalWeight = widget.initialTotalWeightKg.clamp(20.0, 340.0);
+  }
+
+  List<double> _calculatePlatesPerSide() {
+    double rem = ((_totalWeight - _barWeight) / 2.0).clamp(0.0, 200.0);
+    const availablePlates = [25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25];
+    final List<double> result = [];
+    for (final p in availablePlates) {
+      while (rem >= p - 0.01) {
+        result.add(p);
+        rem -= p;
+      }
+    }
+    return result;
+  }
+
+  Color _plateColor(double weight) {
+    if (weight == 25.0) return const Color(0xFFEF4444); // المپیکی قرمز
+    if (weight == 20.0) return const Color(0xFF2563EB); // المپیکی آبی
+    if (weight == 15.0) return const Color(0xFFEAB308); // المپیکی زرد
+    if (weight == 10.0) return const Color(0xFF10B981); // المپیکی سبز
+    if (weight == 5.0) return const Color(0xFFF8FAFC); // سفید
+    if (weight == 2.5) return const Color(0xFF64748B); // ذغالی
+    return const Color(0xFF94A3B8); // کروم ۱.۲۵
+  }
+
+  double _plateHeight(double weight) {
+    if (weight >= 20.0) return 112;
+    if (weight == 15.0) return 96;
+    if (weight == 10.0) return 82;
+    if (weight == 5.0) return 66;
+    return 52;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isFa = widget.isFa;
+    final primary = Theme.of(context).colorScheme.primary;
+    final plates = _calculatePlatesPerSide();
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 44,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(LucideIcons.dumbbell, color: primary),
+                  const SizedBox(width: 10),
+                  Text(
+                    isFa
+                        ? 'راهنمای بصری چیدن صفحه‌های هالتر'
+                        : '3D Olympic Barbell Plate Loader',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: Chip(
+                  backgroundColor: primary.withOpacity(0.18),
+                  label: Text(
+                    '${_totalWeight.toStringAsFixed(1)} kg',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: primary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // شبیه‌ساز بصری میله هالتر استیل و صفحه‌های المپیکی هر طرف
+          Container(
+            height: 145,
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141916),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // میله استیل هالتر
+                Container(
+                  height: 14,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF475569),
+                        Color(0xFFCBD5E1),
+                        Color(0xFF334155),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+                // صفحه‌های سوارشده روی یک سمت هالتر
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // یقه استیل نگهدارنده هالتر
+                    Container(
+                      width: 14,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF94A3B8),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    if (plates.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          isFa ? 'فقط میله خالی هالتر' : 'Empty Barbell Only',
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.white70),
+                        ),
+                      )
+                    else
+                      ...plates.map((w) {
+                        final c = _plateColor(w);
+                        return Container(
+                          width: w >= 15 ? 24 : 18,
+                          height: _plateHeight(w),
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: c,
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: [
+                              BoxShadow(
+                                color: c.withOpacity(0.4),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: RotatedBox(
+                            quarterTurns: 3,
+                            child: Text(
+                              w % 1 == 0 ? '${w.toInt()}' : '$w',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                color:
+                                    w == 5.0 ? Colors.black : Colors.white,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            plates.isEmpty
+                ? (isFa
+                    ? 'میله استاندارد ${_barWeight.toInt()} کیلوگرمی بدون صفحه اضافه'
+                    : '${_barWeight.toInt()}kg Bar Only')
+                : (isFa
+                    ? 'در هر طرف هالتر (${_barWeight.toInt()}kg) این صفحه‌ها را قرار دهید: ${plates.map((e) => "${e % 1 == 0 ? e.toInt() : e}kg").join(" + ")}'
+                    : 'Each side (${_barWeight.toInt()}kg bar): ${plates.map((e) => "${e}kg").join(" + ")}'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.bold,
+                color: Colors.white70),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  setState(() =>
+                      _totalWeight = (_totalWeight - 2.5).clamp(20.0, 340.0));
+                },
+                icon: const Icon(LucideIcons.minus, size: 16),
+                label: const Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text('-2.5 kg'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ChoiceChip(
+                label: Text(isFa ? 'هالتر ۲۰kg' : '20kg Bar'),
+                selected: _barWeight == 20.0,
+                onSelected: (_) => setState(() => _barWeight = 20.0),
+              ),
+              const SizedBox(width: 6),
+              ChoiceChip(
+                label: Text(isFa ? 'هالتر ۱۵kg' : '15kg Bar'),
+                selected: _barWeight == 15.0,
+                onSelected: (_) => setState(() => _barWeight = 15.0),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  setState(() =>
+                      _totalWeight = (_totalWeight + 2.5).clamp(20.0, 340.0));
+                },
+                icon: const Icon(LucideIcons.plus, size: 16),
+                label: const Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text('+2.5 kg'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// ۵. گیج نیم‌دایره مدرج با پشتیبانی از اثر پیشرفت اعطاشده (Endowed Progress Effect)
 class MaxGymDashedArcGauge extends StatelessWidget {
-  final double progress; // 0.0 to 1.0
+  final double progress;
   final String centerValue;
   final String subtitle;
   final Color? activeColor;
@@ -214,11 +636,14 @@ class MaxGymDashedArcGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = activeColor ?? Theme.of(context).colorScheme.primary;
+    // طبق کتاب Universal Principles of Design، تیک اول همیشه به صورت نیمه‌روشن (Warm-up Ready) نمایش داده می‌شود
+    final effectiveVisualProgress = math.max(0.06, progress.clamp(0.0, 1.0));
+
     return SizedBox(
       height: 125,
       width: double.infinity,
       child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: progress.clamp(0.0, 1.0)),
+        tween: Tween(begin: 0.0, end: effectiveVisualProgress),
         duration: const Duration(milliseconds: 900),
         curve: Curves.easeOutCubic,
         builder: (context, animVal, _) {
@@ -310,7 +735,7 @@ class _DashedSemiArcPainter extends CustomPainter {
       oldDelegate.progress != progress;
 }
 
-/// ۴. کارتهای عمودی تغذیه و ماکرو به سبک تصویر ۲ (`Your Daily Nutrition`: Calories, Proteins, Carbs, Fats)
+/// ۶. ستون‌های عمودی تغذیه و ماکرو
 class MaxGymNeonMacroRings extends StatelessWidget {
   final int targetCalories;
   final int proteinGrams;
@@ -329,58 +754,54 @@ class MaxGymNeonMacroRings extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _verticalNutritionPillar(
-                icon: Icons.local_fire_department_rounded,
-                iconColor: const Color(0xFFFF5E3A),
-                title: isFa ? 'کالری هدف' : 'Calories',
-                mainValue: '$targetCalories',
-                unit: 'Kcal',
-                subValue: isFa ? 'روزانه' : 'Daily Target',
-                fillRatio: 0.82,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _verticalNutritionPillar(
-                icon: Icons.scatter_plot_rounded,
-                iconColor: const Color(0xFF00C2FF),
-                title: isFa ? 'پروتئین' : 'Proteins',
-                mainValue: '$proteinGrams',
-                unit: 'g',
-                subValue: '${proteinGrams * 4} Kcal',
-                fillRatio: 0.75,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _verticalNutritionPillar(
-                icon: Icons.bolt_rounded,
-                iconColor: const Color(0xFFFFB800),
-                title: isFa ? 'کربوهیدرات' : 'Carbs',
-                mainValue: '$carbsGrams',
-                unit: 'g',
-                subValue: '${carbsGrams * 4} Kcal',
-                fillRatio: 0.68,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _verticalNutritionPillar(
-                icon: Icons.water_drop_rounded,
-                iconColor: const Color(0xFFB84DFF),
-                title: isFa ? 'چربی مفید' : 'Fats',
-                mainValue: '$fatGrams',
-                unit: 'g',
-                subValue: '${fatGrams * 9} Kcal',
-                fillRatio: 0.45,
-              ),
-            ),
-          ],
+        Expanded(
+          child: _verticalNutritionPillar(
+            icon: Icons.local_fire_department_rounded,
+            iconColor: const Color(0xFFFF5E3A),
+            title: isFa ? 'کالری هدف' : 'Calories',
+            mainValue: '$targetCalories',
+            unit: 'Kcal',
+            subValue: isFa ? 'روزانه' : 'Daily Target',
+            fillRatio: 0.82,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _verticalNutritionPillar(
+            icon: Icons.scatter_plot_rounded,
+            iconColor: const Color(0xFF00C2FF),
+            title: isFa ? 'پروتئین' : 'Proteins',
+            mainValue: '$proteinGrams',
+            unit: 'g',
+            subValue: '${proteinGrams * 4} Kcal',
+            fillRatio: 0.75,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _verticalNutritionPillar(
+            icon: Icons.bolt_rounded,
+            iconColor: const Color(0xFFFFB800),
+            title: isFa ? 'کربوهیدرات' : 'Carbs',
+            mainValue: '$carbsGrams',
+            unit: 'g',
+            subValue: '${carbsGrams * 4} Kcal',
+            fillRatio: 0.68,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _verticalNutritionPillar(
+            icon: Icons.water_drop_rounded,
+            iconColor: const Color(0xFFB84DFF),
+            title: isFa ? 'چربی مفید' : 'Fats',
+            mainValue: '$fatGrams',
+            unit: 'g',
+            subValue: '${fatGrams * 9} Kcal',
+            fillRatio: 0.45,
+          ),
         ),
       ],
     );
@@ -485,12 +906,12 @@ class MaxGymNeonMacroRings extends StatelessWidget {
   }
 }
 
-/// ۵. گیج طیفی مدرن برای نمایش بصری BMI و WHtR
+/// ۷. گیج طیفی مدرن برای نمایش بصری BMI و WHtR
 class MaxGymSpectrumGauge extends StatelessWidget {
   final String title;
   final String valueText;
   final String statusText;
-  final double normalizedPosition; // 0.0 to 1.0
+  final double normalizedPosition;
   final Color accentColor;
 
   const MaxGymSpectrumGauge({
@@ -600,7 +1021,7 @@ class MaxGymSpectrumGauge extends StatelessWidget {
   }
 }
 
-/// ۶. پنل انتخابگر رادیویی عضلات هدف (به سبک تصویر ۳ - Target Muscles با حذف کامل آدمک کارتونی)
+/// ۸. پنل انتخابگر رادیویی عضلات هدف
 class Interactive3DMuscleAnatomy extends StatefulWidget {
   final List<String> activeMuscles;
   final void Function(String muscleId)? onMuscleTapped;
@@ -623,6 +1044,7 @@ class _Interactive3DMuscleAnatomyState
   bool _showBackView = false;
 
   void _flip3DBody() {
+    HapticFeedback.selectionClick();
     setState(() => _showBackView = !_showBackView);
   }
 
@@ -685,7 +1107,7 @@ class _Interactive3DMuscleAnatomyState
             },
             {
               'id': 'abs',
-              'fa': 'شکم و میانتنه (Core)',
+              'fa': 'شکم و میان‌تنه (Core)',
               'en': 'Abs & Core',
               'zone': 'RECTUS ABDOMINIS',
             },
@@ -720,7 +1142,8 @@ class _Interactive3DMuscleAnatomyState
                         color: primary.withOpacity(0.14),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(Icons.radar_rounded, color: primary, size: 18),
+                      child:
+                          Icon(Icons.radar_rounded, color: primary, size: 18),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -761,7 +1184,6 @@ class _Interactive3DMuscleAnatomyState
             ],
           ),
           const SizedBox(height: 16),
-          // کارتهای انتخابگر رادیویی عضلات به سبک تصویر ۳ (fitonist - Target muscles)
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -769,7 +1191,10 @@ class _Interactive3DMuscleAnatomyState
               final id = m['id'] as String;
               final isActive = widget.activeMuscles.contains(id);
               return GestureDetector(
-                onTap: () => widget.onMuscleTapped?.call(id),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  widget.onMuscleTapped?.call(id);
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   width: 165,
@@ -789,7 +1214,6 @@ class _Interactive3DMuscleAnatomyState
                   ),
                   child: Row(
                     children: [
-                      // حلقه رادیویی نئونی دقیقاً مثل عکس ۳ (fitonist)
                       Container(
                         width: 20,
                         height: 20,
