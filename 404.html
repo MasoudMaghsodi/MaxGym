@@ -80,7 +80,7 @@
   <script>
     // ۱. ثبت نسخه بیلد و پاکسازی خودکار Service Worker و Cacheهای قدیمی مرورگر
     (async function purgeStaleBrowserCache() {
-      const CURRENT_BUILD_SIGNATURE = "1794763646";
+      const CURRENT_BUILD_SIGNATURE = "1794769866";
       const savedSig = localStorage.getItem("MAXGYM_ACTIVE_BUILD_SIG");
 
       if ("serviceWorker" in navigator) {
@@ -92,15 +92,17 @@
         } catch (_) {}
       }
 
-      if (savedSig && savedSig !== CURRENT_BUILD_SIGNATURE && "caches" in window) {
+      if (savedSig !== CURRENT_BUILD_SIGNATURE && "caches" in window) {
         try {
           const cacheNames = await caches.keys();
           for (const name of cacheNames) {
             await caches.delete(name);
           }
-          localStorage.setItem("MAXGYM_ACTIVE_BUILD_SIG", CURRENT_BUILD_SIGNATURE);
-          window.location.reload();
-          return;
+          if (savedSig) {
+            localStorage.setItem("MAXGYM_ACTIVE_BUILD_SIG", CURRENT_BUILD_SIGNATURE);
+            window.location.reload();
+            return;
+          }
         } catch (_) {}
       }
       localStorage.setItem("MAXGYM_ACTIVE_BUILD_SIG", CURRENT_BUILD_SIGNATURE);
@@ -114,6 +116,6 @@
       }
     });
   </script>
-  <script src="flutter_bootstrap.js?v=1794763646" async></script>
+  <script src="flutter_bootstrap.js?v=1794769866" async></script>
 </body>
 </html>
