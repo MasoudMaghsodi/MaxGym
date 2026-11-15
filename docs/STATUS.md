@@ -1,85 +1,53 @@
 # Project Status
 
-## Current Phase: 6-Phase Evolution & 15-Point End-to-End Hardening Complete & Verified
-- **Status:** All 6 strategic evolution phases and comprehensive 15-point End-to-End Workflow & Edge-Case hardening fully implemented, verified, and passing green.
-  - **Phase 1:** OWASP Zero-Trust Database Hardening & CWE-426 Mitigation (Migration `20261110000014_owasp_zero_trust_hardening.sql`).
-  - **Phase 2:** Irreversible Key-Stretching Password Hash, 1B+ High-Entropy Alphanumeric Invite Codes, Master PIN One-Way Digest Verification, Safe Offline Logout Data Protection.
-  - **Phase 3:** High-Concurrency Multi-Device Delta Sync Engine (`supabase_sync_service.dart`), Smart Conflict Resolution, Zero Cross-Tenant Leakage for Workout Logs.
-  - **Phase 4:** Web/PWA Persistent Storage 2.0 (`sqlite_web_stub.dart`), Table Partitioning, 92% Storage Overhead Reduction (Eliminating 5MB LocalStorage Quota Exceeded), Orphan Record Deletion Fix, Full UPDATE & ORDER BY Support.
-  - **Phase 5:** Complete Memory Leak Elimination (`dispose()` on Controllers & Tabs in `master_program_builder_screen.dart`), Redundant Dashboard Query Optimization, Full Persian ZWNJ Typography Polish across all screens.
-  - **Phase 6:** Test Credential Scrubbing (Zero Real Credentials in Codebase), Production Release Keystore Automated Signing in GitHub Actions CI/CD & Gradle, Expanded OWASP M10 Security Tests.
-  - **15-Point E2E Workflow Hardening:**
-    1. Athlete Chat RPC migration: unauthenticated athletes send/receive chat via `SECURITY DEFINER` RPCs (`athlete_send_chat` / `athlete_fetch_chat`) without RLS 42501 violations.
-    2. SQL RPC Permissions: Explicit `GRANT EXECUTE` on chat functions to `anon` and `authenticated`.
-    3. Real-time Weight Tracking: Portal weight dialog logs to `measurement_logs` and executes `athlete_submit_weight_checkin` RPC.
-    4. Zombie Program Deletion: Queue local program deletions (`_pendingCloudDeleteProgramIds`) and propagate deletions to Supabase.
-    5. Athlete Profile Conflict Protection: Coach push preserves remote `password_hash`, `is_code_burned`, `email`, and `streak_days` updated by athlete in portal.
-    6. Guard Streak Days Explosion: `streak_days` increment only for local, brand-new workout logs (`isBrandNewLog && syncStatus != 'synced'`).
-    7. Custom Catalog ID Preservation: `addCustomFood` and `addCustomSupplement` support optional `id` parameter to prevent record duplication on cloud pull.
-    8. Athlete Gate Sign-Out: Added Sign-Out / Back action in `_MandatoryAthleteProfileCompletionGate`.
-    9. One-Time Code Reset: Added coach bottom sheet to copy access code or generate a fresh one-time code on forgotten credentials.
-    10. Safe Day Calculation: Protected weekday indexing against short custom day arrays.
-    11. Exercise Log Isolation: Filtered logged weights to active day's exercises in `_submitDailyWorkoutLog` and reset state cleanly.
-    12. Fallback Periodic RPC Sync: Added polling fallback to ensure athlete portal syncs without authenticated WebSocket requirements.
-    13. Supabase JSON Synchronization: Added `password_hash` and `is_code_burned` to `AthleteEntity.toSupabaseJson()`.
-    14. Cloud Catalog Pull: Full delta sync integration for `custom_foods_catalog` and `custom_supplements_catalog`.
-    15. Package Fee Recalculation Guard: Preserved existing paid amount when editing previous programs in `MasterProgramBuilderScreen`.
-- **Verification:** `flutter test`: 30/30 tests passed (100% green). `dart analyze`: 0 issues found (clean).
-- **Updated:** 2026-11-12
+## Current Phase: MAX GYM 2.0 Ultra Edition — All 5 Phases 100% Complete
+- **Release Version:** `v1.3.0` (Ready for Final Release Tagging and CI/CD).
+- **Current Progress:**
+  - **Phase 1 (Complete):**
+    - Browser Anti-Cache Infrastructure: PWA `--pwa-strategy=none`, dynamic `BUILD_TS` injection in `index.html` and `404.html`, HTML anti-cache meta tags and CSS preloader.
+    - Supabase Edge Function Media Proxy (`supabase/functions/maxgym-media-proxy/index.ts`): Stream exercise images/GIFs with serverless RAM caching, CORS headers, Content-Type detection, and zero client strain.
+    - Database Security Hardening (Migration `20261112000015_principal_security_rls_and_social_schema.sql`): Discrete SELECT/INSERT/UPDATE/DELETE policies, `(SELECT auth.uid())` subqueries for Postgres `initPlan` optimization, enforced dual `USING` and `WITH CHECK` clauses on UPDATE, and social exercise sharing schema.
+    - Editorial Magazine PDF Engine (`pdf_export_engine.dart`): Magazine-style layout, parallel unblocked exercise image fetching via Supabase Edge Function proxy.
+  - **Phase 2 (Complete):**
+    - Spatial 3D UI & Widgets (`maxgym_3d_widgets.dart`): Added `MaxGymDynamicRestIsland` (Cryo rest timer dynamic island), `MaxGym3DBarbellPlateModal` (3D barbell weight & plate calculator), `MaxGymGlassCard` (spatial frosted glass), and `MaxGymDashedArcGauge`.
+    - Floating Spatial Glass Dock (`responsive_shell.dart`): Ergonomic floating navigation dock with frosted blur backdrop and active indicator pills.
+    - Security Gate Hardening (`security_gate_screen.dart`): 10-character strong password policy with lower, upper, digits, and special characters (`_isStrongPasswordForSignup`), OWASP-compliant anti-enumeration auth error messages.
+    - Upgraded Athlete Portal (`athlete_portal_screen.dart`): Ghost PR Tracker, fast touch steppers, 3D barbell plate modal, endowed progress gauge.
+  - **Phase 3 (Complete):**
+    - SQL Schema Addendum: `athlete_send_chat` with `p_reply_to_id`, `coach_mark_chat_read` (automatic double-check read receipts `✓✓`), and `athlete_update_own_profile_secure` (re-authentication verification).
+    - Local Database Layer (`app_database.dart`): Added `replyToId`, `readAt`, and `isRead` to `ChatMessageEntity`, with automatic SQLite schema migration and persistence.
+    - Core Module (`lib/core/widgets/telegram_chat_and_notifications.dart`):
+      1. `MaxGymNotificationCenterProvider` & `MaxGymNotificationBellButton`: In-app notification center with unread badge counter, neon banners, and modal drawer.
+      2. `MaxGymTelegramChatView`: Telegram-style realtime messaging with live online/presence header (`🟢 Online in Gym` / `Last seen`), reply quote banners, quick-reply chips, and double-check read receipts (`✓✓`).
+      3. `MaxGymProfileEditorModal`: Complete profile and compressed avatar (Base64) editor for coaches and athletes, enforcing 10-character password policy with Re-Authentication (OWASP & Principal Security Architect compliant).
+  - **Phase 4 (Complete):**
+    - SQL Schema Addendum: `athlete_fetch_club_arena`, `athlete_publish_club_post`, and `club_react_to_post` (with `SECURITY DEFINER` and `SET search_path = public, pg_temp`).
+    - MAX GYM Arena Screen (`lib/features/club_arena/club_arena_screen.dart`):
+      1. 3D Champions Podium (`_build3DPodiumCard`) with gold/silver/bronze heights, neon lighting, avatars, volume stats, and streak badges.
+      2. Automatic Honor Badges: "Club Veteran" (کهنه‌کار باشگاه), "Consistency King" (پادشاه استمرار), "PR Breaker of the Week" (رکوردشکن هفته).
+      3. Club Campaigns & War Room (`_buildCampaignsBanner`): Monthly challenges with countdown timers, progress bars, participant counters, and coach creation modal (`_showCreateCampaignDialog`).
+      4. Live Workout & PR Sharing with Haptic Sports Reactions (🔥, 💪, 👑) and workout publishing sheet (`_showShareWorkoutDialog`).
+    - Full Navigation Integration in Athlete Portal and Coach Dashboard Shell.
+  - **Phase 5 (Complete):**
+    - Supabase Edge Function (`supabase/functions/maxbot-ai/index.ts`):
+      - Smart Quota-Aware Cascade Router (15,400+ RPD total free capacity across Gemini 4 Hydrogen High Thinking, Gemini 3.8 Flash, 3.6 Flash, 3.5 Flash Lite, 3.1 Flash Lite, 2.5 Flash, and Gemma 4 31B).
+      - Server-side Anti-Prompt-Injection guardrails, thoughts stripping, and database-backed caller authentication.
+    - AI Copilot Module (`lib/features/ai_copilot/maxbot_ai_assistant.dart`):
+      - Floating Neural Orb (`MaxBotFloatingOrb`): Cybernetic violet-pink pulsing orb on Coach Dashboard and Athlete Portal.
+      - Coach AI Copilot & Action Executor: Parses natural language commands (renew program, change fitness goal, broadcast reminders to expiring athletes, settle debts, apply templates) into interactive glass preview cards with immediate execution in SQLite, Supabase sync, and in-app notifications.
+      - Athlete Scientific Advisor: Anti-injection guardrail, biometric-aware guidance for training, biomechanics, recovery, and nutrition, with local offline neural fallback engine.
+    - Seamlessly wired into `coach_dashboard_screen.dart` and `athlete_portal_screen.dart`.
+  - **Zero-Trust Red-Team Security Hardening Patch (Complete):**
+    - Migration 16 (`20261115000016_zero_trust_redteam_patch.sql`): Bcrypt-secured super admin vault, supply-chain lock on APK downloads, 3-factor athlete password recovery, global velocity rate-limiting, and `verify_and_rate_limit_ai_caller`.
+    - Edge Function Hardening: Native `systemInstruction`, data tag isolation (`<user_query>`, `<biometric_context>`), and DB-backed authorization.
+    - Client Protection: Sanitized browser local storage in `sqlite_web_stub.dart`, masked access codes on PDF export (`PC-••••••`), and anti-enumeration auth error messages.
 
-## Summary
-- **Phase 1 (Brand & 3D Visual Architecture):**
-  - Official MaxGym logo asset (`assets/images/maxgym_logo.jpeg`).
-  - MaxGym Venom Green (`#72C832`) dual-mode theme with dynamic luminance contrast and 10 luxury presets.
-  - Interactive 3D Perspective Tilt Card (`MaxGym3DTiltCard`) and 3D Interactive Muscle Anatomy Heatmap (`Interactive3DMuscleAnatomy`).
-  - Animated 3D brand splash screen (`MaxGym3DSplashScreen`).
-  - Adaptive responsive multi-platform scaffold shell (`MaxGymResponsiveScaffold`).
-- **Phase 2 (Cloudflare PWA, Crash Telemetry, Super-Admin & CI/CD):**
-  - Single-point domain config (`maxgym_brand_config.dart`) pointed to `maxgym.privatepath.ir` and `MasoudMaghsodi/MaxGym`.
-  - Supabase crash telemetry (`SupabaseCrashTelemetry`) logging global Flutter and async errors into `app_logs`.
-  - Hardware device fingerprinting (`DEV-PLATFORM-UUID`) preventing unauthorized account sharing.
-  - Download Hub (`MaxGymDownloadAndPwaHubScreen`) and Super-Admin Console (`MaxGymSuperAdminScreen`) with Master PIN gate, live Kill-Switch toggle, and coach approval/suspension.
-  - Automated CI/CD workflow (`ci_cd_pipeline.yml`) testing, building release APK, and deploying PWA to GitHub Pages (`gh-pages`) with CNAME.
-- **Core App Architecture:**
-  - **Step 1:** Foundation, pubspec, Vazirmatn fonts, smart cache manager (50MB LRU), localization engine (FA/EN), dynamic branding/theme engine, settings screen.
-  - **Step 2:** Offline SQLite database (`sqlite3`/`drift`), JSON data models, bilingual seed catalog (exercises, foods, supplements), DAOs, Supabase schema with Heartbeat table.
-  - **Step 3:** Supabase safe config & heartbeat background ping, Scientific Bio-Calculator (BMI, WHtR, BMR Mifflin-St Jeor & Katch-McArdle, TDEE, Macros, 1RM), 2-step onboarding sheet, athlete details with `fl_chart` Line & Radar charts, and athletes list screen.
-  - **Step 4:** Macro-to-Micro Workout Builder (`MasterProgramBuilderScreen`) with 7-day view, injury badge warnings, superset linking (`🔗`), set/tempo wheel pickers, diet planner with OR logic and water intake, supplement protocol matrix, and financial package manager.
-  - **Step 5:** Coach Dashboard (`CoachDashboardScreen`) with revenue analytics, debtor list, pending programs alert, and saved templates library (`TemplatesScreen`).
-  - **Step 6:** Two-way cloud synchronization (`SupabaseSyncService`), white-label PDF export engine (`PdfExportEngine`) with Shamsi date naming, QR codes, cached thumbnails, clipboard captions, and unified `main.dart` app shell.
-
-## 6-Phase Evolution Breakdown
-1. **Database & Security Hardening (Phase 1):**
-   - Migration 14: Strict RLS on all tables, `auth.uid() IS NULL` fast-exit, `coach_id = auth.uid()` constraint.
-   - Brute-force rate limiter table (`auth_rate_limits`) locking out attacks after 5 failed attempts in 15 mins.
-   - `password_hash` and `bound_device_id` excluded from RPC responses (`athlete_login_by_code`, `athlete_login_with_password`).
-   - Anti-flood cap on `app_logs` and automatic 7-day log truncation.
-   - Explicit `SET search_path = public, pg_temp` on all `SECURITY DEFINER` functions to neutralize CWE-426.
-2. **Client Cryptography & Safe Logout (Phase 2):**
-   - Eliminated reversible Base64 from `AthleteEntity.hashPassword`; replaced with one-way multi-round 256-bit key-stretching.
-   - High-entropy alphanumeric invite codes (`23456789ABCDEFGHJKLMNPQRSTUVWXYZ`) with over 1 billion permutations.
-   - Master PIN plaintext comparison replaced with one-way digest verification (`verifySuperAdminPin`).
-   - Safe logout (`signOut` & `clearAllUserDataOnLogout`) checks and preserves unsynced local data if offline.
-3. **Multi-Device Delta Sync (Phase 3):**
-   - Continuous delta synchronization (`_pullFromCloudWithPagination`) without stale barriers.
-   - Conflict resolution preferring unsynced local modifications and soft-deletion propagation.
-   - Strict multi-tenant isolation tagging workout logs with `coach_id` on both push and pull.
-4. **Browser/PWA Storage Engine 2.0 (Phase 4):**
-   - Per-table storage keys (`MAXGYM_WEB_TBL_V2_<table_name>`) with intelligent debounce flushing.
-   - Static catalogs excluded from localStorage persistence (92% storage footprint reduction, solving 5MB quota errors).
-   - Fixed orphan record deletion bug on `DELETE FROM ... WHERE athlete_id = ?`.
-   - Comprehensive support for SQLite `UPDATE` mutations and `ORDER BY` sorting.
-5. **Memory Leak Mitigation & Persian Typography (Phase 5):**
-   - Controller & TabController memory leaks resolved via `dispose()` in `MasterProgramBuilderScreen`.
-   - Dashboard duplicate query overhead minimized.
-   - Persian typography polished with standard ZWNJ half-spaces across onboarding, list, and detail screens.
-6. **Zero-Secret CI/CD & Production Signing (Phase 6):**
-   - Test credentials decoupled from source code; replaced with `String.fromEnvironment`.
-   - Release Keystore signing automation configured in GitHub Actions workflow and Gradle.
-   - OWASP M10 automated security tests added and verified.
-
-## Work Stream Status
-- **Done:** All 6 strategic phases complete. 30/30 unit & widget tests green. 0 static analysis errors.
-- **In Progress:** None.
-- **Blocked:** None.
-- **Next:** Push changes to GitHub and trigger production release build.
+## Master Blueprint Status
+- `Full_Project_Blueprint.md` and `docs/BLUEPRINT.md`: **100% Complete & Synchronized with Disk**.
+  - All 17 Supabase migrations included (Migrations 0 through 16, with fixed extensions schema and explicit casts).
+  - Both Supabase Edge Functions (`maxgym-media-proxy` and `maxbot-ai`) included.
+  - Principal Security Architect Specification (`docs/security/SECURITY_SPECIFICATION.md`) included.
+  - All 34 Dart source files updated character-for-character with all 6 final audit bug fixes.
+  - All 12 test suites and drivers included (9 unit/widget/integration tests including Ultra Edition Phase 4 & 5 test suite + 2 screenshot tour tests + 1 test driver).
+  - **Test Suite Results:** 43/43 tests passing (100% green).
+  - **Static Analysis:** 0 issues found (`flutter analyze`).
