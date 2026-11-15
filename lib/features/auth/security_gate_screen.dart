@@ -496,11 +496,12 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
     );
   }
 
-  /// ۳. بازیابی رمز عبور ورزشکار (تطابق ایمیل + شماره موبایل)
+  /// ۳. بازیابی رمز عبور ورزشکار (تطابق ایمیل + شماره موبایل + کد بازیابی مربی)
   Future<bool> resetAthletePassword({
     required String email,
     required String phone,
     required String newPassword,
+    String recoveryCode = '',
   }) async {
     final cleanEmail = email.trim().toLowerCase();
     final cleanPhone = phone.toEnglishDigits();
@@ -517,6 +518,7 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
             'p_email': cleanEmail,
             'p_phone': cleanPhone,
             'p_new_password_hash': newHash,
+            'p_recovery_code': recoveryCode.trim(),
           },
         );
         updatedRemote = res == true;
@@ -525,8 +527,12 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
 
     bool updatedLocal = false;
     for (final a in db.getAllActiveAthletes()) {
+      final codeMatches = recoveryCode.trim().isEmpty ||
+          a.accessCode.toUpperCase() == recoveryCode.trim().toUpperCase();
       if (a.email.trim().toLowerCase() == cleanEmail &&
-          a.phone.trim() == cleanPhone) {
+          a.phone.trim() == cleanPhone &&
+          !a.isCodeBurned &&
+          codeMatches) {
         db.upsertAthlete(a.copyWith(
           passwordHash: newHash,
           isCodeBurned: true,
@@ -585,15 +591,16 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
           email: email.trim(),
         );
       }
-    } on AuthException catch (e) {
-      state = SecurityGateState(
+    } on AuthException catch (_) {
+      state = const SecurityGateState(
         status: SecurityGateStatus.unauthenticated,
-        errorMessage: e.message,
+        errorMessage:
+            'مشخصات ورودی نامعتبر است یا عملیات مجاز نمی‌باشد. لطفاً اطلاعات را بررسی کنید.',
       );
     } catch (_) {
       state = const SecurityGateState(
         status: SecurityGateStatus.unauthenticated,
-        errorMessage: 'خطا در ثبتنام: لطفاً اتصال اینترنت را بررسی کنید.',
+        errorMessage: 'خطا در ثبت‌نام: لطفاً اتصال اینترنت را بررسی کنید.',
       );
     }
   }
@@ -619,10 +626,11 @@ class SecurityGateNotifier extends StateNotifier<SecurityGateState> {
       );
 
       await verifySecurityAndSession();
-    } on AuthException catch (e) {
-      state = SecurityGateState(
+    } on AuthException catch (_) {
+      state = const SecurityGateState(
         status: SecurityGateStatus.unauthenticated,
-        errorMessage: e.message,
+        errorMessage:
+            'مشخصات ورودی نامعتبر است یا عملیات مجاز نمی‌باشد. لطفاً اطلاعات را بررسی کنید.',
       );
     } catch (_) {
       state = const SecurityGateState(
@@ -852,6 +860,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
     );
     final phoneCtrl = TextEditingController();
     final newPassCtrl = TextEditingController();
+    final recoveryCodeCtrl = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -868,7 +877,8 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
             top: 24,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
-          child: Column(
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -934,6 +944,19 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                 Directionality(
                   textDirection: TextDirection.ltr,
                   child: TextField(
+                    controller: recoveryCodeCtrl,
+                    decoration: InputDecoration(
+                      labelText: isFa
+                          ? 'کد دعوت فعال صادرشده توسط مربی (PC-XXXXXX) *'
+                          : 'Active Recovery Code from Coach *',
+                      prefixIcon: const Icon(LucideIcons.shieldCheck),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: TextField(
                     controller: newPassCtrl,
                     obscureText: true,
                     decoration: InputDecoration(
@@ -951,12 +974,13 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                   if (_isAthleteMode) {
                     if (!emailCtrl.text.contains('@') ||
                         phoneCtrl.text.trim().length < 8 ||
-                        newPassCtrl.text.trim().length < 6) {
+                        newPassCtrl.text.trim().length < 6 ||
+                        recoveryCodeCtrl.text.trim().length < 4) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(isFa
-                              ? 'لطفاً ایمیل، شماره موبایل و رمز جدید (حداقل ۶ کاراکتر) را کامل وارد کنید.'
-                              : 'Please fill all fields properly.'),
+                              ? 'لطفاً ایمیل، شماره موبایل، کد دعوت مربی و رمز جدید را کامل وارد کنید.'
+                              : 'Please fill all fields including recovery code.'),
                           backgroundColor: AppColors.danger,
                         ),
                       );
@@ -968,6 +992,7 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
                           email: emailCtrl.text,
                           phone: phoneCtrl.text,
                           newPassword: newPassCtrl.text,
+                          recoveryCode: recoveryCodeCtrl.text,
                         );
                     if (ctx.mounted) Navigator.pop(ctx);
                     if (mounted) {
@@ -1015,9 +1040,19 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
               ),
             ],
           ),
+          ),
         );
       },
     );
+  }
+
+  /// اعتبارسنجی رمز عبور قوی مطابق بند 1.1 منشور امنیتی (حداقل ۱۰ کاراکتر + حروف بزرگ/کوچک و عدد در زمان ثبت‌نام)
+  bool _isStrongPasswordForSignup(String pass) {
+    if (pass.length < 10) return false;
+    final hasUpper = RegExp(r'[A-Z]').hasMatch(pass);
+    final hasLower = RegExp(r'[a-z]').hasMatch(pass);
+    final hasDigit = RegExp(r'[0-9]').hasMatch(pass);
+    return hasUpper && hasLower && hasDigit;
   }
 
   void _submit() {
@@ -1040,12 +1075,12 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
       }
 
       if (_athleteHasPasswordMode || athPass.isNotEmpty) {
-        if (athPass.length < 4) {
+        if (athPass.length < 6) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(isFa
-                  ? 'لطفاً رمز عبور شخصی خود را وارد کنید.'
-                  : 'Please enter your password.'),
+                  ? 'مشخصات ورود نامعتبر است. لطفاً رمز عبور خود را به درستی وارد کنید.'
+                  : 'Invalid credentials.'),
               backgroundColor: AppColors.danger,
             ),
           );
@@ -1067,8 +1102,8 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(isFa
-              ? 'لطفاً یک ایمیل معتبر و رمز عبور حداقل ۶ کاراکتری وارد کنید.'
-              : 'Enter a valid email and at least 6-character password.'),
+              ? 'مشخصات ورود نامعتبر است. ایمیل و رمز عبور را بررسی نمایید.'
+              : 'Invalid credentials.'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -1080,6 +1115,17 @@ class _CoachAuthScreenState extends ConsumerState<CoachAuthScreen> {
           .read(securityGateProvider.notifier)
           .signInCoach(email: email, password: pass);
     } else {
+      if (!_isStrongPasswordForSignup(pass)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isFa
+                ? '🔒 طبق استاندارد امنیتی، رمز عبور ثبت‌نام باید حداقل ۱۰ کاراکتر و شامل حروف بزرگ، کوچک انگلیسی و عدد باشد.'
+                : '🔒 Password must be at least 10 characters and include uppercase, lowercase, and digits.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
       if (_firstNameCtrl.text.trim().isEmpty ||
           _lastNameCtrl.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
