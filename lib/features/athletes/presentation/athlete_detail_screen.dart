@@ -1,3 +1,4 @@
+import '../../../core/widgets/telegram_chat_and_notifications.dart';
 import 'dart:io';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
@@ -17,7 +18,6 @@ import '../../../core/theme/branding_provider.dart';
 import '../../../core/utils/number_parser.dart';
 import '../../../core/widgets/maxgym_3d_widgets.dart';
 import '../../../data/local/app_database.dart';
-import '../../athlete_portal/athlete_portal_screen.dart';
 import '../../workout_builder/presentation/master_program_builder_screen.dart';
 import '../domain/scientific_bio_calculator.dart';
 import 'athlete_onboarding_sheet.dart';
@@ -527,7 +527,7 @@ class _AthleteDetailScreenState extends ConsumerState<AthleteDetailScreen>
                 isScrollControlled: true,
                 builder: (_) => SizedBox(
                   height: MediaQuery.of(context).size.height * 0.78,
-                  child: PureTextChatView(
+                  child: MaxGymTelegramChatView(
                     athlete: athlete,
                     currentSenderRole: 'coach',
                   ),

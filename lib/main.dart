@@ -1,3 +1,4 @@
+import 'features/club_arena/club_arena_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -241,6 +242,7 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
         onOpenWorkoutBuilder: _openProgramBuilderForAthlete,
         onExportPdf: _showPdfLanguageSelectorAndExport,
       ),
+      const MaxGymClubArenaScreen(isCoachMode: true),
       const TemplatesScreen(),
       const BrandingSettingsScreen(),
     ];
@@ -257,6 +259,10 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
         NavigationDestination(
           icon: const Icon(LucideIcons.users),
           label: s.tr('athletes'),
+        ),
+        NavigationDestination(
+          icon: const Icon(LucideIcons.trophy),
+          label: s.isFa ? 'کلاب و کمپین‌ها' : 'Club Arena',
         ),
         NavigationDestination(
           icon: const Icon(LucideIcons.copy),

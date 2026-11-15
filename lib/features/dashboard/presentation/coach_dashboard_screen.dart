@@ -1,3 +1,4 @@
+import '../../../core/widgets/telegram_chat_and_notifications.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import '../../../core/utils/number_parser.dart';
 import '../../../core/widgets/maxgym_3d_widgets.dart';
 import '../../../data/local/app_database.dart';
 import '../../admin_and_download/maxgym_hub_and_admin_screen.dart';
+import '../../ai_copilot/maxbot_ai_assistant.dart';
 import '../../athletes/presentation/athlete_detail_screen.dart';
 import '../../athletes/presentation/athlete_onboarding_sheet.dart';
 import '../../athletes/presentation/athletes_provider.dart';
@@ -135,6 +137,12 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
           ],
         ),
         actions: [
+          MaxGymNotificationBellButton(isFa: isFa),
+          IconButton(
+            tooltip: isFa ? 'ویرایش پروفایل مربی و امنیت' : 'Coach Profile & Security',
+            icon: const Icon(LucideIcons.userCog),
+            onPressed: () => MaxGymProfileEditorModal.showForCoach(context),
+          ),
           IconButton(
             tooltip:
                 isFa ? 'مرکز دانلود و کنسول سوپر-ادمین' : 'Download & Admin Hub',
@@ -315,18 +323,28 @@ class _CoachDashboardScreenState extends ConsumerState<CoachDashboardScreen> {
           const SizedBox(height: 90),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'fab_coach_dashboard_unique',
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => const AthleteOnboardingSheet(),
-          );
-        },
-        icon: const Icon(LucideIcons.userPlus),
-        label: Text(s.tr('new_athlete')),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 74),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const MaxBotFloatingOrb(isCoachMode: true),
+            const SizedBox(width: 10),
+            FloatingActionButton.extended(
+              heroTag: 'fab_coach_dashboard_unique',
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const AthleteOnboardingSheet(),
+                );
+              },
+              icon: const Icon(LucideIcons.userPlus),
+              label: Text(s.tr('new_athlete')),
+            ),
+          ],
+        ),
       ),
     );
   }

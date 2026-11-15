@@ -1,7 +1,12 @@
+import '../../core/widgets/telegram_chat_and_notifications.dart';
+import '../ai_copilot/maxbot_ai_assistant.dart';
+import '../club_arena/club_arena_screen.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:uuid/uuid.dart';
@@ -35,8 +40,10 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
   int _selectedDayIdx = 0;
 
   final Map<String, String> _loggedWeights = {};
+  final Map<String, TextEditingController> _weightControllers = {};
   final Set<String> _completedExerciseIds = {};
   int _waterGlassesToday = 0;
+  bool _isGymFocusMode = false; // حالت تمرکز بالا در حین تمرین (Transient Posture)
 
   Timer? _restTimer;
   int _remainingRestSeconds = 0;
@@ -60,14 +67,62 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     _programsRealtimeSub?.cancel();
     _athleteRealtimeSub?.cancel();
     _rpcPortalSyncTimer?.cancel();
+    for (final ctrl in _weightControllers.values) {
+      ctrl.dispose();
+    }
     super.dispose();
+  }
+
+  TextEditingController _getOrInitWeightController(
+      String exerciseId, double? ghostPreviousPr) {
+    return _weightControllers.putIfAbsent(exerciseId, () {
+      final initialText = _loggedWeights[exerciseId] ??
+          (ghostPreviousPr != null && ghostPreviousPr > 0
+              ? (ghostPreviousPr % 1 == 0
+                  ? ghostPreviousPr.toInt().toString()
+                  : ghostPreviousPr.toStringAsFixed(1))
+              : '');
+      if (initialText.isNotEmpty) {
+        _loggedWeights[exerciseId] = initialText;
+      }
+      return TextEditingController(text: initialText);
+    });
+  }
+
+  void _stepExerciseWeight(
+      String exerciseId, double deltaKg, double? ghostPreviousPr) {
+    HapticFeedback.selectionClick();
+    final ctrl = _getOrInitWeightController(exerciseId, ghostPreviousPr);
+    final currentVal =
+        ctrl.text.toSafeDouble() ?? ghostPreviousPr ?? 20.0;
+    final nextVal = (currentVal + deltaKg).clamp(0.0, 500.0);
+    final formatted = nextVal % 1 == 0
+        ? nextVal.toInt().toString()
+        : nextVal.toStringAsFixed(1);
+    setState(() {
+      ctrl.text = formatted;
+      _loggedWeights[exerciseId] = formatted;
+    });
+  }
+
+  /// استخراج آخرین رکورد وزنه ثبتشده توسط شاگرد برای هر حرکت (Ghost PR Tracker)
+  Map<String, double> _buildPreviousPrMap(LocalAppDatabase db) {
+    final logs = db.getWorkoutLogsForAthlete(_athlete.id);
+    final Map<String, double> prMap = {};
+    for (final log in logs) {
+      log.exerciseMaxWeights.forEach((exKey, weightVal) {
+        if (weightVal > (prMap[exKey] ?? 0)) {
+          prMap[exKey] = weightVal;
+        }
+      });
+    }
+    return prMap;
   }
 
   void _startRealtimeProgramAndProfileSync() {
     final client = SupabaseConfig.clientOrNull;
     if (client == null) return;
 
-    // همگامسازی دورهای از طریق RPC امن (کارکرد ۱۰۰٪ حتی با بسته بودن RLS برای نقش anon)
     _refreshPortalBundleViaRpc();
     _rpcPortalSyncTimer?.cancel();
     _rpcPortalSyncTimer = Timer.periodic(const Duration(seconds: 20), (_) {
@@ -140,7 +195,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     }, onError: (_) {});
   }
 
-  /// واکشی امن برنامهها و سایزگیریهای جدید ورزشکار از طریق RPC بدون نیاز به باز بودن RLS
   Future<void> _refreshPortalBundleViaRpc() async {
     try {
       final client = SupabaseConfig.clientOrNull;
@@ -202,12 +256,17 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
 
   void _startRestTimer(int seconds) {
     _restTimer?.cancel();
+    HapticFeedback.lightImpact();
     setState(() => _remainingRestSeconds = seconds);
     _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted || _remainingRestSeconds <= 1) {
         timer.cancel();
+        HapticFeedback.heavyImpact();
         if (mounted) setState(() => _remainingRestSeconds = 0);
       } else {
+        if (_remainingRestSeconds <= 4) {
+          HapticFeedback.selectionClick();
+        }
         setState(() => _remainingRestSeconds--);
       }
     });
@@ -223,14 +282,17 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
   }
 
   void _showCinematicExerciseStageModal(
-      BuildContext context, WorkoutItemEntity ex, bool isFa) {
+    BuildContext context,
+    WorkoutItemEntity ex,
+    bool isFa,
+    double? previousPr,
+  ) {
     final cleanFa = SeedCatalogData.extractCleanPersianTitle(
             ex.exerciseNameFa, ex.exerciseNameEn)
         .toCleanPersian();
     final primary = Theme.of(context).colorScheme.primary;
     final restSec = ex.sets.isNotEmpty ? ex.sets.first.restSeconds : 60;
-    final weightCtrl =
-        TextEditingController(text: _loggedWeights[ex.id] ?? '');
+    final weightCtrl = _getOrInitWeightController(ex.id, previousPr);
 
     showModalBottomSheet(
       context: context,
@@ -241,7 +303,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
       ),
       builder: (ctx) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.84,
+          initialChildSize: 0.86,
           maxChildSize: 0.94,
           minChildSize: 0.60,
           expand: false,
@@ -383,30 +445,56 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                         ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A1F1C),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(LucideIcons.timer, size: 15, color: primary),
-                          const SizedBox(width: 6),
-                          Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: Text(
-                              '${restSec}s Rest',
-                              style: const TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final w =
+                            weightCtrl.text.toSafeDouble() ?? previousPr ?? 60;
+                        MaxGym3DBarbellPlateModal.show(
+                          ctx,
+                          weightKg: w,
+                          isFa: isFa,
+                        );
+                      },
+                      icon: Icon(LucideIcons.disc, size: 15, color: primary),
+                      label: Text(
+                        isFa ? 'چیدمان هالتر 3D' : '3D Plates',
+                        style: const TextStyle(fontSize: 11),
                       ),
                     ),
                   ],
                 ),
+                if (previousPr != null && previousPr > 0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF8A00).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                          color: const Color(0xFFFF8A00).withOpacity(0.45)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(LucideIcons.flame,
+                            size: 18, color: Color(0xFFFF8A00)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            isFa
+                                ? 'رکورد قبلی تو در این حرکت: ${previousPr % 1 == 0 ? previousPr.toInt() : previousPr} کیلوگرم — امروز وقت شکستنشه! 🔥'
+                                : 'Your Previous PR: ${previousPr}kg — Time to break it! 🔥',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFFFF8A00),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (ex.coachNote.isNotEmpty) ...[
                   const SizedBox(height: 14),
                   Container(
@@ -425,8 +513,8 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 const SizedBox(height: 18),
                 Text(
                   isFa
-                      ? 'پروتکل ستها (برای شروع تایمر استراحت روی هر ست بزنید):'
-                      : 'Sets Protocol (Tap any set to start rest timer):',
+                      ? 'پروتکل ستها (برای شروع تایمر استراحت کرایو روی هر ست بزنید):'
+                      : 'Sets Protocol (Tap any set to start Cryo Rest Timer):',
                   style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -490,6 +578,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 const SizedBox(height: 18),
                 ElevatedButton.icon(
                   onPressed: () {
+                    HapticFeedback.mediumImpact();
                     setState(() {
                       _completedExerciseIds.add(ex.id);
                     });
@@ -498,8 +587,8 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                   },
                   icon: const Icon(LucideIcons.checkCircle2),
                   label: Text(isFa
-                      ? 'تکمیل حرکت و شروع تایمر استراحت'
-                      : 'Mark Done & Start Rest Timer'),
+                      ? 'تکمیل حرکت و شروع ریکاوری کرایو ❄️'
+                      : 'Mark Done & Start Cryo Rest ❄️'),
                 ),
               ],
             );
@@ -512,15 +601,22 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
   Future<void> _submitDailyWorkoutLog(FullProgramEntity program) async {
     final db = ref.read(appDatabaseProvider);
     final isFa = AppStrings.of(context).isFa;
+    HapticFeedback.heavyImpact();
 
-    // فیلتر کردن وزنههای ثبتشده فقط برای حرکات روز انتخابی فعلی (رفع باگ ۱۱)
     final safeIdx = _selectedDayIdx.clamp(0, program.days.length - 1);
-    final activeDayExerciseIds =
-        program.days[safeIdx].exercises.map((e) => e.id).toSet();
-    final filteredWeightsForToday = Map<String, String>.fromEntries(
-      _loggedWeights.entries
-          .where((e) => activeDayExerciseIds.contains(e.key)),
-    );
+    final activeDay = program.days[safeIdx];
+
+    // ذخیره وزنه هم با کلید id حرکت و هم با کلید exerciseId کاتالوگ تا در جلسات بعدی (Ghost PR) همیشه شناخته شود
+    final Map<String, String> filteredWeightsForToday = {};
+    for (final ex in activeDay.exercises) {
+      final val = _loggedWeights[ex.id]?.trim() ?? '';
+      if (val.isNotEmpty) {
+        filteredWeightsForToday[ex.id] = val;
+        if (ex.exerciseId.isNotEmpty) {
+          filteredWeightsForToday[ex.exerciseId] = val;
+        }
+      }
+    }
 
     final log = AthleteWorkoutLogEntity(
       id: const Uuid().v4(),
@@ -536,7 +632,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
 
     db.upsertWorkoutLog(log);
 
-    // بروزرسانی streak_days در استیت محلی
     final updatedAth = db.getAthleteById(_athlete.id);
     if (updatedAth != null) {
       setState(() => _athlete = updatedAth);
@@ -564,8 +659,8 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(isFa
-              ? '🏆 آفرین! رکوردها و گزارش تمرین امروزت به صورت زنده برای مربی ارسال شد.'
-              : '🏆 Awesome! Today\'s workout & PRs sent live to your coach.'),
+              ? '🏆 پیروزی امروز ثبت شد! رکوردها و گزارش تمرین به صورت زنده برای مربی ارسال گردید.'
+              : '🏆 Victory Logged! Today\'s workout & PRs sent live to your coach.'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -591,6 +686,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     final programs = db.getProgramsForAthlete(_athlete.id);
     final activeProgram = programs.isNotEmpty ? programs.first : null;
     final measurements = db.getMeasurementsForAthlete(_athlete.id);
+    final previousPrMap = _buildPreviousPrMap(db);
 
     final bio = ScientificBioCalculator.analyze(
       gender: _athlete.gender,
@@ -602,12 +698,13 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     );
 
     return Scaffold(
+      extendBody: true,
       appBar: AppBar(
         toolbarHeight: 68,
         title: Row(
           children: [
             GestureDetector(
-              onTap: () => setState(() => _selectedTabIndex = 3),
+              onTap: () => setState(() => _selectedTabIndex = 4),
               child: Container(
                 width: 44,
                 height: 44,
@@ -666,33 +763,24 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
           ],
         ),
         actions: [
-          if (_remainingRestSeconds > 0)
-            GestureDetector(
-              onTap: () => setState(() => _remainingRestSeconds = 0),
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: primary,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                alignment: Alignment.center,
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Text(
-                    '⏱ ${_remainingRestSeconds}s',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: Colors.black,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
+          MaxGymNotificationBellButton(isFa: isFa),
+          if (_selectedTabIndex == 0 && activeProgram != null)
+            IconButton(
+              tooltip: isFa
+                  ? 'حالت تمرکز باشگاه (Gym Focus Mode)'
+                  : 'Gym Focus Mode',
+              icon: Icon(
+                _isGymFocusMode ? LucideIcons.minimize2 : LucideIcons.zap,
+                color: _isGymFocusMode ? const Color(0xFFFF8A00) : primary,
               ),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                setState(() => _isGymFocusMode = !_isGymFocusMode);
+              },
             ),
           if (activeProgram != null)
             IconButton(
-              tooltip: isFa ? 'دانلود PDF برنامه من' : 'Download PDF',
+              tooltip: isFa ? 'دانلود مجله PDF برنامه من' : 'Download PDF',
               icon: Icon(LucideIcons.fileDown, color: primary),
               onPressed: () {
                 PdfExportEngine.generateAndShareProgramPdf(
@@ -714,49 +802,124 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 920),
-          child: IndexedStack(
-            index: _selectedTabIndex,
+          child: Column(
             children: [
-              _buildInteractiveWorkoutTab(activeProgram, bio, isFa, theme),
-              _buildInteractiveNutritionAndWaterTab(
-                  activeProgram, bio, isFa, theme),
-              PureTextChatView(
-                athlete: _athlete,
-                currentSenderRole: 'athlete',
+              // جزیره پویای تایمر استراحت کرایو (Cryo Dynamic Rest Island) در بالای تمام تبها
+              MaxGymDynamicRestIsland(
+                remainingSeconds: _remainingRestSeconds,
+                isFa: isFa,
+                onAdd15Seconds: () {
+                  setState(() => _remainingRestSeconds += 15);
+                },
+                onSkipRest: () {
+                  _restTimer?.cancel();
+                  setState(() => _remainingRestSeconds = 0);
+                },
               ),
-              _buildAthleteProfileAndAchievementsTab(
-                  activeProgram, measurements, bio, isFa, theme),
+              Expanded(
+                child: IndexedStack(
+                  index: _selectedTabIndex,
+                  children: [
+                    _buildInteractiveWorkoutTab(
+                        activeProgram, bio, previousPrMap, isFa, theme),
+                    _buildInteractiveNutritionAndWaterTab(
+                        activeProgram, bio, isFa, theme),
+                    MaxGymTelegramChatView(
+                      athlete: _athlete,
+                      currentSenderRole: 'athlete',
+                    ),
+                    _buildAthleteProfileAndAchievementsTab(
+                        activeProgram, measurements, bio, isFa, theme),
+                    MaxGymClubArenaScreen(
+                      isCoachMode: false,
+                      currentAthlete: _athlete,
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedTabIndex,
-        onDestinationSelected: (i) => setState(() => _selectedTabIndex = i),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(LucideIcons.flame),
-            label: isFa ? 'باشگاه و تمرین' : 'Workout',
+      // داک ناوبری شیشهای معلق (Floating Spatial Glass Dock) در منطقه طلایی شست
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0C100E).withOpacity(0.88),
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.10),
+                    width: 1.1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.55),
+                      blurRadius: 24,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: NavigationBar(
+                  height: 68,
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  selectedIndex: _selectedTabIndex,
+                  onDestinationSelected: (i) {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedTabIndex = i);
+                  },
+                  destinations: [
+                    NavigationDestination(
+                      icon: const Icon(LucideIcons.flame),
+                      label: isFa ? 'باشگاه و تمرین' : 'Workout',
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(LucideIcons.apple),
+                      label: isFa ? 'تغذیه و مکمل' : 'Nutrition',
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(LucideIcons.messageSquare),
+                      label: isFa ? 'چت زنده مربی' : 'Live Chat',
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(LucideIcons.userCheck),
+                      label: isFa ? 'پروفایل من' : 'Profile',
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(LucideIcons.trophy),
+                      label: isFa ? 'کلاب و رقابت' : 'Arena',
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          NavigationDestination(
-            icon: const Icon(LucideIcons.apple),
-            label: isFa ? 'تغذیه و مکمل' : 'Nutrition',
-          ),
-          NavigationDestination(
-            icon: const Icon(LucideIcons.messageSquare),
-            label: isFa ? 'چت زنده مربی' : 'Live Chat',
-          ),
-          NavigationDestination(
-            icon: const Icon(LucideIcons.userCheck),
-            label: isFa ? 'پروفایل من' : 'Profile',
-          ),
-        ],
+        ),
+      ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 76),
+        child: MaxBotFloatingOrb(
+          isCoachMode: false,
+          currentAthlete: _athlete,
+        ),
       ),
     );
   }
 
-  Widget _buildInteractiveWorkoutTab(FullProgramEntity? program,
-      BioAnalysisResult bio, bool isFa, ThemeData theme) {
+  Widget _buildInteractiveWorkoutTab(
+    FullProgramEntity? program,
+    BioAnalysisResult bio,
+    Map<String, double> previousPrMap,
+    bool isFa,
+    ThemeData theme,
+  ) {
     final primary = theme.colorScheme.primary;
 
     if (program == null || program.days.isEmpty) {
@@ -772,8 +935,8 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 const SizedBox(height: 16),
                 Text(
                   isFa
-                      ? 'در انتظار ارسال برنامه از سمت مربی...\n(به محض ثبت برنامه توسط مربی، به صورت زنده اینجا ظاهر میشود!)'
-                      : 'Waiting for your coach to assign a plan (Updates Live!).',
+                      ? 'میدان نبرد آماده است! منتظر ارسال برنامه جدید از سمت مربی باش ⚡\n(به محض ثبت برنامه توسط مربی، به صورت زنده اینجا ظاهر میشود)'
+                      : 'The Arena is ready! Waiting for your coach to assign a plan ⚡',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70, height: 1.6),
                 ),
@@ -797,95 +960,103 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     final doneMoves = activeDay.exercises
         .where((e) => _completedExerciseIds.contains(e.id))
         .length;
-    final progress = totalMoves > 0 ? doneMoves / totalMoves : 0.0;
+
+    // پیادهسازی اثر پیشرفت اعطاشده (Endowed Progress Effect) از کتاب Universal Principles of Design:
+    // حضور ورزشکار در باشگاه به خودی خود 10% پیشرفت اولیه محسوب میشود و ادامه مسیر تا 100% را تسریع میکند!
+    final rawProgress = totalMoves > 0 ? doneMoves / totalMoves : 0.0;
+    final endowedProgress = totalMoves == 0
+        ? 0.0
+        : (doneMoves == totalMoves ? 1.0 : (0.10 + (rawProgress * 0.90)));
     final totalSets =
         activeDay.exercises.fold<int>(0, (sum, ex) => sum + ex.sets.length);
 
     return ListView(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 110),
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: LinearGradient(
-              colors: [
-                primary,
-                const Color(0xFF388E3C),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: primary.withOpacity(0.28),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
+        if (!_isGymFocusMode) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: LinearGradient(
+                colors: [
+                  primary,
+                  const Color(0xFF388E3C),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  color: Colors.black87,
-                  shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: primary.withOpacity(0.28),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
-                child: Icon(LucideIcons.trophy, color: primary, size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      program.title.toCleanPersian(),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: const BoxDecoration(
+                    color: Colors.black87,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(LucideIcons.trophy, color: primary, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        program.title.toCleanPersian(),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.black,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isFa
+                            ? 'اعتبار دوره: ${program.durationWeeks} هفته  •  ${program.remainingDays} روز باقیمانده'
+                            : '${program.durationWeeks} Weeks Challenge  •  ${program.remainingDays}d Left',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      '${(endowedProgress * 100).round()}%',
                       style: const TextStyle(
-                        fontSize: 16,
                         fontWeight: FontWeight.w900,
                         color: Colors.black,
+                        fontSize: 12,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isFa
-                          ? 'اعتبار دوره: ${program.durationWeeks} هفته  •  ${program.remainingDays} روز باقیمانده'
-                          : '${program.durationWeeks} Weeks Challenge  •  ${program.remainingDays}d Left',
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Text(
-                    '${(progress * 100).round()}%',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: Colors.black,
-                      fontSize: 12,
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 18),
+          const SizedBox(height: 18),
+        ],
         SizedBox(
           height: 76,
           child: ListView.separated(
@@ -896,7 +1067,10 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
               final d = program.days[i];
               final selected = i == safeIdx;
               return GestureDetector(
-                onTap: () => setState(() => _selectedDayIdx = i),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _selectedDayIdx = i);
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 220),
                   width: 66,
@@ -953,16 +1127,17 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         const SizedBox(height: 18),
         if (activeDay.isRestDay)
           MaxGymGlassCard(
+            accentColor: const Color(0xFF00F0FF),
             padding: const EdgeInsets.all(38),
             child: Column(
               children: [
                 const Icon(LucideIcons.moon,
-                    size: 52, color: Colors.cyanAccent),
+                    size: 52, color: Color(0xFF00F0FF)),
                 const SizedBox(height: 14),
                 Text(
                   isFa
-                      ? 'امروز روز استراحت، ریکاوری و رشد عضلات شماست! 💤💧'
-                      : 'Active Recovery & Muscle Growth Day! 💤💧',
+                      ? 'امروز روز استراحت، ریکاوری کرایو و سنتز پروتئین عضلات شماست! 💤❄️'
+                      : 'Active Cryo Recovery & Muscle Synthesis Day! 💤❄️',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       fontWeight: FontWeight.w900, fontSize: 16),
@@ -971,131 +1146,149 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
             ),
           )
         else ...[
-          MaxGymGlassCard(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      isFa ? 'گزارش پیشرفت جلسه امروز' : 'Session Track Record',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white70,
-                      ),
-                    ),
-                    Directionality(
-                      textDirection: TextDirection.ltr,
-                      child: Text(
-                        activeDay.targetMuscles.join(' • ').toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          color: primary,
+          if (!_isGymFocusMode) ...[
+            MaxGymGlassCard(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        isFa
+                            ? 'گزارش پیشرفت جلسه (۱۰٪ شارژ اولیه حضور ⚡)'
+                            : 'Session Track Record (+10% Check-in Boost ⚡)',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white70,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                MaxGymDashedArcGauge(
-                  progress: progress,
-                  centerValue: '${(progress * 100).round()}%',
-                  subtitle: isFa
-                      ? '$doneMoves از $totalMoves حرکت تکمیل شده'
-                      : '$doneMoves of $totalMoves Moves Completed',
-                  activeColor: primary,
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10, horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1B1F1D),
-                          borderRadius: BorderRadius.circular(16),
+                      Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          activeDay.targetMuscles.join(' • ').toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: primary,
+                          ),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              isFa ? 'مجموع ستها' : 'Total Sets',
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.white60),
-                            ),
-                            Directionality(
-                              textDirection: TextDirection.ltr,
-                              child: Text(
-                                '$totalSets Sets',
+                      ),
+                    ],
+                  ),
+                  MaxGymDashedArcGauge(
+                    progress: endowedProgress,
+                    centerValue: '${(endowedProgress * 100).round()}%',
+                    subtitle: isFa
+                        ? '$doneMoves از $totalMoves حرکت تکمیل شده'
+                        : '$doneMoves of $totalMoves Moves Completed',
+                    activeColor: primary,
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1B1F1D),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                isFa ? 'مجموع ستها' : 'Total Sets',
                                 style: const TextStyle(
-                                    fontSize: 13, fontWeight: FontWeight.w900),
+                                    fontSize: 11, color: Colors.white60),
                               ),
-                            ),
-                          ],
+                              Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: Text(
+                                  '$totalSets Sets',
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10, horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1B1F1D),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              isFa ? 'استمرار تمرین' : 'Streak',
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.white60),
-                            ),
-                            Directionality(
-                              textDirection: TextDirection.ltr,
-                              child: Text(
-                                '${_athlete.streakDays} Days 🔥',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w900,
-                                    color: primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1B1F1D),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                isFa ? 'استمرار تمرین' : 'Streak',
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.white60),
                               ),
-                            ),
-                          ],
+                              Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: Text(
+                                  '${_athlete.streakDays} Days 🔥',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                      color: primary),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 18),
+            const SizedBox(height: 18),
+          ],
+
+          // لیست کارتهای حرکات روز (با رعایت اثر Von Restorff: درخشش نئونی روی حرکت فعال فعلی)
           ...List.generate(activeDay.exercises.length, (idx) {
             final ex = activeDay.exercises[idx];
             final isDone = _completedExerciseIds.contains(ex.id);
+            final firstUnfinishedIdx = activeDay.exercises
+                .indexWhere((e) => !_completedExerciseIds.contains(e.id));
+            final isCurrentActiveSpotlight = idx == firstUnfinishedIdx;
+
             final restSec =
                 ex.sets.isNotEmpty ? ex.sets.first.restSeconds : 60;
             final repsSample =
                 ex.sets.isNotEmpty ? ex.sets.first.reps : '10-12';
+            final ghostPr =
+                previousPrMap[ex.exerciseId] ?? previousPrMap[ex.id];
+            final weightCtrl = _getOrInitWeightController(ex.id, ghostPr);
 
             final cleanPersianTitle = SeedCatalogData.extractCleanPersianTitle(
                     ex.exerciseNameFa, ex.exerciseNameEn)
                 .toCleanPersian();
 
             return MaxGymGlassCard(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(14),
+              isHighlighted: isCurrentActiveSpotlight,
+              accentColor:
+                  isDone ? AppColors.success : (isCurrentActiveSpotlight ? primary : null),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   InkWell(
                     borderRadius: BorderRadius.circular(20),
-                    onTap: () =>
-                        _showCinematicExerciseStageModal(context, ex, isFa),
+                    onTap: () => _showCinematicExerciseStageModal(
+                        context, ex, isFa, ghostPr),
                     child: Row(
                       children: [
                         Stack(
@@ -1164,9 +1357,9 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                                 ),
                               Text(
                                 isFa ? cleanPersianTitle : ex.exerciseNameEn,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.w900,
-                                  fontSize: 15,
+                                  fontSize: _isGymFocusMode ? 17 : 15,
                                   color: Colors.white,
                                 ),
                                 maxLines: 1,
@@ -1203,7 +1396,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                           ),
                         ),
                         Transform.scale(
-                          scale: 1.15,
+                          scale: 1.2,
                           child: Checkbox(
                             value: isDone,
                             activeColor: primary,
@@ -1211,6 +1404,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6)),
                             onChanged: (v) {
+                              HapticFeedback.mediumImpact();
                               setState(() {
                                 if (v == true) {
                                   _completedExerciseIds.add(ex.id);
@@ -1225,43 +1419,118 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                       ],
                     ),
                   ),
+
+                  // نمایش رکورد جلسه قبل (Ghost PR Tracker)
+                  if (ghostPr != null && ghostPr > 0) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF8A00).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        isFa
+                            ? '🔥 رکورد قبلی تو: ${ghostPr % 1 == 0 ? ghostPr.toInt() : ghostPr} کیلوگرم — امروز وقت شکستنشه!'
+                            : '🔥 Previous PR: ${ghostPr}kg — Beat it today!',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFFF8A00),
+                        ),
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: 10),
+                  // ردیف ثبت وزنه بدون نیاز به کیبورد (-2.5kg / +2.5kg) + هالتر سهبعدی + تایمر استراحت
                   Row(
                     children: [
+                      IconButton(
+                        tooltip: '-2.5 kg',
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white.withOpacity(0.06),
+                        ),
+                        onPressed: () =>
+                            _stepExerciseWeight(ex.id, -2.5, ghostPr),
+                        icon: const Icon(LucideIcons.minus, size: 15),
+                      ),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: SizedBox(
                           height: 42,
                           child: TextField(
                             key: ValueKey('weight_input_${ex.id}'),
+                            controller: weightCtrl,
                             onChanged: (val) {
                               _loggedWeights[ex.id] = val.toEnglishDigits();
                             },
-                            keyboardType: TextInputType.number,
-                            style: const TextStyle(fontSize: 12),
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.bold),
                             decoration: InputDecoration(
                               contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 0),
                               hintText: isFa
-                                  ? 'ثبت رکورد وزنه (مثلاً 85 kg)'
-                                  : 'Log weight lifted (kg)',
+                                  ? 'وزنه (مثلاً 85 kg)'
+                                  : 'Weight (kg)',
                               prefixIcon:
                                   const Icon(LucideIcons.trophy, size: 15),
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        tooltip: '+2.5 kg',
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(
+                          backgroundColor: primary.withOpacity(0.16),
+                          foregroundColor: primary,
+                        ),
+                        onPressed: () =>
+                            _stepExerciseWeight(ex.id, 2.5, ghostPr),
+                        icon: const Icon(LucideIcons.plus, size: 15),
+                      ),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        tooltip: isFa
+                            ? 'نمایشگر سهبعدی صفحههای هالتر'
+                            : '3D Barbell Plate Calculator',
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white.withOpacity(0.06),
+                        ),
+                        onPressed: () {
+                          final w =
+                              weightCtrl.text.toSafeDouble() ?? ghostPr ?? 60.0;
+                          MaxGym3DBarbellPlateModal.show(
+                            context,
+                            weightKg: w,
+                            isFa: isFa,
+                          );
+                        },
+                        icon: Icon(LucideIcons.disc, size: 16, color: primary),
+                      ),
+                      const SizedBox(width: 6),
                       OutlinedButton.icon(
                         onPressed: () => _startRestTimer(restSec),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
+                              horizontal: 12, vertical: 10),
                           visualDensity: VisualDensity.compact,
                         ),
-                        icon: Icon(LucideIcons.timer, size: 15, color: primary),
+                        icon: const Icon(LucideIcons.timer,
+                            size: 14, color: Color(0xFF00F0FF)),
                         label: Directionality(
                           textDirection: TextDirection.ltr,
-                          child: Text('${restSec}s'),
+                          child: Text(
+                            '${restSec}s',
+                            style: const TextStyle(color: Color(0xFF00F0FF)),
+                          ),
                         ),
                       ),
                     ],
@@ -1270,15 +1539,17 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
               ),
             );
           }),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: () => _submitDailyWorkoutLog(program),
-            icon: const Icon(LucideIcons.award),
-            label: Text(isFa
-                ? 'ثبت نهایی تمرین امروز و ارسال زنده برای مربی'
-                : 'Finish & Send Live to Coach'),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: () => _submitDailyWorkoutLog(program),
+              icon: const Icon(LucideIcons.award),
+              label: Text(isFa
+                  ? 'ثبت پیروزی امروز و ارسال رکوردها برای مربی 🏆'
+                  : 'Log Today\'s Victory & Send PRs to Coach 🏆'),
+            ),
           ),
-          const SizedBox(height: 40),
         ],
       ],
     );
@@ -1291,7 +1562,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     final primary = theme.colorScheme.primary;
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
       children: [
         Text(
           isFa ? 'نیاز تغذیهای روزانه شما' : 'Your Daily Nutrition',
@@ -1307,7 +1578,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
         ),
         const SizedBox(height: 16),
         MaxGymGlassCard(
-          accentColor: Colors.lightBlueAccent,
+          accentColor: const Color(0xFF00F0FF),
           padding: const EdgeInsets.all(18),
           child: Column(
             children: [
@@ -1324,7 +1595,10 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                     ),
                   ),
                   ElevatedButton.icon(
-                    onPressed: () => setState(() => _waterGlassesToday++),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      setState(() => _waterGlassesToday++);
+                    },
                     icon: const Icon(LucideIcons.glassWater, size: 16),
                     label: Text(isFa ? '+۱ لیوان' : '+1 Glass'),
                   ),
@@ -1335,7 +1609,7 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
                 borderRadius: BorderRadius.circular(10),
                 child: LinearProgressIndicator(
                   value: (_waterGlassesToday / targetGlasses).clamp(0.0, 1.0),
-                  color: Colors.lightBlueAccent,
+                  color: const Color(0xFF00F0FF),
                   minHeight: 10,
                   backgroundColor: Colors.black38,
                 ),
@@ -1420,95 +1694,99 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     final workoutLogs = db.getWorkoutLogsForAthlete(_athlete.id);
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
       children: [
-        Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1A221E), Color(0xFF111513)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        // کارت عضویت هولوگرافیک ۳ بعدی باشگاه (3D Touch Holographic VIP Card)
+        MaxGym3DTiltCard(
+          glowColor: primary,
+          child: Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1A221E), Color(0xFF0E1310)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              border: Border.all(color: primary.withOpacity(0.45), width: 1.4),
             ),
-            border: Border.all(color: primary.withOpacity(0.35), width: 1.2),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: primary.withOpacity(0.20),
-                    child: Text(
-                      _athlete.firstName.isNotEmpty
-                          ? _athlete.firstName.characters.first.toUpperCase()
-                          : 'M',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: primary,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: primary.withOpacity(0.20),
+                      child: Text(
+                        _athlete.firstName.isNotEmpty
+                            ? _athlete.firstName.characters.first.toUpperCase()
+                            : 'M',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          color: primary,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _athlete.fullName,
-                          style: const TextStyle(
-                              fontSize: 19, fontWeight: FontWeight.w900),
-                        ),
-                        const SizedBox(height: 4),
-                        Directionality(
-                          textDirection: TextDirection.ltr,
-                          child: Text(
-                            _athlete.email.isNotEmpty
-                                ? _athlete.email
-                                : _athlete.phone,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _athlete.fullName,
                             style: const TextStyle(
-                                fontSize: 12, color: Colors.white60),
+                                fontSize: 19, fontWeight: FontWeight.w900),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.16),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      isFa ? 'حساب تاییدشده ✓' : 'VERIFIED ✓',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.success,
+                          const SizedBox(height: 4),
+                          Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text(
+                              _athlete.email.isNotEmpty
+                                  ? _athlete.email
+                                  : _athlete.phone,
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.white60),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const Divider(height: 28, color: Colors.white10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _profileStatCol(
-                      isFa ? 'وزن فعلی' : 'Weight', '${_athlete.weightKg} kg'),
-                  _profileStatCol(
-                      isFa ? 'قد' : 'Height', '${_athlete.heightCm.toInt()} cm'),
-                  _profileStatCol(
-                      isFa ? 'شاخص BMI' : 'BMI', bio.bmi.toString()),
-                  _profileStatCol(isFa ? 'استمرار' : 'Streak',
-                      '${_athlete.streakDays} 🔥'),
-                ],
-              ),
-            ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withOpacity(0.16),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        isFa ? 'VIP MEMBER 👑' : 'VIP PASS 👑',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 28, color: Colors.white10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _profileStatCol(
+                        isFa ? 'وزن فعلی' : 'Weight', '${_athlete.weightKg} kg'),
+                    _profileStatCol(isFa ? 'قد' : 'Height',
+                        '${_athlete.heightCm.toInt()} cm'),
+                    _profileStatCol(
+                        isFa ? 'شاخص BMI' : 'BMI', bio.bmi.toString()),
+                    _profileStatCol(isFa ? 'استمرار' : 'Streak',
+                        '${_athlete.streakDays} 🔥'),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 18),
@@ -1591,11 +1869,23 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
               ),
               const SizedBox(height: 14),
               OutlinedButton.icon(
-                onPressed: () => _showUpdateWeightAndPasswordDialog(isFa),
-                icon: const Icon(LucideIcons.lock, size: 16),
+                onPressed: () => MaxGymProfileEditorModal.showForAthlete(
+                  context,
+                  athlete: _athlete,
+                  onUpdated: (updated) => setState(() => _athlete = updated),
+                ),
+                icon: const Icon(LucideIcons.userCog, size: 16),
                 label: Text(isFa
-                    ? 'تغییر رمز عبور شخصی / ثبت وزن جدید'
-                    : 'Change Password / Update Weight'),
+                    ? 'ویرایش پروفایل، عکس آواتار و تغییر رمز عبور امن'
+                    : 'Edit Profile, Avatar & Security'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => _showUpdateWeightAndPasswordDialog(isFa),
+                icon: const Icon(LucideIcons.scale, size: 16),
+                label: Text(isFa
+                    ? 'ثبت سریع وزن جدید در نمودار'
+                    : 'Quick Weight Check-in'),
               ),
             ],
           ),
@@ -1621,7 +1911,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
     );
   }
 
-  /// ثبت همزمان وزن جدید در نمودار پیشرفت (measurement_logs) + تغییر رمز عبور شخصی (رفع باگ ۳)
   void _showUpdateWeightAndPasswordDialog(bool isFa) {
     final weightCtrl =
         TextEditingController(text: _athlete.weightKg.toStringAsFixed(1));
@@ -1703,7 +1992,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
               );
               db.upsertAthlete(updated);
 
-              // ثبت رکورد جدید در جدول measurement_logs برای نمایش در نمودار پیشرفت مربی
               final checkInLog = MeasurementLogEntity(
                 id: const Uuid().v4(),
                 athleteId: updated.id,
@@ -1771,7 +2059,6 @@ class _AthletePortalScreenState extends ConsumerState<AthletePortalScreen> {
   }
 }
 
-/// گیت اجباری تکمیل پروفایل اولیه ورزشکار (مجهز به دکمه خروج در AppBar برای رفع باگ ۸)
 class _MandatoryAthleteProfileCompletionGate extends ConsumerStatefulWidget {
   final AthleteEntity athlete;
   final void Function(AthleteEntity updated) onCompleted;
@@ -2051,7 +2338,6 @@ class _MandatoryAthleteProfileCompletionGateState
   }
 }
 
-/// ویجت چت دوطرفه هوشمند (پشتیبانی همزمان از RPC برای ورزشکار و دسترسی مستقیم برای مربی - رفع باگ ۱)
 class PureTextChatView extends ConsumerStatefulWidget {
   final AthleteEntity athlete;
   final String currentSenderRole; // 'coach' | 'athlete'
@@ -2140,14 +2426,12 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
   }
 
   void _subscribeToRealtimeAndRpcChat() {
-    // ۱. واکشی اولیه و دورهای از طریق RPC (تضمین کارکرد برای ورزشکار بدون نیاز به RLS باز)
     _fetchChatViaRpc();
     _rpcChatPollTimer?.cancel();
     _rpcChatPollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       _fetchChatViaRpc();
     });
 
-    // ۲. استریم Realtime برای مربی لاگینشده
     final client = SupabaseConfig.clientOrNull;
     if (client == null) return;
     final db = ref.read(appDatabaseProvider);
@@ -2201,7 +2485,6 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
       final client = SupabaseConfig.clientOrNull;
       if (client != null) {
         if (widget.currentSenderRole == 'athlete') {
-          // ارسال پیام ورزشکار از طریق تونل امن RPC (ثبت خودکار coach_id و عبور مجاز از RLS)
           final ok = await client.rpc(
             'athlete_send_chat',
             params: {
@@ -2215,7 +2498,6 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
             db.markRecordSynced('chat_messages', msg.id);
           }
         } else {
-          // ارسال پیام توسط مربی با درج صریح coach_id
           final coachUid = client.auth.currentUser?.id;
           final payload = msg.toSupabaseJson();
           if (coachUid != null) {
@@ -2353,7 +2635,7 @@ class _PureTextChatViewState extends ConsumerState<PureTextChatView> {
                     ),
             ),
             Container(
-              margin: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 94),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: const Color(0xFF121815),
